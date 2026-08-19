@@ -8,7 +8,11 @@ import {
   createRenderJob,
   updateRenderJob,
 } from "@/lib/remotion/renderJobs";
-import { shortVideoSchema } from "@video/compositions/ShortVideo/schema";
+import {
+  isTemplateId,
+  templateRegistry,
+  type TemplateId,
+} from "@video/templates/registry";
 
 export const runtime = "nodejs";
 
@@ -16,7 +20,23 @@ const DELAY_RENDER_TIMEOUT_IN_MILLISECONDS = 90000;
 
 export async function POST(request: Request) {
   const json = await request.json().catch(() => null);
-  const parsed = shortVideoSchema.safeParse(json);
+
+  if (
+    typeof json !== "object" ||
+    json === null ||
+    !("templateId" in json) ||
+    typeof json.templateId !== "string" ||
+    !isTemplateId(json.templateId)
+  ) {
+    return NextResponse.json(
+      { error: "templateId が不正です" },
+      { status: 400 }
+    );
+  }
+
+  const templateId: TemplateId = json.templateId;
+  const template = templateRegistry[templateId];
+  const parsed = template.schema.safeParse("props" in json ? json.props : undefined);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -39,7 +59,7 @@ export async function POST(request: Request) {
 
       const composition = await selectComposition({
         serveUrl,
-        id: "ShortVideo",
+        id: template.compositionId,
         inputProps,
         puppeteerInstance,
         timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,

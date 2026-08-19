@@ -1,25 +1,29 @@
 import React from "react";
 import { AbsoluteFill, Series, type CalculateMetadataFunction } from "remotion";
-import type { ShortVideoProps } from "./schema";
-import { Hook } from "./Hook";
-import { ClipSequence } from "./ClipSequence";
-import { CTA } from "./CTA";
-import { CTA_DURATION_IN_SECONDS, HOOK_DURATION_IN_SECONDS, VIDEO_FPS } from "./constants";
-import { getShortVideoDurationInFrames } from "./duration";
-import "./font";
+import type { RankingVideoProps } from "./schema";
+import { RankingItemSequence } from "./RankingItemSequence";
+import { Hook } from "../../shared/Hook";
+import { CTA } from "../../shared/CTA";
+import {
+  CTA_DURATION_IN_SECONDS,
+  HOOK_DURATION_IN_SECONDS,
+  VIDEO_FPS,
+} from "../../shared/constants";
+import { getRankingVideoDurationInFrames } from "./duration";
+import "../../shared/font";
 
-export const calculateShortVideoMetadata: CalculateMetadataFunction<
-  ShortVideoProps
+export const calculateRankingVideoMetadata: CalculateMetadataFunction<
+  RankingVideoProps
 > = ({ props }) => {
   return {
-    durationInFrames: getShortVideoDurationInFrames(props),
+    durationInFrames: getRankingVideoDurationInFrames(props),
     props,
   };
 };
 
-export const ShortVideo: React.FC<ShortVideoProps> = ({
+export const RankingVideo: React.FC<RankingVideoProps> = ({
   hook,
-  clips,
+  items,
   cta,
   theme,
 }) => {
@@ -38,12 +42,17 @@ export const ShortVideo: React.FC<ShortVideoProps> = ({
           />
         </Series.Sequence>
 
-        {clips.map((clip, index) => (
+        {items.map((item, index) => (
           <Series.Sequence
             key={index}
-            durationInFrames={Math.round(clip.durationInSeconds * VIDEO_FPS)}
+            durationInFrames={Math.round(item.durationInSeconds * VIDEO_FPS)}
           >
-            <ClipSequence {...clip} index={index} accentColor={theme.primaryColor} />
+            <RankingItemSequence
+              {...item}
+              index={index}
+              rank={items.length - index}
+              accentColor={theme.primaryColor}
+            />
           </Series.Sequence>
         ))}
 

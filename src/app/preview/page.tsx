@@ -1,17 +1,30 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Player } from "@remotion/player";
-import { ShortVideo } from "@video/compositions/ShortVideo/ShortVideo";
-import { defaultShortVideoProps } from "@video/compositions/ShortVideo/defaultProps";
-import { getShortVideoDurationInFrames } from "@video/compositions/ShortVideo/duration";
 import {
   VIDEO_FPS,
   VIDEO_HEIGHT,
   VIDEO_WIDTH,
-} from "@video/compositions/ShortVideo/constants";
+} from "@video/shared/constants";
+import { StandardVideo } from "@video/templates/standard/StandardVideo";
+import { defaultStandardVideoProps } from "@video/templates/standard/defaultProps";
+import { getStandardVideoDurationInFrames } from "@video/templates/standard/duration";
+import { RankingVideo } from "@video/templates/ranking/RankingVideo";
+import { defaultRankingVideoProps } from "@video/templates/ranking/defaultProps";
+import { getRankingVideoDurationInFrames } from "@video/templates/ranking/duration";
+import { templateRegistry, TEMPLATE_IDS, type TemplateId } from "@video/templates/registry";
 
 export default function PreviewPage() {
-  const durationInFrames = getShortVideoDurationInFrames(defaultShortVideoProps);
+  const [templateId, setTemplateId] = useState<TemplateId>("standard");
+
+  const durationInFrames = useMemo(
+    () =>
+      templateId === "standard"
+        ? getStandardVideoDurationInFrames(defaultStandardVideoProps)
+        : getRankingVideoDurationInFrames(defaultRankingVideoProps),
+    [templateId]
+  );
 
   return (
     <main
@@ -32,17 +45,53 @@ export default function PreviewPage() {
           {(durationInFrames / VIDEO_FPS).toFixed(1)}秒 / {VIDEO_WIDTH}x{VIDEO_HEIGHT}
         </p>
       </div>
-      <Player
-        component={ShortVideo}
-        inputProps={defaultShortVideoProps}
-        durationInFrames={durationInFrames}
-        fps={VIDEO_FPS}
-        compositionWidth={VIDEO_WIDTH}
-        compositionHeight={VIDEO_HEIGHT}
-        style={{ width: 360, height: 640 }}
-        controls
-        loop
-      />
+
+      <div style={{ display: "flex", gap: 8 }}>
+        {TEMPLATE_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTemplateId(id)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              fontSize: 13,
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: id === templateId ? "white" : "transparent",
+              color: id === templateId ? "black" : "white",
+              cursor: "pointer",
+            }}
+          >
+            {templateRegistry[id].label}
+          </button>
+        ))}
+      </div>
+
+      {templateId === "standard" ? (
+        <Player
+          component={StandardVideo}
+          inputProps={defaultStandardVideoProps}
+          durationInFrames={durationInFrames}
+          fps={VIDEO_FPS}
+          compositionWidth={VIDEO_WIDTH}
+          compositionHeight={VIDEO_HEIGHT}
+          style={{ width: 360, height: 640 }}
+          controls
+          loop
+        />
+      ) : (
+        <Player
+          component={RankingVideo}
+          inputProps={defaultRankingVideoProps}
+          durationInFrames={durationInFrames}
+          fps={VIDEO_FPS}
+          compositionWidth={VIDEO_WIDTH}
+          compositionHeight={VIDEO_HEIGHT}
+          style={{ width: 360, height: 640 }}
+          controls
+          loop
+        />
+      )}
     </main>
   );
 }
