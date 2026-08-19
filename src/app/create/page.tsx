@@ -70,9 +70,11 @@ const toShortVideoProps = (form: FormState): ShortVideoProps => ({
 
 type RenderState =
   | { status: "idle" }
-  | { status: "loading" }
+  | { status: "rendering"; progress: number }
   | { status: "done"; url: string }
   | { status: "error"; message: string };
+
+const POLL_INTERVAL_MS = 1000;
 
 export default function CreatePage() {
   const [form, setForm] = useState<FormState>(initialForm);
@@ -137,8 +139,40 @@ export default function CreatePage() {
     }));
   };
 
+  const pollJob = (jobId: string) => {
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/render/${jobId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "状態取得に失敗しました");
+
+        if (data.status === "rendering") {
+          setRenderState({ status: "rendering", progress: data.progress });
+          return;
+        }
+
+        clearInterval(timer);
+        if (data.status === "done") {
+          setRenderState({ status: "done", url: data.url });
+        } else {
+          setRenderState({
+            status: "error",
+            message: data.message ?? "レンダーに失敗しました",
+          });
+        }
+      } catch (error) {
+        clearInterval(timer);
+        setRenderState({
+          status: "error",
+          message:
+            error instanceof Error ? error.message : "状態取得に失敗しました",
+        });
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
   const handleRender = async () => {
-    setRenderState({ status: "loading" });
+    setRenderState({ status: "rendering", progress: 0 });
     try {
       const res = await fetch("/api/render", {
         method: "POST",
@@ -146,13 +180,13 @@ export default function CreatePage() {
         body: JSON.stringify(props),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "レンダーに失敗しました");
-      setRenderState({ status: "done", url: data.url });
+      if (!res.ok) throw new Error(data.error ?? "レンダーの開始に失敗しました");
+      pollJob(data.jobId);
     } catch (error) {
       setRenderState({
         status: "error",
         message:
-          error instanceof Error ? error.message : "レンダーに失敗しました",
+          error instanceof Error ? error.message : "レンダーの開始に失敗しました",
       });
     }
   };
@@ -315,13 +349,22 @@ export default function CreatePage() {
           <button
             type="button"
             onClick={handleRender}
-            disabled={!canRender || renderState.status === "loading"}
+            disabled={!canRender || renderState.status === "rendering"}
             className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors disabled:opacity-40"
           >
-            {renderState.status === "loading"
-              ? "レンダー中...(数十秒かかります)"
+            {renderState.status === "rendering"
+              ? `レンダー中... ${Math.round(renderState.progress * 100)}%`
               : "動画を書き出す"}
           </button>
+
+          {renderState.status === "rendering" ? (
+            <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-foreground transition-[width]"
+                style={{ width: `${Math.round(renderState.progress * 100)}%` }}
+              />
+            </div>
+          ) : null}
 
           {renderState.status === "error" ? (
             <p className="text-sm text-red-500">{renderState.message}</p>

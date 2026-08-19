@@ -1,5 +1,5 @@
 import type { ShortVideoProps } from "./schema";
-import { notoSansJP } from "./font";
+import { NOTO_SANS_JP_FONT_FAMILY } from "./font";
 
 /**
  * Studio/Player でのプレビュー用サンプルデータ。
@@ -21,6 +21,6 @@ export const defaultShortVideoProps: ShortVideoProps = {
   },
   theme: {
     primaryColor: "#FF3366",
-    fontFamily: `${notoSansJP.fontFamily}, "Hiragino Sans", sans-serif`,
+    fontFamily: `"${NOTO_SANS_JP_FONT_FAMILY}", "Hiragino Sans", sans-serif`,
   },
 };
