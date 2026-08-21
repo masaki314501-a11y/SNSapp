@@ -1,12 +1,14 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
 import type { ClipProps } from "./schema";
+import type { CaptionStyle } from "../../shared/schema";
 import { MediaBackground } from "../../shared/MediaBackground";
 import { AnimatedCaption } from "../../shared/AnimatedCaption";
 
 type Props = ClipProps & {
   index: number;
   accentColor: string;
+  captionStyle: CaptionStyle;
 };
 
 /**
@@ -19,6 +21,7 @@ export const ClipSequence: React.FC<Props> = ({
   index,
   accentColor,
   captionAnimation,
+  captionStyle,
 }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -32,6 +35,7 @@ export const ClipSequence: React.FC<Props> = ({
         text={caption}
         accentColor={accentColor}
         animation={captionAnimation}
+        captionStyle={captionStyle}
       />
     </AbsoluteFill>
   );

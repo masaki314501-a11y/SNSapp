@@ -4,6 +4,8 @@ import type { CaptionAnimation } from "./schema";
 type AnimationStyle = {
   transform: string;
   opacity: number;
+  /** "highlight-sweep"専用: マーカーで左から塗るような背景の見え方(clip-path)。 */
+  clipPath?: string;
 };
 
 /**
@@ -45,6 +47,30 @@ export const getCaptionAnimationStyle = (
       });
       const scale = interpolate(progress, [0, 1], [1.5, 1]);
       return { transform: `scale(${scale})`, opacity };
+    }
+    case "highlight-sweep": {
+      // マーカーで左から塗っていくように背景だけを先に見せ、テキストは即表示する。
+      const sweep = interpolate(localFrame, [2, 16], [0, 100], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      });
+      return {
+        transform: "none",
+        opacity: interpolate(localFrame, [0, 3], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+        clipPath: `inset(0 ${100 - sweep}% 0 0)`,
+      };
+    }
+    case "shake-in": {
+      // 登場直後に強めに揺れてから止まる、注意を引くための演出。
+      const progress = spring({
+        frame: springFrame,
+        fps,
+        config: { damping: 6, mass: 0.4 },
+        durationInFrames: 18,
+      });
+      const wiggle = Math.sin(progress * Math.PI * 3) * (1 - progress) * 8;
+      const scale = interpolate(progress, [0, 1], [0.7, 1]);
+      return { transform: `scale(${scale}) rotate(${wiggle}deg)`, opacity };
     }
     case "slide-up":
     default: {

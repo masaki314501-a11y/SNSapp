@@ -47,7 +47,12 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
             key={index}
             durationInFrames={Math.round(clip.durationInSeconds * VIDEO_FPS)}
           >
-            <ClipSequence {...clip} index={index} accentColor={theme.primaryColor} />
+            <ClipSequence
+              {...clip}
+              index={index}
+              accentColor={theme.primaryColor}
+              captionStyle={theme.captionStyle}
+            />
           </Series.Sequence>
         ))}
 

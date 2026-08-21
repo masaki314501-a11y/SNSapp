@@ -32,12 +32,17 @@ export async function POST(request: Request) {
   }
 
   const id = randomUUID();
-  const filename = `${id}.${ext}`;
   const dir = path.join(process.cwd(), "public", "videos");
   await mkdir(dir, { recursive: true });
 
+  // サーバー側での変換は行わず、アップロードされたファイルをそのまま保存する。
+  // iPhoneのHEVC(.mov)等、ブラウザやレンダー用Chromiumが再生できないコーデックの
+  // 場合はプレビュー/書き出しに失敗することがある点に注意。
+  const filename = `${id}.${ext}`;
+  const outputPath = path.join(dir, filename);
+
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, filename), buffer);
+  await writeFile(outputPath, buffer);
 
   // ShortVideoProps.clips[].src にそのまま入れられる相対パス
   return NextResponse.json({ path: `videos/${filename}` });

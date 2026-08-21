@@ -2,25 +2,239 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --background-elevated: #f6f6f7;
+  --background-elevated-2: #eeeef0;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.22);
+  --foreground: #0b0b0c;
+  --muted: #6b6b70;
+  --muted-2: #96969b;
+  --accent: #0b0b0c;
+  --accent-contrast: #ffffff;
+  --success: #16a34a;
+  --warning: #b45309;
+  --danger: #dc2626;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-elevated: var(--background-elevated);
+  --color-background-elevated-2: var(--background-elevated-2);
   --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), "Hiragino Sans", "Noto Sans JP", sans-serif;
+  min-height: 100%;
+}
+
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--background-elevated-2);
+  border-radius: 999px;
+  border: 2px solid var(--background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* --- reusable component classes --- */
+
+.panel {
+  background: var(--background-elevated);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.divider-row {
+  border-bottom: 1px solid var(--border);
+}
+.divider-row:last-child {
+  border-bottom: none;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
+.field-input {
+  background: var(--background-elevated-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--foreground);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+.field-input::placeholder {
+  color: var(--muted-2);
+}
+.field-input:focus {
+  outline: none;
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+.field-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  border-radius: 10px;
+  transition: opacity 0.15s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.btn-primary:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-outline {
+  border: 1px solid var(--border-strong);
+  color: var(--foreground);
+  border-radius: 10px;
+  background: transparent;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--foreground);
+  background: var(--background-elevated-2);
+}
+.btn-outline:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--danger);
+}
+.btn-ghost:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.upload-drop {
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--background-elevated-2);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.upload-drop:hover {
+  border-color: var(--foreground);
+}
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-pill.neutral {
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}
+.badge-pill.success {
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.12);
+}
+.badge-pill.warning {
+  color: var(--warning);
+  background: rgba(234, 179, 8, 0.12);
+}
+.badge-pill.danger {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+input[type="file"] {
+  color: var(--muted);
+  font-size: 13px;
+}
+input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--background-elevated-2);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+input[type="file"]::file-selector-button:hover {
+  border-color: var(--foreground);
+  background: var(--background-elevated);
+}
+
+input[type="color"] {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background-elevated-2);
+  padding: 3px;
+  cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
 }

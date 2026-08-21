@@ -18,7 +18,20 @@ export const runtime = "nodejs";
 
 const DELAY_RENDER_TIMEOUT_IN_MILLISECONDS = 90000;
 
+/**
+ * @remotion/bundler の bundle() はプロセス内で1度だけ public/ をコピーして
+ * 静的配信するため(bundle.ts参照)、サーバー起動後にアップロードされた動画は
+ * そのスナップショットに存在せず404になる。レンダー時だけは絶対URLに差し替え、
+ * 実際に稼働中のNext.jsサーバー(常に最新のpublic/を配信している)から
+ * 直接読ませることでこれを回避する。
+ */
+const resolveUploadedSrc = (origin: string, src?: string): string | undefined => {
+  if (!src || src.startsWith("http://") || src.startsWith("https://")) return src;
+  return `${origin}/${src}`;
+};
+
 export async function POST(request: Request) {
+  const origin = new URL(request.url).origin;
   const json = await request.json().catch(() => null);
 
   if (
@@ -45,7 +58,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const inputProps = parsed.data;
+  const inputProps = {
+    ...parsed.data,
+    clips: parsed.data.clips.map((clip) => ({
+      ...clip,
+      src: resolveUploadedSrc(origin, clip.src),
+    })),
+  };
   const jobId = createRenderJob();
 
   // レンダーはレスポンス返却後もバックグラウンドで進行させ、進捗はジョブストアを

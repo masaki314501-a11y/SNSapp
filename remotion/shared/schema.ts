@@ -16,13 +16,28 @@ export const ctaSchema = z.object({
   text: z.string().default("詳しくはプロフィールへ"),
 });
 
+export const captionStyleSchema = z
+  .enum(["pill", "outline"])
+  .default("pill")
+  .describe(
+    "テロップの見た目。pill=アクセントカラーの角丸背景、outline=背景無しの白文字+黒縁取り(バズ動画で定番)"
+  );
+
+export type CaptionStyle = z.infer<typeof captionStyleSchema>;
+
+export const CAPTION_STYLE_OPTIONS: { value: CaptionStyle; label: string }[] = [
+  { value: "pill", label: "カラー背景(ボックス)" },
+  { value: "outline", label: "縁取り文字(背景なし)" },
+];
+
 export const themeSchema = z.object({
   primaryColor: zColor().default("#FF3366"),
   fontFamily: z.string().default(DEFAULT_FONT_FAMILY),
+  captionStyle: captionStyleSchema,
 });
 
 export const captionAnimationSchema = z
-  .enum(["slide-up", "fade", "pop", "zoom-in"])
+  .enum(["slide-up", "fade", "pop", "zoom-in", "highlight-sweep", "shake-in"])
   .default("slide-up")
   .describe("テロップの出現アニメーション");
 
@@ -36,6 +51,8 @@ export const CAPTION_ANIMATION_OPTIONS: {
   { value: "fade", label: "フェードイン" },
   { value: "pop", label: "ポップイン(拡大)" },
   { value: "zoom-in", label: "ズームイン(縮小)" },
+  { value: "highlight-sweep", label: "マーカーで塗る" },
+  { value: "shake-in", label: "揺れて強調" },
 ];
 
 /**

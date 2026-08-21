@@ -10,12 +10,12 @@ type Props = {
 
 export const RenderPanel: React.FC<Props> = ({ canRender, renderState, onRender }) => {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <button
         type="button"
         onClick={onRender}
         disabled={!canRender || renderState.status === "rendering"}
-        className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors disabled:opacity-40"
+        className="btn-outline flex h-14 items-center justify-center px-6 text-base font-semibold"
       >
         {renderState.status === "rendering"
           ? `レンダー中... ${Math.round(renderState.progress * 100)}%`
@@ -23,26 +23,33 @@ export const RenderPanel: React.FC<Props> = ({ canRender, renderState, onRender 
       </button>
 
       {renderState.status === "rendering" ? (
-        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-full"
+          style={{ background: "var(--background-elevated-2)" }}
+        >
           <div
-            className="h-full rounded-full bg-foreground transition-[width]"
-            style={{ width: `${Math.round(renderState.progress * 100)}%` }}
+            className="h-full rounded-full transition-[width]"
+            style={{
+              width: `${Math.round(renderState.progress * 100)}%`,
+              background: "var(--foreground)",
+            }}
           />
         </div>
       ) : null}
 
       {renderState.status === "error" ? (
-        <p className="text-sm text-red-500">{renderState.message}</p>
+        <p className="badge-pill danger w-fit">{renderState.message}</p>
       ) : null}
 
       {renderState.status === "done" ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="panel flex flex-col gap-3 p-5">
           <video
             src={renderState.url}
             controls
             className="w-full max-w-xs self-center rounded-lg"
+            style={{ border: "1px solid var(--border-strong)" }}
           />
-          <a href={renderState.url} download className="text-center text-sm underline">
+          <a href={renderState.url} download className="btn-primary flex h-11 items-center justify-center text-sm">
             ダウンロード
           </a>
         </div>

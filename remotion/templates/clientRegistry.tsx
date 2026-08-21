@@ -2,9 +2,6 @@ import { templateRegistry, type TemplateId } from "./registry";
 import { StandardVideo, calculateStandardVideoMetadata } from "./standard/StandardVideo";
 import { defaultStandardVideoProps } from "./standard/defaultProps";
 import { getStandardVideoDurationInFrames } from "./standard/duration";
-import { RankingVideo, calculateRankingVideoMetadata } from "./ranking/RankingVideo";
-import { defaultRankingVideoProps } from "./ranking/defaultProps";
-import { getRankingVideoDurationInFrames } from "./ranking/duration";
 
 /**
  * 実際に描画するReactコンポーネント一式を含むレジストリ。
@@ -19,12 +16,5 @@ export const clientTemplateRegistry = {
     calculateMetadata: calculateStandardVideoMetadata,
     defaultProps: defaultStandardVideoProps,
     getDurationInFrames: getStandardVideoDurationInFrames,
-  },
-  ranking: {
-    ...templateRegistry.ranking,
-    component: RankingVideo,
-    calculateMetadata: calculateRankingVideoMetadata,
-    defaultProps: defaultRankingVideoProps,
-    getDurationInFrames: getRankingVideoDurationInFrames,
   },
 } satisfies Record<TemplateId, unknown>;

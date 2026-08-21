@@ -11,6 +11,7 @@
     "remotion:render": "remotion render ShortVideo out/short-video.mp4"
   },
   "dependencies": {
+    "@google/genai": "^2.18.0",
     "@remotion/bundler": "^4.0.513",
     "@remotion/cli": "^4.0.513",
     "@remotion/fonts": "^4.0.513",

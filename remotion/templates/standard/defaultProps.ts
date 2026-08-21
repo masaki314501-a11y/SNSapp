@@ -37,5 +37,6 @@ export const defaultStandardVideoProps: StandardVideoProps = {
   theme: {
     primaryColor: "#FF3366",
     fontFamily: `"${NOTO_SANS_JP_FONT_FAMILY}", "Hiragino Sans", sans-serif`,
+    captionStyle: "pill",
   },
 };
