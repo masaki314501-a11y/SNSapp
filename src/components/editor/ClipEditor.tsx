@@ -48,6 +48,7 @@ import {
 } from "./timelineUtils";
 import { TimelineRoot, type AudioSelection } from "./timeline/TimelineRoot";
 import { ClipInspectorPanel } from "./timeline/ClipInspectorPanel";
+import { AudioInspectorPanel } from "./timeline/AudioInspectorPanel";
 
 /**
  * /create でアップロード・字幕生成された動画を、再生しながらトリム・並べ替え・
@@ -158,8 +159,12 @@ export const ClipEditor: React.FC = () => {
   /** AIナレーション一括生成の進捗(nullなら未実行)。単発生成もtotal=1として同じ状態を使う。 */
   const [narrationGenerating, setNarrationGenerating] = useState<{ current: number; total: number } | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "done">("idle");
-  /** 「タイムライン/スタイル」のタブ切り替え。プレビュー・タイムライン・書き出しは常時表示。 */
-  const [activeTab, setActiveTab] = useState<"timeline" | "style">("timeline");
+  /**
+   * 「クリップ/音声/スタイル」のタブ切り替え。プレビュー・タイムライン・書き出しは常時表示。
+   * タイムライン(映像/SE/BGMトラック)自体はクリップ・音声どちらのタブでも表示し、
+   * 右側の編集パネルだけを「今やりたいこと」で切り替える。
+   */
+  const [activeTab, setActiveTab] = useState<"clip" | "audio" | "style">("clip");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditText, setBulkEditText] = useState("");
 
@@ -987,11 +992,25 @@ export const ClipEditor: React.FC = () => {
           </p>
         </div>
 
-        {activeTab === "timeline" ? (
+        {activeTab === "clip" ? (
           <ClipInspectorPanel
             segments={form.segments}
             selectedSegmentKey={selectedSegmentKey}
             selectedCount={selectedKeys.size}
+            sfxCount={sfxClips.length}
+            maxSfxClips={MAX_SFX_CLIPS}
+            onUpdateSegment={updateSegment}
+            onApplyAnimationToAll={applyAnimationToAll}
+            onMergeWithNext={mergeSegmentWithNext}
+            onDuplicate={duplicateSegment}
+            onRemove={(key) => removeSegments(new Set([key]))}
+            onDeleteSelected={() => removeSegments(selectedKeys)}
+            narrationGenerating={narrationGenerating}
+            onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
+          />
+        ) : activeTab === "audio" ? (
+          <AudioInspectorPanel
+            segments={form.segments}
             audioSelection={audioSelection}
             sfxClips={sfxClips}
             bgm={bgm}
@@ -1000,12 +1019,6 @@ export const ClipEditor: React.FC = () => {
             maxSfxClips={MAX_SFX_CLIPS}
             sfxPresets={SFX_PRESETS}
             bgmPresets={BGM_PRESETS}
-            onUpdateSegment={updateSegment}
-            onApplyAnimationToAll={applyAnimationToAll}
-            onMergeWithNext={mergeSegmentWithNext}
-            onDuplicate={duplicateSegment}
-            onRemove={(key) => removeSegments(new Set([key]))}
-            onDeleteSelected={() => removeSegments(selectedKeys)}
             onUpdateSfx={updateSfxClip}
             onRemoveSfx={removeSfxClip}
             onSetBgmField={(patch) => setBgm((prev) => (prev ? { ...prev, ...patch } : prev))}
@@ -1018,20 +1031,26 @@ export const ClipEditor: React.FC = () => {
             narrationVoice={narrationVoice}
             onChangeNarrationVoice={setNarrationVoice}
             narrationGenerating={narrationGenerating}
-            onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
             onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
           />
         ) : null}
       </div>
 
-      {/* タブ切り替え(タイムライン/スタイル)。プレビュー・書き出しは常時表示。 */}
+      {/* タブ切り替え(クリップ/音声/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
       <div className="tab-bar">
         <button
           type="button"
-          onClick={() => setActiveTab("timeline")}
-          className={`tab-button${activeTab === "timeline" ? " active" : ""}`}
+          onClick={() => setActiveTab("clip")}
+          className={`tab-button${activeTab === "clip" ? " active" : ""}`}
         >
-          タイムライン
+          クリップ
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("audio")}
+          className={`tab-button${activeTab === "audio" ? " active" : ""}`}
+        >
+          音声
         </button>
         <button
           type="button"
@@ -1150,7 +1169,7 @@ export const ClipEditor: React.FC = () => {
         </div>
       ) : null}
 
-      {activeTab === "timeline" ? (
+      {activeTab === "clip" || activeTab === "audio" ? (
         <TimelineRoot
           segments={form.segments}
           sfxClips={sfxClips}
