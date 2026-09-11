@@ -767,7 +767,11 @@ export const ClipEditor: React.FC = () => {
     const index = form.segments.findIndex((segment) => segment.key === key);
     if (index === -1) return;
     const caption = form.segments[index].caption.trim();
-    if (!caption || sfxClips.length >= MAX_SFX_CLIPS) return;
+    if (!caption) return;
+    if (sfxClips.length >= MAX_SFX_CLIPS) {
+      alert(`効果音/ナレーションの上限(${MAX_SFX_CLIPS}件)に達しているため追加できません`);
+      return;
+    }
     setNarrationGenerating({ current: 0, total: 1 });
     try {
       const { path } = await requestVoiceover(caption, narrationVoice);

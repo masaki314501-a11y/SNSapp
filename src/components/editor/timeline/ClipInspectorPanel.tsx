@@ -169,9 +169,17 @@ export const ClipInspectorPanel: React.FC<Props> = ({
               <button
                 type="button"
                 className="editor-toolbar-btn"
-                disabled={selectedSegment.caption.trim().length === 0 || narrationGenerating !== null}
+                disabled={
+                  selectedSegment.caption.trim().length === 0 ||
+                  narrationGenerating !== null ||
+                  sfxClips.length >= maxSfxClips
+                }
                 onClick={() => onGenerateNarrationForSegment(selectedSegment.key)}
-                title="このテロップをAIナレーション(読み上げ音声)に変換してSEと同じ扱いで追加します"
+                title={
+                  sfxClips.length >= maxSfxClips
+                    ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
+                    : "このテロップをAIナレーション(読み上げ音声)に変換してSEと同じ扱いで追加します"
+                }
               >
                 {narrationGenerating ? "生成中..." : "🎙 ナレーション生成"}
               </button>
@@ -286,9 +294,17 @@ export const ClipInspectorPanel: React.FC<Props> = ({
         <button
           type="button"
           className="editor-toolbar-btn"
-          disabled={narrationGenerating !== null || segments.every((segment) => segment.caption.trim().length === 0)}
+          disabled={
+            narrationGenerating !== null ||
+            segments.every((segment) => segment.caption.trim().length === 0) ||
+            sfxClips.length >= maxSfxClips
+          }
           onClick={onGenerateNarrationForAll}
-          title="テロップが入っている全クリップ分、順番にAIナレーションを生成して追加します"
+          title={
+            sfxClips.length >= maxSfxClips
+              ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
+              : "テロップが入っている全クリップ分、順番にAIナレーションを生成して追加します"
+          }
         >
           {narrationGenerating ? `生成中... (${narrationGenerating.current}/${narrationGenerating.total})` : "🎙 全クリップに一括生成"}
         </button>
