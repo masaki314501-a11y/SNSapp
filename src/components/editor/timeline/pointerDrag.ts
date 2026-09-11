@@ -27,11 +27,20 @@ export const beginPointerDrag = (event: React.PointerEvent<HTMLElement>, handler
   target.setPointerCapture(pointerId);
   handlers.onStart?.();
 
+  // pointermoveは指/カーソルの動き1回ごとに(高頻度な環境だと1秒間に100回以上)発火するが、
+  // onMove側はReactの状態更新とプレビューの再計算を伴い重いため、そのまま繋ぐと
+  // ドラッグ中にカクつく。1フレームにつき最新の1回だけ反映すれば見た目は変わらず滑らかになる。
+  let rafId: number | null = null;
+  const flush = () => {
+    rafId = null;
+    handlers.onMove(lastDeltaX);
+  };
+
   const handleMove = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return;
     lastDeltaX = e.clientX - startX;
     if (Math.abs(lastDeltaX) > threshold) moved = true;
-    handlers.onMove(lastDeltaX);
+    if (rafId === null) rafId = requestAnimationFrame(flush);
   };
 
   const handleUp = (e: PointerEvent) => {
@@ -40,6 +49,11 @@ export const beginPointerDrag = (event: React.PointerEvent<HTMLElement>, handler
     target.removeEventListener("pointerup", handleUp);
     target.removeEventListener("pointercancel", handleUp);
     if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      handlers.onMove(lastDeltaX);
+    }
     handlers.onEnd?.(lastDeltaX);
     if (!moved) handlers.onClick?.();
   };

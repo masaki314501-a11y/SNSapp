@@ -39,6 +39,42 @@
   padding: 16px;
 }
 
+/* --- 元動画のうち使う範囲の可視化バー(カット画面) --- */
+.editor-coverage-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.editor-coverage-bar {
+  position: relative;
+  height: 18px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1.5px solid var(--foreground);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--background-elevated-2),
+    var(--background-elevated-2) 6px,
+    var(--background) 6px,
+    var(--background) 12px
+  );
+}
+.editor-coverage-kept {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  min-width: 2px;
+}
+.editor-coverage-playhead {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--danger);
+  z-index: 2;
+}
+
 /* --- タイムライン・ツールバー --- */
 .editor-timeline-wrap {
   display: flex;
@@ -268,9 +304,12 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 9px;
+  width: 15px;
   cursor: ew-resize;
   touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .editor-clip-handle.left {
   left: 0;
@@ -278,8 +317,19 @@
 .editor-clip-handle.right {
   right: 0;
 }
-.editor-clip-handle:hover {
+.editor-clip-handle:hover,
+.editor-clip-handle:active {
   background: rgba(36, 28, 21, 0.18);
+}
+/* つまめる位置だと分かるよう、縦の粒3つで指がかりを示す(細い枠線だけだと
+   タッチ操作でどこがハンドルか見えづらかったため)。 */
+.editor-clip-handle::after {
+  content: "";
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: rgba(36, 28, 21, 0.45);
+  box-shadow: 0 -6px 0 rgba(36, 28, 21, 0.45), 0 6px 0 rgba(36, 28, 21, 0.45);
 }
 
 .editor-clip-fade {

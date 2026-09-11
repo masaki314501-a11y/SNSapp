@@ -159,6 +159,38 @@ export const CutEditor: React.FC = () => {
     [segments]
   );
 
+  /**
+   * 元動画のどこを残し、どこを捨てたかを可視化するための、元動画全体を基準にした
+   * 「使う範囲」の一覧(再生順ではなく元動画上の時刻順にマージ)。
+   * クリップ一覧(VideoTrack)は再生順に詰めて表示するため、元動画のどこを切ったかは
+   * ここで別に見せないと分からない。
+   */
+  const sourceCoverage = useMemo(() => {
+    if (videoDurationInSeconds <= 0) return { ranges: [] as [number, number][], keptSeconds: 0 };
+    const sorted = segments
+      .map((s): [number, number] => [s.startFromSeconds, s.startFromSeconds + s.durationInSeconds])
+      .sort((a, b) => a[0] - b[0]);
+    const merged: [number, number][] = [];
+    for (const [start, end] of sorted) {
+      const last = merged[merged.length - 1];
+      if (last && start <= last[1] + 0.01) {
+        last[1] = Math.max(last[1], end);
+      } else {
+        merged.push([start, end]);
+      }
+    }
+    const keptSeconds = merged.reduce((sum, [start, end]) => sum + (end - start), 0);
+    return { ranges: merged, keptSeconds };
+  }, [segments, videoDurationInSeconds]);
+
+  /** 再生ヘッドが今どのクリップの何秒目かを、元動画上の時刻に変換する(上のバーの再生位置表示用)。 */
+  const activeSourceSeconds = useMemo(() => {
+    if (!activeProgramSegment) return null;
+    const segment = segments.find((s) => s.key === activeProgramSegment.key);
+    if (!segment) return null;
+    return segment.startFromSeconds + activeProgramSegment.offsetSeconds;
+  }, [activeProgramSegment, segments]);
+
   const pushHistory = () => {
     setHistory((prev) => [...prev, segments].slice(-50));
     setFuture([]);
@@ -300,6 +332,11 @@ export const CutEditor: React.FC = () => {
       return;
     }
     selectOnly(key);
+    // 分割・イン/アウト点は再生ヘッドの位置にあるクリップに対して働くため、クリックした
+    // クリップと再生ヘッドがずれたままだと「選んだのに違うクリップが編集される」ことになる。
+    // クリック時に再生ヘッドをそのクリップの先頭へ合わせ、選択=編集対象を一致させる。
+    const range = segmentFrameRanges.find((r) => r.key === key);
+    if (range) playerRef.current?.seekTo(range.startFrame);
   };
 
   useEffect(() => {
@@ -408,6 +445,38 @@ export const CutEditor: React.FC = () => {
       <p className="text-center text-xs" style={{ color: "var(--muted-2)" }}>
         Space=再生/一時停止・←→=1フレーム送り・S=分割・I/O=再生位置をイン/アウト点に
       </p>
+
+      {videoDurationInSeconds > 0 ? (
+        <div className="editor-coverage-wrap">
+          <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted-2)" }}>
+            <span>元動画のうち、使う範囲(オレンジ)</span>
+            <span>
+              使用 {sourceCoverage.keptSeconds.toFixed(1)}秒 / 全体 {videoDurationInSeconds.toFixed(1)}秒
+              (
+              {Math.round((1 - sourceCoverage.keptSeconds / videoDurationInSeconds) * 100)}
+              %カット)
+            </span>
+          </div>
+          <div className="editor-coverage-bar">
+            {sourceCoverage.ranges.map(([start, end], i) => (
+              <div
+                key={i}
+                className="editor-coverage-kept"
+                style={{
+                  left: `${(start / videoDurationInSeconds) * 100}%`,
+                  width: `${((end - start) / videoDurationInSeconds) * 100}%`,
+                }}
+              />
+            ))}
+            {activeSourceSeconds !== null ? (
+              <div
+                className="editor-coverage-playhead"
+                style={{ left: `${(activeSourceSeconds / videoDurationInSeconds) * 100}%` }}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <TimelineRoot
         segments={segments}
