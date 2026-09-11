@@ -6,6 +6,7 @@ import type { VoiceOption } from "@/lib/gemini/voiceOptions";
 
 type Props = {
   segments: ProjectSegment[];
+  selectedSegmentKey: string | null;
   audioSelection: AudioSelection;
   /** AIナレーションのみ(SEを除く)。表示用のトラックも同じ絞り込みをしている。 */
   narrationClips: ProjectSfxClip[];
@@ -19,16 +20,18 @@ type Props = {
   onChangeNarrationVoice: (voiceName: string) => void;
   /** AIナレーション生成中の進捗(単発生成もtotal=1として同じ状態を使う)。nullなら非実行中。 */
   narrationGenerating: { current: number; total: number } | null;
+  onGenerateNarrationForSegment: (key: string) => void;
   onGenerateNarrationForAll: () => void;
 };
 
 /**
- * 「AI音声」タブの右側パネル。読み上げの声選択・全クリップ一括生成と、
- * 生成済みナレーションクリップのプロパティ編集。1クリップだけの生成は
- * 「字幕」タブ(そのクリップのテロップを見ながら生成できる)で行う。
+ * 「AI音声」タブの右側パネル。読み上げの声選択・全クリップ一括生成、
+ * 選択中クリップ単体の生成、生成済みナレーションクリップのプロパティ編集を扱う。
+ * (映像トラックはこのタブでも表示したままなので、クリップを選んで個別生成できる)
  */
 export const NarrationInspectorPanel: React.FC<Props> = ({
   segments,
+  selectedSegmentKey,
   audioSelection,
   narrationClips,
   totalSfxCount,
@@ -39,10 +42,15 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
   narrationVoice,
   onChangeNarrationVoice,
   narrationGenerating,
+  onGenerateNarrationForSegment,
   onGenerateNarrationForAll,
 }) => {
   const selected =
     audioSelection?.kind === "sfx" ? narrationClips.find((c) => c.key === audioSelection.key) ?? null : null;
+  const selectedSegmentIndex = selectedSegmentKey
+    ? segments.findIndex((segment) => segment.key === selectedSegmentKey)
+    : -1;
+  const selectedSegment = selectedSegmentIndex >= 0 ? segments[selectedSegmentIndex] : null;
 
   return (
     <div className="editor-inspector">
@@ -83,9 +91,33 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
               削除
             </button>
           </div>
+        ) : selectedSegment ? (
+          <div className="editor-inspector-fields">
+            <h3>クリップ{selectedSegmentIndex + 1}</h3>
+            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+              {selectedSegment.caption || "(テロップ無し)"}
+            </p>
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              disabled={
+                selectedSegment.caption.trim().length === 0 ||
+                narrationGenerating !== null ||
+                totalSfxCount >= maxSfxClips
+              }
+              onClick={() => onGenerateNarrationForSegment(selectedSegment.key)}
+              title={
+                totalSfxCount >= maxSfxClips
+                  ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
+                  : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
+              }
+            >
+              {narrationGenerating ? "生成中..." : "🎙 このクリップのナレーション生成"}
+            </button>
+          </div>
         ) : (
           <div className="editor-inspector-empty">
-            <p>下のナレーションブロックを選択すると、ここでプロパティを編集できます</p>
+            <p>映像クリップまたはナレーションブロックを選択すると、ここで生成・編集できます</p>
           </div>
         )}
       </div>

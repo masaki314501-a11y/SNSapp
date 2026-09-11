@@ -1043,6 +1043,7 @@ export const ClipEditor: React.FC = () => {
         ) : activeTab === "narration" ? (
           <NarrationInspectorPanel
             segments={form.segments}
+            selectedSegmentKey={selectedSegmentKey}
             audioSelection={audioSelection}
             narrationClips={narrationOnlyClips}
             totalSfxCount={sfxClips.length}
@@ -1053,6 +1054,7 @@ export const ClipEditor: React.FC = () => {
             narrationVoice={narrationVoice}
             onChangeNarrationVoice={setNarrationVoice}
             narrationGenerating={narrationGenerating}
+            onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
             onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
           />
         ) : activeTab === "bgm" ? (
