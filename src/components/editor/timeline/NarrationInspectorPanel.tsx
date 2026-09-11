@@ -71,6 +71,14 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
                 onChange={(e) => onUpdateSfx(selected.key, { volume: Number(e.target.value) })}
               />
             </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selected.volume === 0}
+                onChange={(e) => onUpdateSfx(selected.key, { volume: e.target.checked ? 0 : 1 })}
+              />
+              <span className="field-label">ミュート</span>
+            </label>
             <button type="button" className="editor-toolbar-btn danger" onClick={() => onRemoveSfx(selected.key)}>
               削除
             </button>

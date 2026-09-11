@@ -13,6 +13,16 @@ export type GenerateVoiceoverInput = {
   voiceName: string;
 };
 
+/**
+ * GeminiのTTSプレビューモデルは、リクエスト自体は200 OKで成功するのに音声データが
+ * 空(finishReason=OTHER等)で返ってくることが一定確率である既知の問題を抱えている
+ * (Google公式ドキュメントも「テキストトークンが誤って返り500になることがあるため
+ * リトライを実装すること」と案内しており、同種の一過性の不具合)。
+ * HTTPレベルのエラーではないため isRetryableApiError では拾えず、専用にリトライ対象と
+ * して扱う。
+ */
+class NoAudioDataError extends Error {}
+
 /** Gemini TTSのレスポンスmimeType(例: "audio/L16;codec=pcm;rate=24000")からサンプルレートを取り出す。 */
 const parseSampleRate = (mimeType: string | undefined): number => {
   const match = mimeType?.match(/rate=(\d+)/);
@@ -89,7 +99,7 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
           "[generateVoiceover] 音声データが返されなかったレスポンス",
           JSON.stringify(response).slice(0, 2000)
         );
-        throw new Error(
+        throw new NoAudioDataError(
           reasonParts.length > 0
             ? `Gemini APIから音声データが返されませんでした(${reasonParts.join(", ")})`
             : "Gemini APIから音声データが返されませんでした"
@@ -100,10 +110,13 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
       return pcmToWav(pcmData, sampleRate);
     } catch (error) {
       lastError = error;
-      if (isRetryableApiError(error) && attempt < MAX_GENERATE_ATTEMPTS) {
+      const retryable = isRetryableApiError(error) || error instanceof NoAudioDataError;
+      if (retryable && attempt < MAX_GENERATE_ATTEMPTS) {
         const delayMs = RETRY_BASE_DELAY_MS * attempt;
         console.warn(
-          `[generateVoiceover] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`
+          `[generateVoiceover] 音声生成に失敗したため${delayMs}ms後に再試行します(試行${attempt}/${MAX_GENERATE_ATTEMPTS}): ${
+            error instanceof Error ? error.message : error
+          }`
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
