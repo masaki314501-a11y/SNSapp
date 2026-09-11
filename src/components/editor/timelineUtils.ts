@@ -116,11 +116,63 @@ export const findLargestGap = (
   return size > 0.05 ? { start: largest[0], size } : null;
 };
 
+// レンダー時のスキーマ検証(clip.durationInSeconds >= 0.3)を満たすための下限。
+// keepRangeの境界でちょうど切り詰められた発話区切りは、これを下回る細切れになりうる。
+const MIN_RENDERABLE_DURATION_IN_SECONDS = 0.3;
+
+/**
+ * 短すぎるクリップ(keepRangeの境界などで発話区切りが細切れになったもの)を、
+ * 同じkeepRange内で隣接するクリップに吸収してテキストを引き継ぐ(mergeWithNextと
+ * 同様、空でない側のテキストのみ連結)。吸収先が無い(range内に1件だけ)場合は、
+ * range内に収まる範囲で尺そのものを底上げする。
+ */
+const mergeTooShortSegments = <T extends TimelineSegment & { caption: string }>(
+  segments: T[],
+  rangeStart: number,
+  rangeEnd: number
+): T[] => {
+  const result = [...segments];
+  for (let i = 0; i < result.length; i++) {
+    if (result[i].durationInSeconds >= MIN_RENDERABLE_DURATION_IN_SECONDS) continue;
+    const tiny = result[i];
+    if (result.length === 1) {
+      // 浮動小数点の減算誤差でちょうど下限(0.3)を僅かに下回ると再びスキーマ検証に
+      // 引っかかるため、下限そのものではなく少し余裕を持たせた尺を目標にする。
+      const targetDuration = MIN_RENDERABLE_DURATION_IN_SECONDS + 0.02;
+      const extendedEnd = Math.min(rangeEnd, tiny.startFromSeconds + targetDuration);
+      const extendedStart = Math.max(rangeStart, extendedEnd - targetDuration);
+      result[i] = { ...tiny, startFromSeconds: extendedStart, durationInSeconds: extendedEnd - extendedStart };
+      continue;
+    }
+    const mergeIntoNext = i < result.length - 1;
+    const targetIndex = mergeIntoNext ? i + 1 : i - 1;
+    const target = result[targetIndex];
+    const mergedStart = Math.min(tiny.startFromSeconds, target.startFromSeconds);
+    const mergedEnd = Math.max(
+      tiny.startFromSeconds + tiny.durationInSeconds,
+      target.startFromSeconds + target.durationInSeconds
+    );
+    const captionParts = mergeIntoNext ? [tiny.caption, target.caption] : [target.caption, tiny.caption];
+    const merged: T = {
+      ...target,
+      startFromSeconds: mergedStart,
+      durationInSeconds: mergedEnd - mergedStart,
+      caption: captionParts.filter((text) => text.trim().length > 0).join(" "),
+    };
+    const spliceIndex = Math.min(i, targetIndex);
+    result.splice(spliceIndex, 2, merged);
+    i = spliceIndex - 1;
+  }
+  return result;
+};
+
 /**
  * 文字起こし結果(動画全体を対象に生成された時系列順のクリップ)を、ラフカット画面で選んだ
  * 「使う範囲(keepRanges、再生順)」だけに絞り込む。範囲境界をまたぐクリップは境界で切り詰め、
  * 各keepRangeの内部では時系列順(=文字起こし結果の並び)を保つ。keepRangesの並び順が
- * そのまま出力の再生順になる。
+ * そのまま出力の再生順になる。切り詰めで下限(0.3秒)を下回ったクリップは同じrange内の
+ * 隣接クリップに吸収する(range境界をまたいで吸収すると、カットで捨てた範囲を
+ * 誤って含めてしまうため、吸収はrange内に限定する)。
  */
 export const clipTranscribedToKeepRanges = <T extends TimelineSegment & { caption: string }>(
   transcribed: T[],
@@ -131,18 +183,20 @@ export const clipTranscribedToKeepRanges = <T extends TimelineSegment & { captio
   for (const range of keepRanges) {
     const rangeStart = range.startFromSeconds;
     const rangeEnd = range.startFromSeconds + range.durationInSeconds;
+    const withinRange: T[] = [];
     for (const segment of sorted) {
       const segStart = segment.startFromSeconds;
       const segEnd = segment.startFromSeconds + segment.durationInSeconds;
       const overlapStart = Math.max(segStart, rangeStart);
       const overlapEnd = Math.min(segEnd, rangeEnd);
       if (overlapEnd - overlapStart <= TIME_EPSILON_SECONDS) continue;
-      result.push({
+      withinRange.push({
         ...segment,
         startFromSeconds: overlapStart,
         durationInSeconds: overlapEnd - overlapStart,
       });
     }
+    result.push(...mergeTooShortSegments(withinRange, rangeStart, rangeEnd));
   }
   return result;
 };

@@ -176,7 +176,10 @@ export const buildStandardVideoProps = (params: {
   clips: params.segments.map((segment) => ({
     src: params.videoPath,
     caption: segment.caption,
-    durationInSeconds: segment.durationInSeconds,
+    // スキーマ側の下限(clip.durationInSeconds >= 0.3)を下回るクリップが
+    // (文字起こし結果をkeepRangeで切り詰めた際の細切れ等で)保存されていると、
+    // ここで弾かれないまま送信され書き出し時に検証エラーになるため、念のため底上げする。
+    durationInSeconds: Math.max(segment.durationInSeconds, 0.3),
     startFromSeconds: segment.startFromSeconds,
     captionAnimation: segment.captionAnimation,
     volume: segment.volume,
