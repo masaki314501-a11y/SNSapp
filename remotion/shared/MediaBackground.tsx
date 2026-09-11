@@ -15,6 +15,7 @@ type Props = {
   startFromSeconds: number;
   index: number;
   placeholderLabel: string;
+  volume?: number;
 };
 
 /**
@@ -27,6 +28,7 @@ export const MediaBackground: React.FC<Props> = ({
   startFromSeconds,
   index,
   placeholderLabel,
+  volume = 1,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -41,6 +43,7 @@ export const MediaBackground: React.FC<Props> = ({
         <OffthreadVideo
           src={resolveClipSrc(src)}
           startFrom={Math.round(startFromSeconds * fps)}
+          volume={volume}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (

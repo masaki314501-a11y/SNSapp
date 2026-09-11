@@ -7,14 +7,14 @@ import { standardVideoSchema, MIN_CLIPS, MAX_CLIPS } from "./standard/schema";
  * Node.jsのAPIルート(Route Handler)から安全に読み込める。
  * 実際の描画に使うコンポーネントは clientRegistry.tsx を参照。
  *
- * テンプレートは「フック(0-3秒)→本題(3-20秒)→CTA(20-25秒)」構成の
- * standard のみ。テンプレート選択UIは持たない。
+ * テンプレートは動画の音声を発話の区切りごとに字幕化する standard のみ。
+ * テンプレート選択UIは持たない。
  */
 export const templateRegistry = {
   standard: {
     compositionId: "Standard",
-    label: "フック→本題→CTA",
-    description: `結論を先出しするフック、クリップ${MIN_CLIPS}〜${MAX_CLIPS}個をつなぐ本題、一言CTAで構成するテンプレート`,
+    label: "音声字幕",
+    description: `動画の音声を発話の区切りごとに文字起こしし、テロップとして重ねるテンプレート(クリップ${MIN_CLIPS}〜${MAX_CLIPS}個)`,
     schema: standardVideoSchema,
   },
 } as const;

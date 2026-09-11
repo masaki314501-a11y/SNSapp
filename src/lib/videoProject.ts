@@ -1,0 +1,206 @@
+"use client";
+
+import {
+  CAPTION_ANIMATION_OPTIONS,
+  type CaptionAnimation,
+  type CaptionFontFamily,
+  type CaptionFontSize,
+  type CaptionPosition,
+  type CaptionStyle,
+} from "@video/shared/schema";
+import type { StandardVideoProps } from "@video/templates/standard/schema";
+
+/**
+ * 「動画をアップロード・字幕生成する画面(/create)」と
+ * 「クリップを編集・書き出しする画面(/edit)」をまたいで動画の編集状態を受け渡すための
+ * 共有ストア。アップロード済みファイルはpublic/videos/配下の静的パスとして残るため、
+ * ファイル本体(File/blob URL)を持ち回らなくてもvideoPathだけで次の画面から再生できる。
+ * 画面遷移だけでなく、リロード/再訪問時の自動保存・復元も同じ仕組みで兼ねる。
+ */
+
+export const DEFAULT_CAPTION_ANIMATION: CaptionAnimation = CAPTION_ANIMATION_OPTIONS[0].value;
+export const DEFAULT_CAPTION_STYLE: CaptionStyle = "pill";
+export const DEFAULT_CAPTION_FONT_FAMILY: CaptionFontFamily = "Noto Sans JP";
+export const DEFAULT_CAPTION_POSITION: CaptionPosition = "bottom";
+export const DEFAULT_CAPTION_FONT_SIZE: CaptionFontSize = "medium";
+export const DEFAULT_FADE_IN_OUT = false;
+export const DEFAULT_CLIP_VOLUME = 1;
+export const DEFAULT_PRIMARY_COLOR = "#FF3366";
+
+export type ProjectSegment = {
+  key: string;
+  caption: string;
+  startFromSeconds: number;
+  durationInSeconds: number;
+  captionAnimation: CaptionAnimation;
+  /** このクリップの元動画音量。0=ミュート、1=そのまま、2=倍量。 */
+  volume: number;
+};
+
+export type ProjectSfxClip = {
+  key: string;
+  src: string;
+  label: string;
+  /** 書き出し後の動画上でこの効果音を鳴らし始める秒数。 */
+  startFromSeconds: number;
+  volume: number;
+};
+
+export type ProjectBgm = {
+  src: string;
+  label: string;
+  volume: number;
+  /** 先頭でBGM音量を0から立ち上げる秒数。 */
+  fadeInSeconds: number;
+  /** 末尾でBGM音量を0まで下げる秒数。 */
+  fadeOutSeconds: number;
+};
+
+export type VideoProject = {
+  videoPath: string;
+  videoFileName: string | null;
+  videoDurationInSeconds: number;
+  primaryColor: string;
+  captionStyle: CaptionStyle;
+  fontFamily: CaptionFontFamily;
+  captionPosition: CaptionPosition;
+  fontSize: CaptionFontSize;
+  fadeInOut: boolean;
+  segments: ProjectSegment[];
+  sfx: ProjectSfxClip[];
+  bgm: ProjectBgm | null;
+};
+
+const PROJECT_STORAGE_KEY = "sns-app:video-project:v1";
+
+const isVideoProjectLike = (value: unknown): value is Partial<VideoProject> => {
+  if (typeof value !== "object" || value === null) return false;
+  const project = value as Partial<VideoProject>;
+  return (
+    typeof project.videoPath === "string" &&
+    project.videoPath.length > 0 &&
+    typeof project.videoDurationInSeconds === "number" &&
+    Array.isArray(project.segments)
+  );
+};
+
+/**
+ * 保存データを最新の形へ補完する。fontSize/fadeInOut/sfx/bgm/segment.volumeなどは
+ * 後から追加したフィールドのため、古い保存データには無いことがある。
+ */
+const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
+  videoPath: raw.videoPath ?? "",
+  videoFileName: raw.videoFileName ?? null,
+  videoDurationInSeconds: raw.videoDurationInSeconds ?? 0,
+  primaryColor: raw.primaryColor ?? DEFAULT_PRIMARY_COLOR,
+  captionStyle: raw.captionStyle ?? DEFAULT_CAPTION_STYLE,
+  fontFamily: raw.fontFamily ?? DEFAULT_CAPTION_FONT_FAMILY,
+  captionPosition: raw.captionPosition ?? DEFAULT_CAPTION_POSITION,
+  fontSize: raw.fontSize ?? DEFAULT_CAPTION_FONT_SIZE,
+  fadeInOut: raw.fadeInOut ?? DEFAULT_FADE_IN_OUT,
+  segments: (raw.segments ?? []).map((segment) => ({
+    ...segment,
+    volume: segment.volume ?? DEFAULT_CLIP_VOLUME,
+  })),
+  sfx: raw.sfx ?? [],
+  bgm: raw.bgm
+    ? {
+        ...raw.bgm,
+        fadeInSeconds: raw.bgm.fadeInSeconds ?? 0,
+        fadeOutSeconds: raw.bgm.fadeOutSeconds ?? 0,
+      }
+    : null,
+});
+
+/** 保存されているプロジェクトを読み込む。無ければnull(SSR/壊れたデータの場合もnull)。 */
+export const loadProject = (): VideoProject | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isVideoProjectLike(parsed) ? normalizeProject(parsed) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** JSON文字列からプロジェクトを復元する(エクスポート/インポート機能用)。無効なら null。 */
+export const parseProjectJson = (json: string): VideoProject | null => {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return isVideoProjectLike(parsed) ? normalizeProject(parsed) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveProject = (project: VideoProject): void => {
+  try {
+    window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
+  } catch {
+    // 保存容量の超過等は自動保存が使えないだけなので無視する
+  }
+};
+
+export const clearProject = (): void => {
+  try {
+    window.localStorage.removeItem(PROJECT_STORAGE_KEY);
+  } catch {
+    // 無視してよい
+  }
+};
+
+/** アップロード済み動画をブラウザで直接再生するためのURL(public/配下の静的パス)。 */
+export const projectVideoUrl = (videoPath: string): string => `/${videoPath}`;
+
+/**
+ * 編集状態(クリップ・スタイル・SE/BGM)からレンダー用のStandardVideoPropsを組み立てる。
+ * 編集画面(未保存の最新state)と書き出し画面(localStorageから読み込んだVideoProject)の
+ * 両方から同じ形で呼べるよう、個別フィールドを受け取る形にしている。
+ */
+export const buildStandardVideoProps = (params: {
+  videoPath: string;
+  segments: ProjectSegment[];
+  primaryColor: string;
+  captionStyle: CaptionStyle;
+  fontFamily: CaptionFontFamily;
+  captionPosition: CaptionPosition;
+  fontSize: CaptionFontSize;
+  fadeInOut: boolean;
+  sfxClips: ProjectSfxClip[];
+  bgm: ProjectBgm | null;
+}): StandardVideoProps => ({
+  // segmentsの配列順=再生順(並べ替え機能でユーザーが変更できる)。
+  // 元動画上の時刻順とは独立しているため、ここでは絶対にソートし直さない。
+  clips: params.segments.map((segment) => ({
+    src: params.videoPath,
+    caption: segment.caption,
+    durationInSeconds: segment.durationInSeconds,
+    startFromSeconds: segment.startFromSeconds,
+    captionAnimation: segment.captionAnimation,
+    volume: segment.volume,
+  })),
+  theme: {
+    primaryColor: params.primaryColor,
+    fontFamily: params.fontFamily,
+    captionPosition: params.captionPosition,
+    captionStyle: params.captionStyle,
+    fontSize: params.fontSize,
+    fadeInOut: params.fadeInOut,
+  },
+  sfx: params.sfxClips.map((clip) => ({
+    src: clip.src,
+    label: clip.label,
+    startFromSeconds: clip.startFromSeconds,
+    volume: clip.volume,
+  })),
+  bgm: params.bgm
+    ? {
+        src: params.bgm.src,
+        volume: params.bgm.volume,
+        fadeInSeconds: params.bgm.fadeInSeconds,
+        fadeOutSeconds: params.bgm.fadeOutSeconds,
+      }
+    : undefined,
+});

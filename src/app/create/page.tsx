@@ -1,20 +1,18 @@
-import { AutoEditor } from "./AutoEditor";
+import { UploadGenerator } from "./UploadGenerator";
 
 export default function CreatePage() {
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
+    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
       <div className="flex flex-col gap-2">
-        <span className="badge-pill neutral w-fit">Gemini APIで自動生成</span>
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-          ショート動画を作成
+        <h1 className="font-display text-2xl tracking-tight sm:text-3xl">
+          動画をアップロード
         </h1>
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          動画・参考スクリーンショット・タイトルを入力すると、AIが
-          「フック(0-3秒)→本題(3-20秒)→CTA(20-25秒)」の構成で自動生成します。
+          アップロード後、使う範囲を選ぶ(カット)→参考画像・字幕生成→編集の順に進みます。
         </p>
       </div>
 
-      <AutoEditor />
+      <UploadGenerator />
     </main>
   );
 }

@@ -22,16 +22,26 @@ const DELAY_RENDER_TIMEOUT_IN_MILLISECONDS = 90000;
  * @remotion/bundler の bundle() はプロセス内で1度だけ public/ をコピーして
  * 静的配信するため(bundle.ts参照)、サーバー起動後にアップロードされた動画は
  * そのスナップショットに存在せず404になる。レンダー時だけは絶対URLに差し替え、
- * 実際に稼働中のNext.jsサーバー(常に最新のpublic/を配信している)から
- * 直接読ませることでこれを回避する。
+ * 実際に稼働中のNext.jsサーバーから /api/media 経由で直接読ませることでこれを回避する
+ * (/api/media はリクエスト都度ファイルシステムを見るため、本番ビルドでも
+ * 起動後に増えたファイルを返せる。通常のpublicフォルダ配信はビルド時点の
+ * スナップショットしか返さず本番ビルドで404になるため使えない)。
+ *
+ * ヘッドレスChromium(レンダラー)は常にこのサーバーと同じマシン/コンテナ内から
+ * ループバック経由でアクセスするため、常にプレーンHTTPで到達できる。
+ * Codespaces等のポート転送プロキシ経由でブラウザからアクセスした場合、
+ * リクエストのoriginがhttpsになることがあるが、それをそのままレンダラーに渡すと
+ * ローカルのNext.jsサーバー(HTTPのみ)に対してTLSハンドシェイクを試みてしまい
+ * 失敗する(EPROTO: packet length too long)ため、常にループバックのHTTP originを使う。
  */
-const resolveUploadedSrc = (origin: string, src?: string): string | undefined => {
+const LOCAL_ORIGIN = `http://127.0.0.1:${process.env.PORT ?? 3000}`;
+
+const resolveUploadedSrc = (src?: string): string | undefined => {
   if (!src || src.startsWith("http://") || src.startsWith("https://")) return src;
-  return `${origin}/${src}`;
+  return `${LOCAL_ORIGIN}/api/media/${src}`;
 };
 
 export async function POST(request: Request) {
-  const origin = new URL(request.url).origin;
   const json = await request.json().catch(() => null);
 
   if (
@@ -62,10 +72,56 @@ export async function POST(request: Request) {
     ...parsed.data,
     clips: parsed.data.clips.map((clip) => ({
       ...clip,
-      src: resolveUploadedSrc(origin, clip.src),
+      src: resolveUploadedSrc(clip.src),
     })),
   };
   const jobId = createRenderJob();
+
+  const runRender = async () => {
+    updateRenderJob(jobId, { status: "starting", progress: 0, message: "ブラウザを起動中..." });
+    const serveUrl = await getServeUrl();
+    const puppeteerInstance = await getBrowserInstance();
+
+    updateRenderJob(jobId, { status: "starting", progress: 0, message: "動画の構成を解決中..." });
+    const composition = await selectComposition({
+      serveUrl,
+      id: template.compositionId,
+      inputProps,
+      puppeteerInstance,
+      timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
+    });
+
+    const outDir = path.join(process.cwd(), "public", "renders");
+    await mkdir(outDir, { recursive: true });
+    const outputLocation = path.join(outDir, `${jobId}.mp4`);
+
+    updateRenderJob(jobId, { status: "rendering", progress: 0, message: "フレームを描画中..." });
+    await renderMedia({
+      composition,
+      serveUrl,
+      codec: "h264",
+      outputLocation,
+      inputProps,
+      puppeteerInstance,
+      // CPUコアが少ない環境では動画フレームの合成処理がイベントループを
+      // 占有し、フォントファイル読み込み(delayRender)が既定の30秒
+      // タイムアウト内に完了しないことがあったため延長し、あわせて
+      // 並列タブによる競合を避けるため並列度も1に抑える。
+      concurrency: 1,
+      timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
+      onProgress: ({ progress }) => {
+        updateRenderJob(jobId, { status: "rendering", progress, message: "フレームを描画中..." });
+      },
+    });
+
+    updateRenderJob(jobId, { status: "rendering", progress: 1, message: "書き出しファイルを保存中..." });
+
+    updateRenderJob(jobId, {
+      status: "done",
+      progress: 1,
+      url: `/api/media/renders/${jobId}.mp4`,
+    });
+  };
 
   // レンダーはレスポンス返却後もバックグラウンドで進行させ、進捗はジョブストアを
   // ポーリングして取得する。Next.jsのリクエスト実行コンテキストが終了すると
@@ -73,52 +129,32 @@ export async function POST(request: Request) {
   // Node常駐サーバ(next start / next dev)であることが前提。
   after(async () => {
     try {
-      const serveUrl = await getServeUrl();
-      const puppeteerInstance = await getBrowserInstance();
-
-      const composition = await selectComposition({
-        serveUrl,
-        id: template.compositionId,
-        inputProps,
-        puppeteerInstance,
-        timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
-      });
-
-      const outDir = path.join(process.cwd(), "public", "renders");
-      await mkdir(outDir, { recursive: true });
-      const outputLocation = path.join(outDir, `${jobId}.mp4`);
-
-      await renderMedia({
-        composition,
-        serveUrl,
-        codec: "h264",
-        outputLocation,
-        inputProps,
-        puppeteerInstance,
-        // CPUコアが少ない環境では動画フレームの合成処理がイベントループを
-        // 占有し、フォントファイル読み込み(delayRender)が既定の30秒
-        // タイムアウト内に完了しないことがあったため延長し、あわせて
-        // 並列タブによる競合を避けるため並列度も1に抑える。
-        concurrency: 1,
-        timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
-        onProgress: ({ progress }) => {
-          updateRenderJob(jobId, { status: "rendering", progress });
-        },
-      });
-
+      await runRender();
+    } catch (firstError) {
+      // ヘッドレスChromeの起動・DevTools接続には@remotion/renderer内部で25秒の
+      // 固定タイムアウトがあり、CPUコアが少ない環境ではdevサーバーの再コンパイル等と
+      // 資源を取り合って初回だけ間に合わないことがある(getBrowserInstance()は
+      // 失敗時にキャッシュを捨てるため、再試行で新しいブラウザ起動を試せる)。
+      // そのため1回だけ自動リトライしてから諦める。
+      console.error("レンダー1回目の失敗、リトライします:", firstError);
       updateRenderJob(jobId, {
-        status: "done",
-        progress: 1,
-        url: `/renders/${jobId}.mp4`,
-      });
-    } catch (error) {
-      console.error(error);
-      updateRenderJob(jobId, {
-        status: "error",
+        status: "starting",
         progress: 0,
-        message:
-          error instanceof Error ? error.message : "レンダーに失敗しました",
+        message: "1回目のレンダーに失敗したため再試行しています...",
       });
+      try {
+        await runRender();
+      } catch (secondError) {
+        console.error(secondError);
+        updateRenderJob(jobId, {
+          status: "error",
+          progress: 0,
+          message:
+            secondError instanceof Error
+              ? secondError.message
+              : "レンダーに失敗しました",
+        });
+      }
     }
   });
 

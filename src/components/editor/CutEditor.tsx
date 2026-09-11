@@ -1,0 +1,457 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Player, type PlayerRef } from "@remotion/player";
+import { StandardVideo } from "@video/templates/standard/StandardVideo";
+import { getStandardVideoDurationInFrames } from "@video/templates/standard/duration";
+import { MAX_CLIPS } from "@video/templates/standard/schema";
+import { VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH, DEFAULT_CLIP_DURATION_IN_SECONDS } from "@video/shared/constants";
+import {
+  DEFAULT_CAPTION_ANIMATION,
+  DEFAULT_CLIP_VOLUME,
+  buildStandardVideoProps,
+  clearProject,
+  loadProject,
+  saveProject,
+  type ProjectSegment,
+  type VideoProject,
+} from "@/lib/videoProject";
+import {
+  MIN_SEGMENT_DURATION_IN_SECONDS,
+  findLargestGap,
+  clampTrimStart,
+  clampTrimEnd,
+  canSplitSegment,
+  splitSegment,
+} from "./timelineUtils";
+import { TimelineRoot } from "./timeline/TimelineRoot";
+
+/**
+ * アップロード直後の動画から、実際に使う範囲だけを粗く選ぶラフカット画面(/create/cut)。
+ * ここで捨てた範囲は以降(参考画像でのスタイル抽出・音声からの字幕生成)の対象にならないため、
+ * 不要な前置き・言い淀み・撮り直し部分などを先に切り捨てておくと後工程が速く・安く済む。
+ * テロップ・SE/BGM・スタイルはまだ持たず、クリップの分割・トリム・並べ替え・削除のみを扱う。
+ */
+const applyTrimPatch = (
+  segments: ProjectSegment[],
+  videoDurationInSeconds: number,
+  key: string,
+  patch: Partial<Pick<ProjectSegment, "startFromSeconds" | "durationInSeconds">>
+): ProjectSegment[] => {
+  const sortedByTime = [...segments].sort((a, b) => a.startFromSeconds - b.startFromSeconds);
+  const sortedIndex = sortedByTime.findIndex((segment) => segment.key === key);
+  if (sortedIndex === -1) return segments;
+
+  let updated = sortedByTime[sortedIndex];
+  if (patch.startFromSeconds !== undefined) {
+    updated = { ...updated, ...clampTrimStart(sortedIndex, sortedByTime, patch.startFromSeconds) };
+  }
+  if (patch.durationInSeconds !== undefined) {
+    updated = {
+      ...updated,
+      durationInSeconds: clampTrimEnd(sortedIndex, sortedByTime, videoDurationInSeconds, patch.durationInSeconds),
+    };
+  }
+  return segments.map((segment) => (segment.key === key ? updated : segment));
+};
+
+const EmptyState: React.FC = () => (
+  <div className="panel flex flex-col items-center gap-3 p-10 text-center">
+    <p className="text-sm font-medium">カットする動画がありません</p>
+    <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+      まずは動画をアップロードしてください
+    </p>
+    <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
+      動画をアップロードする →
+    </a>
+  </div>
+);
+
+export const CutEditor: React.FC = () => {
+  const router = useRouter();
+  const playerRef = useRef<PlayerRef>(null);
+
+  const [project, setProject] = useState<VideoProject | null>(null);
+  const [hasCheckedProject, setHasCheckedProject] = useState(false);
+  const [segments, setSegments] = useState<ProjectSegment[]>([]);
+  const [history, setHistory] = useState<ProjectSegment[][]>([]);
+  const [future, setFuture] = useState<ProjectSegment[][]>([]);
+  const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
+  const videoDurationInSeconds = project?.videoDurationInSeconds ?? 0;
+
+  useEffect(() => {
+    const loaded = loadProject();
+    if (loaded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
+      setProject(loaded);
+      setSegments(loaded.segments);
+    }
+    setHasCheckedProject(true);
+  }, []);
+
+  // 自動保存(カット結果は/create/styleへ渡す前提の一時状態だが、リロードしても続けられるようにする)。
+  useEffect(() => {
+    if (!project) return;
+    const timer = setTimeout(() => {
+      saveProject({ ...project, segments });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [project, segments]);
+
+  const props = useMemo(
+    () =>
+      buildStandardVideoProps({
+        videoPath: project?.videoPath ?? "",
+        segments,
+        primaryColor: project?.primaryColor ?? "#FF3366",
+        captionStyle: project?.captionStyle ?? "pill",
+        fontFamily: project?.fontFamily ?? "Noto Sans JP",
+        captionPosition: project?.captionPosition ?? "bottom",
+        fontSize: project?.fontSize ?? "medium",
+        fadeInOut: false,
+        sfxClips: [],
+        bgm: null,
+      }),
+    [segments, project]
+  );
+  const durationInFrames = useMemo(() => getStandardVideoDurationInFrames(props), [props]);
+
+  const [previewFrame, setPreviewFrame] = useState(0);
+  const hasClips = segments.length > 0;
+  useEffect(() => {
+    if (!hasClips) return;
+    const player = playerRef.current;
+    if (!player) return;
+    const handleFrameUpdate = ({ detail }: { detail: { frame: number } }) => {
+      setPreviewFrame(detail.frame);
+    };
+    player.addEventListener("frameupdate", handleFrameUpdate);
+    return () => player.removeEventListener("frameupdate", handleFrameUpdate);
+  }, [hasClips]);
+
+  const segmentFrameRanges = useMemo(
+    () =>
+      segments.reduce<{ key: string; startFrame: number; endFrame: number }[]>((acc, segment) => {
+        const startFrame = acc.length > 0 ? acc[acc.length - 1].endFrame : 0;
+        const endFrame = startFrame + Math.round(segment.durationInSeconds * VIDEO_FPS);
+        return [...acc, { key: segment.key, startFrame, endFrame }];
+      }, []),
+    [segments]
+  );
+  const activeProgramSegment = useMemo(() => {
+    const current =
+      segmentFrameRanges.find((range) => previewFrame < range.endFrame) ??
+      segmentFrameRanges[segmentFrameRanges.length - 1];
+    if (!current) return null;
+    return { key: current.key, offsetSeconds: (previewFrame - current.startFrame) / VIDEO_FPS };
+  }, [segmentFrameRanges, previewFrame]);
+  const activeSegmentKey = activeProgramSegment?.key ?? null;
+
+  const largestGap = useMemo(() => findLargestGap(segments, videoDurationInSeconds), [segments, videoDurationInSeconds]);
+  const canAddSegment = segments.length < MAX_CLIPS && largestGap !== null;
+  const canRemoveSegment = segments.length > 0;
+
+  const totalSeconds = useMemo(
+    () => segments.reduce((sum, segment) => sum + segment.durationInSeconds, 0),
+    [segments]
+  );
+
+  const pushHistory = () => {
+    setHistory((prev) => [...prev, segments].slice(-50));
+    setFuture([]);
+  };
+
+  const selectOnly = (key: string | null) => {
+    setSelectedSegmentKey(key);
+    setSelectedKeys(key ? new Set([key]) : new Set());
+  };
+
+  const undo = () => {
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setFuture((f) => [segments, ...f]);
+      setSegments(last);
+      selectOnly(null);
+      return prev.slice(0, -1);
+    });
+  };
+
+  const redo = () => {
+    setFuture((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev[0];
+      setHistory((h) => [...h, segments]);
+      setSegments(next);
+      selectOnly(null);
+      return prev.slice(1);
+    });
+  };
+
+  const canUndo = history.length > 0;
+  const canRedo = future.length > 0;
+
+  const updateSegmentTrim = (key: string, patch: Partial<Pick<ProjectSegment, "startFromSeconds" | "durationInSeconds">>) => {
+    setSegments((prev) => applyTrimPatch(prev, videoDurationInSeconds, key, patch));
+  };
+
+  const addSegment = () => {
+    if (!canAddSegment || !largestGap) return;
+    const durationInSeconds = Math.min(
+      Math.max(Math.min(DEFAULT_CLIP_DURATION_IN_SECONDS, largestGap.size), MIN_SEGMENT_DURATION_IN_SECONDS),
+      largestGap.size
+    );
+    const newSegment: ProjectSegment = {
+      key: crypto.randomUUID(),
+      caption: "",
+      startFromSeconds: largestGap.start,
+      durationInSeconds,
+      captionAnimation: DEFAULT_CAPTION_ANIMATION,
+      volume: DEFAULT_CLIP_VOLUME,
+    };
+    pushHistory();
+    setSegments((prev) => [...prev, newSegment]);
+    selectOnly(newSegment.key);
+  };
+
+  const removeSegments = (keys: Set<string>) => {
+    if (keys.size === 0 || !canRemoveSegment) return;
+    pushHistory();
+    setSegments((prev) => prev.filter((segment) => !keys.has(segment.key)));
+    selectOnly(null);
+  };
+
+  const reorderSegment = (draggedKey: string, targetKey: string) => {
+    if (draggedKey === targetKey) return;
+    if (!segments.some((s) => s.key === draggedKey) || !segments.some((s) => s.key === targetKey)) return;
+    pushHistory();
+    setSegments((prev) => {
+      const next = [...prev];
+      const fromIndex = next.findIndex((segment) => segment.key === draggedKey);
+      const toIndex = next.findIndex((segment) => segment.key === targetKey);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const canSplitAtPlayhead = useMemo(() => {
+    if (!activeProgramSegment || segments.length >= MAX_CLIPS) return false;
+    const segment = segments.find((s) => s.key === activeProgramSegment.key);
+    if (!segment) return false;
+    return canSplitSegment(segment, activeProgramSegment.offsetSeconds);
+  }, [activeProgramSegment, segments]);
+
+  const splitAtPlayhead = () => {
+    if (!activeProgramSegment) return;
+    const { key, offsetSeconds } = activeProgramSegment;
+    setSegments((prev) => {
+      const index = prev.findIndex((segment) => segment.key === key);
+      if (index === -1 || prev.length >= MAX_CLIPS) return prev;
+      const segment = prev[index];
+      if (!canSplitSegment(segment, offsetSeconds)) return prev;
+      pushHistory();
+      const newKey = crypto.randomUUID();
+      return splitSegment(prev, index, offsetSeconds, newKey);
+    });
+  };
+
+  /** 今プレビューが再生している範囲の開始点(イン点)を、再生ヘッドの位置に打ち直す。 */
+  const trimStartToPlayhead = () => {
+    if (!activeProgramSegment) return;
+    const { key, offsetSeconds } = activeProgramSegment;
+    const segment = segments.find((s) => s.key === key);
+    if (!segment) return;
+    updateSegmentTrim(key, { startFromSeconds: segment.startFromSeconds + offsetSeconds });
+  };
+
+  /** 今プレビューが再生している範囲の終了点(アウト点)を、再生ヘッドの位置に打ち直す。 */
+  const trimEndToPlayhead = () => {
+    if (!activeProgramSegment) return;
+    const { key, offsetSeconds } = activeProgramSegment;
+    updateSegmentTrim(key, { durationInSeconds: offsetSeconds });
+  };
+
+  const selectSegment = (
+    key: string,
+    index: number,
+    modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }
+  ) => {
+    if (modifiers.shiftKey && selectedSegmentKey) {
+      const anchorIndex = segments.findIndex((segment) => segment.key === selectedSegmentKey);
+      if (anchorIndex !== -1) {
+        const [from, to] = anchorIndex < index ? [anchorIndex, index] : [index, anchorIndex];
+        setSelectedKeys(new Set(segments.slice(from, to + 1).map((segment) => segment.key)));
+        return;
+      }
+    }
+    if (modifiers.metaKey || modifiers.ctrlKey) {
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      setSelectedSegmentKey(key);
+      return;
+    }
+    selectOnly(key);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditableTarget =
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable;
+      const isFocusedControl = target instanceof HTMLButtonElement || target instanceof HTMLSelectElement;
+      const isRedoCombo =
+        (e.metaKey || e.ctrlKey) && ((e.shiftKey && e.key.toLowerCase() === "z") || e.key.toLowerCase() === "y");
+      const isUndoCombo = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z";
+
+      if (isRedoCombo) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (isUndoCombo) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (isEditableTarget) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedKeys.size > 0) {
+        e.preventDefault();
+        removeSegments(selectedKeys);
+        return;
+      }
+      if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey && canSplitAtPlayhead) {
+        e.preventDefault();
+        splitAtPlayhead();
+        return;
+      }
+      if (e.key.toLowerCase() === "i" && !e.metaKey && !e.ctrlKey && activeSegmentKey) {
+        e.preventDefault();
+        trimStartToPlayhead();
+        return;
+      }
+      if (e.key.toLowerCase() === "o" && !e.metaKey && !e.ctrlKey && activeSegmentKey) {
+        e.preventDefault();
+        trimEndToPlayhead();
+        return;
+      }
+      if (isFocusedControl) return;
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        playerRef.current?.toggle();
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const player = playerRef.current;
+        if (!player) return;
+        e.preventDefault();
+        const delta = e.key === "ArrowLeft" ? -1 : 1;
+        player.seekTo(Math.max(0, player.getCurrentFrame() + delta));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
+  const handleStartOver = () => {
+    if (!window.confirm("現在の内容を破棄して、新しい動画のアップロードからやり直しますか?")) return;
+    clearProject();
+    router.push("/create");
+  };
+
+  const handleGoToStyle = () => {
+    if (!project || segments.length === 0) return;
+    saveProject({ ...project, segments });
+    router.push("/create/style");
+  };
+
+  if (!hasCheckedProject) return null;
+  if (!project) return <EmptyState />;
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <button type="button" onClick={handleStartOver} className="btn-ghost self-start text-xs">
+        ← 別の動画からやり直す
+      </button>
+
+      <div
+        style={{
+          height: "min(58vh, 620px)",
+          aspectRatio: `${VIDEO_WIDTH} / ${VIDEO_HEIGHT}`,
+          borderRadius: 8,
+          overflow: "hidden",
+          border: "1px solid var(--border-strong)",
+          alignSelf: "center",
+        }}
+      >
+        <Player
+          ref={playerRef}
+          component={StandardVideo}
+          inputProps={props}
+          durationInFrames={Math.max(durationInFrames, 1)}
+          fps={VIDEO_FPS}
+          compositionWidth={VIDEO_WIDTH}
+          compositionHeight={VIDEO_HEIGHT}
+          style={{ width: "100%", height: "100%" }}
+          controls
+          loop
+        />
+      </div>
+      <p className="text-center text-xs" style={{ color: "var(--muted-2)" }}>
+        Space=再生/一時停止・←→=1フレーム送り・S=分割・I/O=再生位置をイン/アウト点に
+      </p>
+
+      <TimelineRoot
+        segments={segments}
+        sfxClips={[]}
+        bgm={null}
+        videoPath={project.videoPath}
+        totalDurationSeconds={totalSeconds}
+        currentSeconds={previewFrame / VIDEO_FPS}
+        selectedKeys={selectedKeys}
+        activeSegmentKey={activeSegmentKey}
+        audioSelection={null}
+        onSelectSegment={selectSegment}
+        onTrimStart={(key, value) => updateSegmentTrim(key, { startFromSeconds: value })}
+        onTrimEnd={(key, value) => updateSegmentTrim(key, { durationInSeconds: value })}
+        onReorder={reorderSegment}
+        onSelectSfx={() => {}}
+        onMoveSfx={() => {}}
+        onSelectBgm={() => {}}
+        onScrub={(seconds) => playerRef.current?.seekTo(Math.round(seconds * VIDEO_FPS))}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
+        canAddSegment={canAddSegment}
+        onAddSegment={addSegment}
+        selectedCount={selectedKeys.size}
+        onDeleteSelected={() => removeSegments(selectedKeys)}
+        onOpenBulkEdit={() => {}}
+        canOpenBulkEdit={false}
+        canSplitAtPlayhead={canSplitAtPlayhead}
+        onSplitAtPlayhead={splitAtPlayhead}
+        onTrimStartToPlayhead={trimStartToPlayhead}
+        onTrimEndToPlayhead={trimEndToPlayhead}
+        hideAudioTracks
+      />
+
+      <button
+        type="button"
+        onClick={handleGoToStyle}
+        disabled={segments.length === 0}
+        className="btn-primary flex h-14 items-center justify-center px-6 text-base"
+      >
+        この範囲で進む(参考画像・字幕生成へ) →
+      </button>
+    </div>
+  );
+};

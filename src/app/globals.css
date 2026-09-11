@@ -1,19 +1,53 @@
 @import "tailwindcss";
 
+/*
+ * 見出し用の表示フォント。テロップ用に同梱済みのDela Gothic One(public/fonts/)を
+ * 流用する(remotion/shared/font.tsのレンダー用ロードとは独立した、ブラウザ表示専用の@font-face)。
+ * -japaneseサブセットのためラテン文字のグリフが無い可能性があるが、CSSのfont-familyは
+ * 文字単位でフォールバックするため、次の書体(Hiragino Sans等)に自動で逃げて崩れない。
+ */
+@font-face {
+  font-family: "Dela Gothic One";
+  src: url("/fonts/dela-gothic-one/dela-gothic-one-japanese-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --background: #ffffff;
-  --background-elevated: #f6f6f7;
-  --background-elevated-2: #eeeef0;
-  --border: rgba(0, 0, 0, 0.1);
-  --border-strong: rgba(0, 0, 0, 0.22);
-  --foreground: #0b0b0c;
-  --muted: #6b6b70;
-  --muted-2: #96969b;
-  --accent: #0b0b0c;
-  --accent-contrast: #ffffff;
-  --success: #16a34a;
-  --warning: #b45309;
-  --danger: #dc2626;
+  /* 暖色寄りのニュートラル(生成AIツールにありがちな青紫グラデーションと距離を置く) */
+  --background: #fffcf7;
+  --background-elevated: #fff4e6;
+  --background-elevated-2: #ffe9cf;
+  --foreground: #241c15;
+  --muted: #6e6156;
+  --muted-2: #988a7c;
+  --border: rgba(36, 28, 21, 0.14);
+  --border-strong: rgba(36, 28, 21, 0.55);
+
+  /* ブランドアクセント(4色サイクル)。紫系は使わず、コーラル/ティール/ゴールド/ブルーで構成する */
+  --accent: #ff5a36;
+  --accent-contrast: #fffaf5;
+  --accent-soft: #ffe4d6;
+  --accent-2: #0e9384;
+  --accent-2-soft: #d8f1ec;
+  --accent-3: #f2a900;
+  --accent-3-soft: #fdecc0;
+  --accent-4: #2f6fed;
+  --accent-4-soft: #dbe6fd;
+
+  --success: #12b76a;
+  --success-soft: #d7f5e6;
+  --warning: #f2a900;
+  --warning-soft: #fdecc0;
+  --danger: #e23b6b;
+  --danger-soft: #fbdde7;
+
+  /* ネオブルータリズム寄りの「ポップ」な太縁+ハードシャドウ */
+  --shadow-pop: 3px 3px 0 var(--foreground);
+  --shadow-pop-sm: 2px 2px 0 var(--foreground);
+  --shadow-pop-hover: 5px 5px 0 var(--foreground);
+  --shadow-pop-active: 1px 1px 0 var(--foreground);
 }
 
 @theme inline {
@@ -25,11 +59,16 @@
   --color-border-strong: var(--border-strong);
   --color-muted: var(--muted);
   --color-muted-2: var(--muted-2);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --color-accent-4: var(--accent-4);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: "Dela Gothic One", var(--font-geist-sans);
 }
 
 html {
@@ -44,8 +83,8 @@ body {
 }
 
 ::selection {
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 ::-webkit-scrollbar {
@@ -66,7 +105,20 @@ body {
 
 /* --- reusable component classes --- */
 
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
 .panel {
+  background: var(--background-elevated);
+  border: 1.5px solid var(--foreground);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+}
+
+.panel-flat {
   background: var(--background-elevated);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -81,19 +133,19 @@ body {
 
 .field-label {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--muted);
 }
 
 .field-input {
   background: var(--background-elevated-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
   padding: 10px 14px;
   font-size: 14px;
   color: var(--foreground);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
   width: 100%;
 }
 .field-input::placeholder {
@@ -102,7 +154,7 @@ body {
 .field-input:focus {
   outline: none;
   border-color: var(--foreground);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-pop-sm);
 }
 .field-input:disabled {
   opacity: 0.5;
@@ -112,43 +164,63 @@ body {
 .btn-primary {
   background: var(--accent);
   color: var(--accent-contrast);
-  font-weight: 600;
-  border-radius: 10px;
-  transition: opacity 0.15s ease;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 2px solid var(--foreground);
+  box-shadow: var(--shadow-pop);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.85;
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-pop-hover);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: var(--shadow-pop-active);
 }
 .btn-primary:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-outline {
-  border: 1px solid var(--border-strong);
+  border: 2px solid var(--foreground);
   color: var(--foreground);
-  border-radius: 10px;
-  background: transparent;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  border-radius: 12px;
+  background: var(--background);
+  box-shadow: var(--shadow-pop-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 .btn-outline:hover:not(:disabled) {
-  border-color: var(--foreground);
   background: var(--background-elevated-2);
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-pop-hover);
+}
+.btn-outline:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: none;
 }
 .btn-outline:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-ghost {
   color: var(--muted);
-  transition: color 0.15s ease;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 .btn-ghost:hover:not(:disabled) {
   color: var(--danger);
+  background: var(--danger-soft);
 }
 .btn-ghost:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -156,25 +228,28 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 2px solid var(--foreground);
+  background: var(--accent-3-soft);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 800;
   font-family: var(--font-mono);
   flex-shrink: 0;
+  box-shadow: var(--shadow-pop-sm);
 }
 
 .upload-drop {
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
+  border: 2px dashed var(--border-strong);
+  border-radius: 12px;
   background: var(--background-elevated-2);
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .upload-drop:hover {
-  border-color: var(--foreground);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .badge-pill {
@@ -184,23 +259,27 @@ body {
   border-radius: 999px;
   padding: 4px 12px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
+  border: 1.5px solid var(--foreground);
 }
 .badge-pill.neutral {
-  color: var(--muted);
-  border: 1px solid var(--border-strong);
+  color: var(--foreground);
+  background: var(--background-elevated-2);
 }
 .badge-pill.success {
-  color: var(--success);
-  background: rgba(34, 197, 94, 0.12);
+  color: var(--foreground);
+  background: var(--success-soft);
+  border-color: var(--success);
 }
 .badge-pill.warning {
-  color: var(--warning);
-  background: rgba(234, 179, 8, 0.12);
+  color: var(--foreground);
+  background: var(--warning-soft);
+  border-color: var(--warning);
 }
 .badge-pill.danger {
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--foreground);
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 input[type="file"] {
@@ -210,22 +289,87 @@ input[type="file"] {
 input[type="file"]::file-selector-button {
   margin-right: 12px;
   padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border-strong);
-  background: var(--background-elevated-2);
+  border-radius: 10px;
+  border: 2px solid var(--foreground);
+  background: var(--background);
   color: var(--foreground);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  box-shadow: var(--shadow-pop-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 input[type="file"]::file-selector-button:hover {
+  background: var(--accent-soft);
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-pop-hover);
+}
+
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.tab-button {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+.tab-button:hover {
+  color: var(--foreground);
+}
+.tab-button.active {
+  color: var(--foreground);
+  background: var(--accent-soft);
   border-color: var(--foreground);
-  background: var(--background-elevated);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 28, 21, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.modal-panel {
+  background: var(--background);
+  border: 2px solid var(--foreground);
+  border-radius: 16px;
+  box-shadow: 6px 6px 0 var(--foreground);
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.preset-card {
+  border: 2px solid var(--foreground);
+  border-radius: 12px;
+  background: var(--background);
+  box-shadow: var(--shadow-pop-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  text-align: left;
+}
+.preset-card:hover {
+  background: var(--accent-soft);
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-pop-hover);
 }
 
 input[type="color"] {
-  border: 1px solid var(--border);
+  border: 2px solid var(--foreground);
   border-radius: 8px;
   background: var(--background-elevated-2);
   padding: 3px;
@@ -237,4 +381,53 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
   border: none;
   border-radius: 5px;
+}
+
+/* --- 進捗バー(レンダー・字幕生成) --- */
+.progress-track {
+  height: 10px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1.5px solid var(--foreground);
+  background: var(--background-elevated-2);
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+/* 進捗が0〜100%で測れない段階(ブラウザ起動中など)向けの不確定表示。 */
+.progress-fill.indeterminate {
+  width: 40%;
+  animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+/* --- ログ表示(レンダー・字幕生成の進行メッセージ履歴) --- */
+.log-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--background-elevated-2);
+  padding: 10px 12px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.log-panel .log-line.current {
+  color: var(--foreground);
+  font-weight: 700;
 }

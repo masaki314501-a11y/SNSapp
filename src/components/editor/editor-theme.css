@@ -1,0 +1,422 @@
+/*
+ * /edit 画面のタイムライン(ルーラー・トラック・クリップブロック・インスペクター等)専用の
+ * レイアウト/コンポーネントクラス。配色は独自のダークテーマにはせず、globals.cssの
+ * 既存トークン(var(--background)等、ライトな「ポップ」ブランド)をそのまま使う
+ * ("見た目の骨格(横長タイムライン・サムネイル・波形)はFinal Cut Pro/CapCut寄りにするが、
+ * 色味はアプリ既存のブランドを維持する"というフィードバックに合わせた構成)。
+ */
+
+/* --- レイアウト --- */
+.editor-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.editor-top-row {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .editor-top-row {
+    flex-direction: row;
+    align-items: stretch;
+  }
+}
+
+.editor-preview-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: var(--background-elevated);
+  border: 1.5px solid var(--foreground);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  padding: 16px;
+}
+
+/* --- タイムライン・ツールバー --- */
+.editor-timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  background: var(--background-elevated);
+  border: 1.5px solid var(--foreground);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.editor-timeline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--background-elevated-2);
+  border-bottom: 1.5px solid var(--foreground);
+  flex-wrap: wrap;
+}
+
+.editor-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--foreground);
+  background: var(--background);
+  border: 2px solid var(--foreground);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+.editor-toolbar-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-pop-hover);
+}
+.editor-toolbar-btn:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: var(--shadow-pop-active);
+}
+.editor-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+.editor-toolbar-btn.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.editor-toolbar-btn.cursor-pointer {
+  cursor: pointer;
+}
+
+.editor-timeline-spacer {
+  flex: 1;
+}
+
+.editor-timecode {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.editor-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.editor-zoom-control input[type="range"] {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+/* --- タイムライン本体 --- */
+.editor-timeline-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--background);
+}
+
+.editor-timeline-content {
+  position: relative;
+  min-width: 100%;
+}
+
+.editor-ruler {
+  position: relative;
+  background: var(--background-elevated-2);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.editor-ruler-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border-strong);
+  padding-left: 4px;
+  display: flex;
+  align-items: center;
+}
+.editor-ruler-tick span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+.editor-tracks {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-track {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+.editor-track-label {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  width: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--background-elevated-2);
+  border-right: 1px solid var(--border);
+}
+.editor-lane {
+  position: relative;
+  background: var(--background);
+}
+.editor-track-video .editor-lane {
+  height: 76px;
+}
+.editor-track-sfx .editor-lane,
+.editor-track-bgm .editor-lane {
+  height: 38px;
+}
+
+/* --- クリップブロック --- */
+.editor-clip-block {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  border: 1.5px solid var(--border-strong);
+  touch-action: none;
+}
+.editor-clip-block:active {
+  cursor: grabbing;
+}
+.editor-clip-block.video {
+  background: var(--background-elevated-2);
+  border-color: var(--foreground);
+}
+.editor-clip-block.video.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.editor-clip-block.video.active {
+  border-color: var(--danger);
+}
+.editor-clip-block.sfx {
+  background: var(--accent-2-soft);
+  border-color: var(--accent-2);
+}
+.editor-clip-block.sfx.selected {
+  outline: 2px solid var(--accent-2);
+  outline-offset: -1px;
+}
+.editor-clip-block.bgm {
+  background: var(--success-soft);
+  border-color: var(--success);
+}
+.editor-clip-block.bgm.selected {
+  outline: 2px solid var(--success);
+  outline-offset: -1px;
+}
+
+.editor-clip-thumbs {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.editor-clip-thumbs img,
+.editor-clip-thumb-placeholder {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  object-fit: cover;
+  background: var(--background-elevated-2);
+}
+
+.editor-clip-caption {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--foreground);
+  background: rgba(255, 252, 247, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.editor-clip-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.editor-clip-handle.left {
+  left: 0;
+}
+.editor-clip-handle.right {
+  right: 0;
+}
+.editor-clip-handle:hover {
+  background: rgba(36, 28, 21, 0.18);
+}
+
+.editor-clip-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(36, 28, 21, 0.35), transparent);
+}
+.editor-clip-fade.right {
+  right: 0;
+  background: linear-gradient(to left, rgba(36, 28, 21, 0.35), transparent);
+}
+
+.editor-waveform {
+  position: absolute;
+  inset: 0;
+  fill: rgba(36, 28, 21, 0.4);
+  pointer-events: none;
+}
+
+.editor-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  z-index: 30;
+  pointer-events: none;
+}
+.editor-playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--danger);
+}
+
+/* --- インスペクター --- */
+.editor-inspector {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-elevated);
+  border: 1.5px solid var(--foreground);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+@media (min-width: 900px) {
+  .editor-inspector {
+    width: 300px;
+    flex-shrink: 0;
+  }
+}
+.editor-inspector-body {
+  padding: 14px;
+  flex: 1;
+  min-height: 200px;
+}
+.editor-inspector-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+.editor-inspector-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.editor-inspector-fields h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+.editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.editor-field textarea {
+  min-height: 56px;
+  resize: vertical;
+  font-family: inherit;
+}
+.editor-field input,
+.editor-field select,
+.editor-field textarea {
+  background: var(--background-elevated-2);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--foreground);
+}
+.editor-field input:focus,
+.editor-field select:focus,
+.editor-field textarea:focus {
+  outline: none;
+  border-color: var(--foreground);
+}
+.editor-field input[type="range"] {
+  accent-color: var(--accent);
+  padding: 0;
+  border: none;
+  background: none;
+}
+.editor-field-row {
+  display: flex;
+  gap: 10px;
+}
+.editor-field-row .editor-field {
+  flex: 1;
+}
+.editor-inspector-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.editor-inspector-footer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1.5px solid var(--foreground);
+  background: var(--background-elevated-2);
+}
+.editor-inspector-footer input[type="file"] {
+  display: none;
+}

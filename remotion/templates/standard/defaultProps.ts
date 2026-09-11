@@ -1,5 +1,4 @@
 import type { StandardVideoProps } from "./schema";
-import { NOTO_SANS_JP_FONT_FAMILY } from "../../shared/font";
 
 /**
  * Studio/Player でのプレビュー用サンプルデータ。
@@ -7,36 +6,36 @@ import { NOTO_SANS_JP_FONT_FAMILY } from "../../shared/font";
  * 実素材を使う場合は public/videos/ 配下に動画を置き、staticFile("videos/xxx.mp4") を指定する。
  */
 export const defaultStandardVideoProps: StandardVideoProps = {
-  hook: {
-    headline: "知らないと損する\n節約術3選",
-    subline: "最後まで見て",
-  },
   clips: [
     {
-      caption: "①まずはここをチェック",
-      durationInSeconds: 5,
+      caption: "まずはここをチェック",
+      durationInSeconds: 3,
       startFromSeconds: 0,
       captionAnimation: "slide-up",
+      volume: 1,
     },
     {
-      caption: "②次にやるべきこと",
-      durationInSeconds: 6,
-      startFromSeconds: 0,
+      caption: "次にやるべきこと",
+      durationInSeconds: 3,
+      startFromSeconds: 3,
       captionAnimation: "pop",
+      volume: 1,
     },
     {
-      caption: "③仕上げの一手",
-      durationInSeconds: 6,
-      startFromSeconds: 0,
+      caption: "仕上げの一手",
+      durationInSeconds: 3,
+      startFromSeconds: 6,
       captionAnimation: "zoom-in",
+      volume: 1,
     },
   ],
-  cta: {
-    text: "詳しくはプロフィールへ",
-  },
   theme: {
     primaryColor: "#FF3366",
-    fontFamily: `"${NOTO_SANS_JP_FONT_FAMILY}", "Hiragino Sans", sans-serif`,
+    fontFamily: "Noto Sans JP",
     captionStyle: "pill",
+    captionPosition: "bottom",
+    fontSize: "medium",
+    fadeInOut: false,
   },
+  sfx: [],
 };

@@ -1,7 +1,9 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { getCaptionAnimationStyle } from "./captionAnimations";
-import type { CaptionAnimation, CaptionStyle } from "./schema";
+import { ensureCaptionFontLoaded } from "./font";
+import type { CaptionAnimation, CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "./schema";
+import { CAPTION_FONT_SIZE_SCALE, resolveFontFamilyStack } from "./schema";
 
 type Props = {
   text: string;
@@ -9,7 +11,17 @@ type Props = {
   animation: CaptionAnimation;
   /** pill=アクセントカラーの角丸背景、outline=背景無しの白文字+黒縁取り */
   captionStyle?: CaptionStyle;
-  bottomOffset?: number;
+  fontFamily?: CaptionFontFamily;
+  position?: CaptionPosition;
+  fontSize?: CaptionFontSize;
+};
+
+const OFFSET_FROM_EDGE = 160;
+
+const POSITION_STYLE: Record<CaptionPosition, React.CSSProperties> = {
+  top: { justifyContent: "flex-start", paddingTop: OFFSET_FROM_EDGE, paddingBottom: 0 },
+  middle: { justifyContent: "center", paddingTop: 0, paddingBottom: 0 },
+  bottom: { justifyContent: "flex-end", paddingTop: 0, paddingBottom: OFFSET_FROM_EDGE },
 };
 
 /**
@@ -21,11 +33,24 @@ export const AnimatedCaption: React.FC<Props> = ({
   accentColor,
   animation,
   captionStyle = "pill",
-  bottomOffset = 160,
+  fontFamily = "Noto Sans JP",
+  position = "bottom",
+  fontSize = "medium",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { transform, opacity, clipPath } = getCaptionAnimationStyle(animation, frame, fps);
+  const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(animation, frame, fps);
+  // 選択されているフォントだけを遅延読み込みする(全書体を毎回読み込むのは無駄が大きいため)。
+  void ensureCaptionFontLoaded(fontFamily);
+
+  if (!text.trim()) {
+    // 発話が無い無音区間はテロップを表示しない(pillスタイルの空の背景ボックスが
+    // 出てしまうのを防ぐ)。
+    return null;
+  }
+
+  const fontFamilyStack = resolveFontFamilyStack(fontFamily);
+  const sizeScale = CAPTION_FONT_SIZE_SCALE[fontSize];
 
   const textStyle: React.CSSProperties =
     captionStyle === "outline"
@@ -34,7 +59,8 @@ export const AnimatedCaption: React.FC<Props> = ({
           color: "white",
           WebkitTextStroke: `2.5px ${accentColor}`,
           paintOrder: "stroke fill",
-          fontSize: 48,
+          fontFamily: fontFamilyStack,
+          fontSize: 48 * sizeScale,
           fontWeight: 900,
           lineHeight: 1.35,
           textShadow: "0 4px 12px rgba(0,0,0,0.5)",
@@ -43,7 +69,8 @@ export const AnimatedCaption: React.FC<Props> = ({
           display: "inline-block",
           backgroundColor: accentColor,
           color: "white",
-          fontSize: 44,
+          fontFamily: fontFamilyStack,
+          fontSize: 44 * sizeScale,
           fontWeight: 800,
           padding: "16px 32px",
           borderRadius: 16,
@@ -54,14 +81,13 @@ export const AnimatedCaption: React.FC<Props> = ({
   return (
     <AbsoluteFill
       style={{
-        justifyContent: "flex-end",
+        ...POSITION_STYLE[position],
         alignItems: "center",
-        paddingBottom: bottomOffset,
         paddingLeft: 48,
         paddingRight: 48,
       }}
     >
-      <div style={{ transform, opacity, maxWidth: "100%", textAlign: "center" }}>
+      <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
         <span style={{ ...textStyle, clipPath }}>{text}</span>
       </div>
     </AbsoluteFill>

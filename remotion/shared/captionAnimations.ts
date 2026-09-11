@@ -6,6 +6,8 @@ type AnimationStyle = {
   opacity: number;
   /** "highlight-sweep"専用: マーカーで左から塗るような背景の見え方(clip-path)。 */
   clipPath?: string;
+  /** "blur-in"専用: ぼかしから鮮明になるフィルター。 */
+  filter?: string;
 };
 
 /**
@@ -71,6 +73,35 @@ export const getCaptionAnimationStyle = (
       const wiggle = Math.sin(progress * Math.PI * 3) * (1 - progress) * 8;
       const scale = interpolate(progress, [0, 1], [0.7, 1]);
       return { transform: `scale(${scale}) rotate(${wiggle}deg)`, opacity };
+    }
+    case "blur-in": {
+      // ピント合わせのように、ぼかしを残しながらフェードインする。
+      const progress = interpolate(localFrame, [0, 16], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      });
+      return { transform: "none", opacity, filter: `blur(${(1 - progress) * 10}px)` };
+    }
+    case "slide-side": {
+      const progress = spring({
+        frame: springFrame,
+        fps,
+        config: { damping: 14 },
+        durationInFrames: 14,
+      });
+      const x = interpolate(progress, [0, 1], [-60, 0]);
+      return { transform: `translateX(${x}px)`, opacity };
+    }
+    case "flip-in": {
+      // 縦回転しながらめくれて正面を向く。
+      const progress = spring({
+        frame: springFrame,
+        fps,
+        config: { damping: 12 },
+        durationInFrames: 16,
+      });
+      const rotate = interpolate(progress, [0, 1], [90, 0]);
+      return { transform: `perspective(600px) rotateX(${rotate}deg)`, opacity };
     }
     case "slide-up":
     default: {

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: snsapp
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: GEMINI_TTS_MODEL
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
