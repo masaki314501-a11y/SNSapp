@@ -110,8 +110,17 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
       return pcmToWav(pcmData, sampleRate);
     } catch (error) {
       lastError = error;
-      const retryable = isRetryableApiError(error) || error instanceof NoAudioDataError;
-      if (retryable && attempt < MAX_GENERATE_ATTEMPTS) {
+      // ここまでに確認できた失敗(429/503、音声データ空、原因不明の一過性エラー)は
+      // いずれも一時的なもので、時間を置いて再試行すれば成功することが多い。
+      // 原因を個別に判定しきれない以上、このAPI呼び出しに限っては種類を問わず
+      // リトライ対象にする(GEMINI_API_KEY未設定などはループに入る前に弾いている)。
+      if (!(error instanceof NoAudioDataError) && !isRetryableApiError(error)) {
+        console.error(
+          `[generateVoiceover] 想定外のエラー(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`,
+          error
+        );
+      }
+      if (attempt < MAX_GENERATE_ATTEMPTS) {
         const delayMs = RETRY_BASE_DELAY_MS * attempt;
         console.warn(
           `[generateVoiceover] 音声生成に失敗したため${delayMs}ms後に再試行します(試行${attempt}/${MAX_GENERATE_ATTEMPTS}): ${
