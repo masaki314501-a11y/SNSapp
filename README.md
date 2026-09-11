@@ -14,6 +14,8 @@
 
 動画ファイルをアップロードする(`/api/upload` → `public/videos/` に保存、実際の長さを
 ブラウザ側で自動検出)。完了すると動画全体を1つの「使う範囲」として保存し、`/create/cut` へ。
+長さの自動検出はSafari(iOS/iPadOS)で一部の動画形式だと失敗することがあり、その場合は
+エラー表示と「長さの取得を再試行」ボタンを出す。
 
 ### 2. `/create/cut` — ラフカット
 
@@ -41,7 +43,8 @@ Remotion Playerでのプレビューを見ながら、以下を編集できる�
 
 - **クリップ**: トリミング(開始秒・長さ、ドラッグ or イン/アウト点`I`/`O`)、分割(`S`)、
   追加・削除・複製・結合、ドラッグ&ドロップや↑↓での並べ替え、複数選択(Shift/Ctrl)、
-  字幕の個別編集・一括編集、クリップごとの音量、テロップ出現アニメーション(9種)、Undo/Redo
+  字幕の個別編集・一括編集、クリップごとの音量(元の音声だけをミュートするチェックボックス
+  付き)、テロップ出現アニメーション(9種)、Undo/Redo
 - **スタイル**: プリセット(6種)一括適用、配色、テロップの見た目(カラー背景/縁取り文字)、
   フォント(15書体)、テロップ位置、文字サイズ、全体フェードイン/アウト
 - **音声(SE・BGM・AIナレーション)**: 効果音の追加(プリセット10種 or アップロード、最大30個、
@@ -67,9 +70,11 @@ JSONエクスポート/インポートにも対応する。
   - `useExtractStyleJob.ts` — スタイル抽出ジョブ(画像/動画どちらも)の開始とポーリング
   - `cut/` — ラフカットのUI(`CutEditor.tsx` を配置)
   - `style/` — 参考画像・動画/字幕生成のUI(`StyleAndTranscribe.tsx` を配置)
-- `src/app/edit/` — クリップ編集・書き出しのUI(`ClipEditor.tsx` を配置)
+- `src/app/edit/` — クリップ編集のUI(`ClipEditor.tsx` を配置)
+- `src/app/edit/export/` — 書き出しのUI(`ExportScreen.tsx` を配置)
 - `src/components/editor/` — 編集画面のコンポーネント・ロジック
-  - `ClipEditor.tsx` — プレビュー・クリップ編集・スタイル・音声タブ・書き出しをまとめる本体(`/edit`)
+  - `ClipEditor.tsx` — プレビュー・クリップ編集・スタイル・音声タブをまとめる本体(`/edit`)
+  - `ExportScreen.tsx` — 書き出し専用画面の本体(`/edit/export`)
   - `CutEditor.tsx` — ラフカット専用の簡易版(`/create/cut`、キャプション/SE/BGM無し)
   - `RenderPanel.tsx` — 書き出しボタンと進捗表示(不確定プログレス・残り時間の目安)
   - `useRenderJob.ts` — 書き出しジョブの開始とポーリング
@@ -92,6 +97,10 @@ JSONエクスポート/インポートにも対応する。
   - `transcribe-captions/` — 動画の音声を文字起こし(Gemini、非同期ジョブ+ポーリング)
   - `generate-voiceover/` — テロップをAIナレーション音声(WAV)に変換(Gemini TTS、同期レスポンス)
   - `render/` — Remotionでの動画書き出し(非同期ジョブ+ポーリング)
+  - `media/[...path]/` — `public/videos` `public/audio` `public/renders` を都度ファイル
+    システムから配信するRoute Handler。通常のpublic配信はビルド時点のスナップショット
+    しか返さず、起動後にアップロード/生成されたファイルは本番ビルドで404になるため必要。
+    HTTP Rangeリクエストにも対応(iOS/iPadOSの「ビデオを保存」やシーク操作に必要)
 - `src/lib/gemini/` — Gemini API呼び出しのラッパー
   - `transcribeCaptions.ts` / `transcribeJobs.ts` — 動画をFile APIにアップロードし、発話区切り
     ごとの `{startFromSeconds, durationInSeconds, caption}` 配列を取得する。ジョブはインメモリ管理
@@ -131,6 +140,9 @@ CLIでのレンダリング: `npm run remotion:render`(`out/short-video.mp4`に�
 
 ## `/insights` — お店のクチコミを見る(動画編集とは別機能)
 
+現在トップページからの導線は外してあり(一旦使わない運用のため)、直接 `/insights` に
+アクセスすれば使える。機能自体はそのまま残っている。
+
 Google Places API(APIキーのみ・OAuth不要)で、店名・住所から場所を検索し、評価と直近の
 口コミ(API仕様上、最大5件まで)を表示する。自社・競合を問わず公開情報として取得できる、
 SNS投稿ネタ探し用の簡易ツール。
@@ -153,6 +165,26 @@ SNS投稿ネタ探し用の簡易ツール。
 - `GEMINI_TTS_MODEL` — 任意。AIナレーション生成に使うモデル。既定値は `gemini-2.5-flash-preview-tts`
 - `GEMINI_MIN_INTERVAL_MS` — 任意。Gemini APIリクエスト間の最小間隔(レート制御用)
 - `GOOGLE_MAPS_API_KEY` — 任意。`/insights`で使うGoogle Maps Platform(Places API)のAPIキー
+
+## デプロイ(Render.com)
+
+`Dockerfile` と `render.yaml` を用意済みで、Render.comの Blueprint機能でデプロイできる。
+
+1. Renderダッシュボードで **New +** → **Blueprint** から、このGitHubリポジトリを接続
+2. `render.yaml` が自動検出され、Freeプランの Web Service(Dockerビルド)が構成される
+3. 環境変数(`GEMINI_API_KEY`など、上記の「環境変数」参照)を入力してデプロイ
+
+`next.config.ts` を見ると分かる通り `output: "standalone"` は使わず、`node_modules`
+全体を含めるシンプルな構成にしている(`@remotion/bundler`/`@remotion/renderer`が
+プラットフォーム別ネイティブバイナリを動的requireで解決しており、standaloneのファイル
+トレースだと正しく検出できずランタイムでENOENTになる恐れがあるため)。ビルド時に
+`npx remotion browser ensure` でヘッドレスChromeをイメージに焼き込み、実行時の初回
+レンダーでのダウンロードを防いでいる。
+
+Freeプランはメモリが少なく(512MB)、ヘッドレスChromeでの動画レンダリングが重い
+(クリップ数・動画尺次第でメモリ不足になりうる)ため、書き出しが不安定な場合は
+有料プランへの変更を検討する。また無操作が続くとスリープし、次のアクセス時に
+再起動で数十秒かかる。
 
 ---
 
