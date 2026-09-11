@@ -11,10 +11,23 @@ let browserPromise: Promise<HeadlessBrowser> | null = null;
 
 export const getBrowserInstance = (): Promise<HeadlessBrowser> => {
   if (!browserPromise) {
-    browserPromise = openBrowser("chrome").catch((error: unknown) => {
-      browserPromise = null;
-      throw error;
-    });
+    const thisPromise: Promise<HeadlessBrowser> = openBrowser("chrome")
+      .then((browser) => {
+        // メモリの少ない本番環境(Render無料プラン)ではヘッドレスChromeが稀に
+        // OOM Kill等で予期せず終了することがある。検知せずキャッシュし続けると、
+        // 次のレンダーが死んだブラウザに接続しようとして分かりにくいエラーになる
+        // (実際に発生していた"The string did not match the expected pattern."は
+        // これが疑わしい)。終了を検知したらキャッシュを破棄し、次回は再起動させる。
+        browser.once("closed", () => {
+          if (browserPromise === thisPromise) browserPromise = null;
+        });
+        return browser;
+      })
+      .catch((error: unknown) => {
+        if (browserPromise === thisPromise) browserPromise = null;
+        throw error;
+      });
+    browserPromise = thisPromise;
   }
 
   return browserPromise;
