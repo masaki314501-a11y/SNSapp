@@ -76,10 +76,24 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
         return Promise.race([generatePromise, timeoutPromise]);
       });
 
-      const part = response.candidates?.[0]?.content?.parts?.[0];
+      const candidate = response.candidates?.[0];
+      const part = candidate?.content?.parts?.[0];
       const base64Data = part?.inlineData?.data;
       if (!base64Data) {
-        throw new Error("Gemini APIから音声データが返されませんでした");
+        const reasonParts = [
+          response.promptFeedback?.blockReason ? `blockReason=${response.promptFeedback.blockReason}` : null,
+          candidate?.finishReason ? `finishReason=${candidate.finishReason}` : null,
+          typeof part?.text === "string" && part.text ? `text="${part.text.slice(0, 80)}"` : null,
+        ].filter((v): v is string => Boolean(v));
+        console.error(
+          "[generateVoiceover] 音声データが返されなかったレスポンス",
+          JSON.stringify(response).slice(0, 2000)
+        );
+        throw new Error(
+          reasonParts.length > 0
+            ? `Gemini APIから音声データが返されませんでした(${reasonParts.join(", ")})`
+            : "Gemini APIから音声データが返されませんでした"
+        );
       }
       const pcmData = Buffer.from(base64Data, "base64");
       const sampleRate = parseSampleRate(part?.inlineData?.mimeType);

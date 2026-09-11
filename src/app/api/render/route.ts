@@ -62,6 +62,7 @@ export async function POST(request: Request) {
   const parsed = template.schema.safeParse("props" in json ? json.props : undefined);
 
   if (!parsed.success) {
+    console.error("[render] 入力検証エラー", JSON.stringify(parsed.error.issues));
     return NextResponse.json(
       { error: "入力内容が不正です", issues: parsed.error.issues },
       { status: 400 }

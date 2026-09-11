@@ -80,7 +80,17 @@ export const useRenderJob = () => {
         body: JSON.stringify({ templateId, props }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "レンダーの開始に失敗しました");
+      if (!res.ok) {
+        const issues = Array.isArray(data.issues)
+          ? data.issues
+              .map((issue: { path?: unknown[]; message?: string }) =>
+                `${Array.isArray(issue.path) ? issue.path.join(".") : "?"}: ${issue.message ?? ""}`
+              )
+              .join(" / ")
+          : "";
+        const baseMessage = data.error ?? "レンダーの開始に失敗しました";
+        throw new Error(issues ? `${baseMessage}(${issues})` : baseMessage);
+      }
       pollJob(data.jobId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "レンダーの開始に失敗しました";
