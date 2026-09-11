@@ -1,18 +1,20 @@
 /**
  * fetch()はアップロード進捗を取得できないため、大きい動画ファイルでも
  * 進捗率をUIに表示できるようXMLHttpRequestを使う。
+ *
+ * multipart/form-dataではなく生のバイト列をそのまま送る(サーバー側で
+ * ストリームのまま書き込むため。理由は src/app/api/upload/route.ts 参照)。
+ * ファイル名はUTF-8のことがあるためヘッダーに載せる前にエンコードする。
  */
 export const uploadVideoFile = (
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<string> =>
   new Promise((resolve, reject) => {
-    const body = new FormData();
-    body.set("file", file);
-
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
     xhr.responseType = "json";
+    xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
 
     xhr.upload.onprogress = (event) => {
       if (!onProgress || !event.lengthComputable) return;
@@ -30,5 +32,5 @@ export const uploadVideoFile = (
 
     xhr.onerror = () => reject(new Error("通信エラーによりアップロードに失敗しました"));
 
-    xhr.send(body);
+    xhr.send(file);
   });

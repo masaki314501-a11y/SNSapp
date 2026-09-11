@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { ProjectSegment } from "@/lib/videoProject";
 import { beginPointerDrag } from "./pointerDrag";
 import { pixelsToSeconds, secondsToPixels } from "./timelineScale";
@@ -27,7 +27,7 @@ type VideoClipBlockProps = {
  * segment.startFromSecondsは「元動画の何秒目を使うか」であって画面上の位置ではないため、
  * サムネイル抽出の基準時刻としてのみ使う(位置には使わない)。
  */
-const VideoClipBlock: React.FC<VideoClipBlockProps> = ({
+const VideoClipBlock: React.FC<VideoClipBlockProps> = memo(function VideoClipBlock({
   segment,
   index,
   leftSeconds,
@@ -39,7 +39,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = ({
   onTrimStart,
   onTrimEnd,
   onReorderDrop,
-}) => {
+}) {
   const widthPx = Math.max(4, secondsToPixels(segment.durationInSeconds, pixelsPerSecond));
   const leftPx = secondsToPixels(leftSeconds, pixelsPerSecond);
   const thumbnails = useClipThumbnails(videoPath, segment.startFromSeconds, segment.durationInSeconds, widthPx);
@@ -103,7 +103,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = ({
       <div className="editor-clip-handle right" onPointerDown={handleRightHandlePointerDown} />
     </div>
   );
-};
+});
 
 type VideoTrackProps = {
   segments: ProjectSegment[];
@@ -117,7 +117,7 @@ type VideoTrackProps = {
   onReorder: (draggedKey: string, targetKey: string) => void;
 };
 
-export const VideoTrack: React.FC<VideoTrackProps> = ({
+export const VideoTrack: React.FC<VideoTrackProps> = memo(function VideoTrack({
   segments,
   videoPath,
   pixelsPerSecond,
@@ -127,7 +127,7 @@ export const VideoTrack: React.FC<VideoTrackProps> = ({
   onTrimStart,
   onTrimEnd,
   onReorder,
-}) => {
+}) {
   const positioned = segments.reduce<{ segment: ProjectSegment; leftSeconds: number }[]>((acc, segment) => {
     const prev = acc[acc.length - 1];
     const leftSeconds = prev ? prev.leftSeconds + prev.segment.durationInSeconds : 0;
@@ -170,4 +170,4 @@ export const VideoTrack: React.FC<VideoTrackProps> = ({
       </div>
     </div>
   );
-};
+});

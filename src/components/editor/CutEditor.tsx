@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Player, type PlayerRef } from "@remotion/player";
 import { StandardVideo } from "@video/templates/standard/StandardVideo";
@@ -191,15 +191,15 @@ export const CutEditor: React.FC = () => {
     return segment.startFromSeconds + activeProgramSegment.offsetSeconds;
   }, [activeProgramSegment, segments]);
 
-  const pushHistory = () => {
+  const pushHistory = useCallback(() => {
     setHistory((prev) => [...prev, segments].slice(-50));
     setFuture([]);
-  };
+  }, [segments]);
 
-  const selectOnly = (key: string | null) => {
+  const selectOnly = useCallback((key: string | null) => {
     setSelectedSegmentKey(key);
     setSelectedKeys(key ? new Set([key]) : new Set());
-  };
+  }, []);
 
   const undo = () => {
     setHistory((prev) => {
@@ -226,9 +226,20 @@ export const CutEditor: React.FC = () => {
   const canUndo = history.length > 0;
   const canRedo = future.length > 0;
 
-  const updateSegmentTrim = (key: string, patch: Partial<Pick<ProjectSegment, "startFromSeconds" | "durationInSeconds">>) => {
-    setSegments((prev) => applyTrimPatch(prev, videoDurationInSeconds, key, patch));
-  };
+  const updateSegmentTrim = useCallback(
+    (key: string, patch: Partial<Pick<ProjectSegment, "startFromSeconds" | "durationInSeconds">>) => {
+      setSegments((prev) => applyTrimPatch(prev, videoDurationInSeconds, key, patch));
+    },
+    [videoDurationInSeconds]
+  );
+  const handleTrimStart = useCallback(
+    (key: string, value: number) => updateSegmentTrim(key, { startFromSeconds: value }),
+    [updateSegmentTrim]
+  );
+  const handleTrimEnd = useCallback(
+    (key: string, value: number) => updateSegmentTrim(key, { durationInSeconds: value }),
+    [updateSegmentTrim]
+  );
 
   const addSegment = () => {
     if (!canAddSegment || !largestGap) return;
@@ -256,7 +267,7 @@ export const CutEditor: React.FC = () => {
     selectOnly(null);
   };
 
-  const reorderSegment = (draggedKey: string, targetKey: string) => {
+  const reorderSegment = useCallback((draggedKey: string, targetKey: string) => {
     if (draggedKey === targetKey) return;
     if (!segments.some((s) => s.key === draggedKey) || !segments.some((s) => s.key === targetKey)) return;
     pushHistory();
@@ -269,7 +280,7 @@ export const CutEditor: React.FC = () => {
       next.splice(toIndex, 0, moved);
       return next;
     });
-  };
+  }, [segments, pushHistory]);
 
   const canSplitAtPlayhead = useMemo(() => {
     if (!activeProgramSegment || segments.length >= MAX_CLIPS) return false;
@@ -308,7 +319,7 @@ export const CutEditor: React.FC = () => {
     updateSegmentTrim(key, { durationInSeconds: offsetSeconds });
   };
 
-  const selectSegment = (
+  const selectSegment = useCallback((
     key: string,
     index: number,
     modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }
@@ -337,7 +348,7 @@ export const CutEditor: React.FC = () => {
     // クリック時に再生ヘッドをそのクリップの先頭へ合わせ、選択=編集対象を一致させる。
     const range = segmentFrameRanges.find((r) => r.key === key);
     if (range) playerRef.current?.seekTo(range.startFrame);
-  };
+  }, [selectedSegmentKey, segments, segmentFrameRanges, selectOnly]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -489,8 +500,8 @@ export const CutEditor: React.FC = () => {
         activeSegmentKey={activeSegmentKey}
         audioSelection={null}
         onSelectSegment={selectSegment}
-        onTrimStart={(key, value) => updateSegmentTrim(key, { startFromSeconds: value })}
-        onTrimEnd={(key, value) => updateSegmentTrim(key, { durationInSeconds: value })}
+        onTrimStart={handleTrimStart}
+        onTrimEnd={handleTrimEnd}
         onReorder={reorderSegment}
         onSelectSfx={() => {}}
         onMoveSfx={() => {}}
