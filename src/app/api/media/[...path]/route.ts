@@ -28,7 +28,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path: segments } = await params;
@@ -55,12 +55,43 @@ export async function GET(
 
   const ext = (rest[rest.length - 1].split(".").pop() ?? "").toLowerCase();
   const contentType = MIME_BY_EXTENSION[ext] ?? "application/octet-stream";
+
+  // iOS/iPadOS の「ビデオを保存」やAirPlay、動画のシークバー操作はHTTP Range
+  // リクエスト(部分取得)に依存しているため、対応しないと保存・再生に失敗する。
+  const range = request.headers.get("range");
+  if (range) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    const start = match?.[1] ? Number(match[1]) : 0;
+    const end = match?.[2] ? Number(match[2]) : size - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= size) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${size}` },
+      });
+    }
+
+    const stream = Readable.toWeb(
+      createReadStream(filePath, { start, end })
+    ) as ReadableStream;
+    return new NextResponse(stream, {
+      status: 206,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Length": String(end - start + 1),
+        "Content-Range": `bytes ${start}-${end}/${size}`,
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   const stream = Readable.toWeb(createReadStream(filePath)) as ReadableStream;
 
   return new NextResponse(stream, {
     headers: {
       "Content-Type": contentType,
       "Content-Length": String(size),
+      "Accept-Ranges": "bytes",
       "Cache-Control": "no-store",
     },
   });
