@@ -155,6 +155,16 @@ export const ClipInspectorPanel: React.FC<Props> = ({
                 onChange={(e) => onUpdateSegment(selectedSegment.key, { volume: Number(e.target.value) })}
               />
             </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selectedSegment.volume === 0}
+                onChange={(e) =>
+                  onUpdateSegment(selectedSegment.key, { volume: e.target.checked ? 0 : 1 })
+                }
+              />
+              <span className="field-label">元の音声をミュート(ナレーションやBGMだけにする)</span>
+            </label>
             <div className="editor-inspector-actions">
               <button
                 type="button"
