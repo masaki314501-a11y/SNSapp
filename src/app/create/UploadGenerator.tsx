@@ -29,12 +29,31 @@ const readVideoDurationInSeconds = (file: File): Promise<number> =>
     const url = URL.createObjectURL(file);
     const videoEl = document.createElement("video");
     videoEl.preload = "metadata";
+    const cleanup = () => URL.revokeObjectURL(url);
+    const finish = (duration: number) => {
+      cleanup();
+      if (!Number.isFinite(duration) || duration <= 0) {
+        reject(new Error("動画の長さを取得できませんでした"));
+        return;
+      }
+      resolve(duration);
+    };
     videoEl.onloadedmetadata = () => {
-      URL.revokeObjectURL(url);
-      resolve(videoEl.duration);
+      // Safari(iOS/iPadOS)は一部のmov/mp4でdurationが最初Infinityのまま
+      // 確定しないことがある。末尾付近にシークするとdurationchangeで
+      // 実際の長さが取得できるため、その場合だけ追加で待つ。
+      if (!Number.isFinite(videoEl.duration)) {
+        videoEl.ontimeupdate = () => {
+          videoEl.ontimeupdate = null;
+          finish(videoEl.duration);
+        };
+        videoEl.currentTime = Number.MAX_SAFE_INTEGER;
+        return;
+      }
+      finish(videoEl.duration);
     };
     videoEl.onerror = () => {
-      URL.revokeObjectURL(url);
+      cleanup();
       reject(new Error("動画の長さを取得できませんでした"));
     };
     videoEl.src = url;
@@ -50,8 +69,20 @@ export const UploadGenerator: React.FC = () => {
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoUploadPercent, setVideoUploadPercent] = useState(0);
   const [videoDurationInSeconds, setVideoDurationInSeconds] = useState<number | null>(null);
+  const [durationError, setDurationError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const canProceed = Boolean(videoPath) && videoDurationInSeconds !== null && !videoUploading;
+
+  const detectDuration = (file: File) => {
+    setDurationError(null);
+    readVideoDurationInSeconds(file)
+      .then((duration) => setVideoDurationInSeconds(duration))
+      .catch((error) => {
+        setVideoDurationInSeconds(null);
+        setDurationError(error instanceof Error ? error.message : "動画の長さを取得できませんでした");
+      });
+  };
 
   const handleVideoFileChange = async (file: File | null) => {
     if (!file) return;
@@ -60,10 +91,9 @@ export const UploadGenerator: React.FC = () => {
     setVideoFileName(file.name);
     setVideoDurationInSeconds(null);
     setVideoPath("");
+    setPendingFile(file);
 
-    readVideoDurationInSeconds(file)
-      .then((duration) => setVideoDurationInSeconds(duration))
-      .catch(() => setVideoDurationInSeconds(null));
+    detectDuration(file);
 
     try {
       const path = await uploadVideoFile(file, setVideoUploadPercent);
@@ -156,10 +186,24 @@ export const UploadGenerator: React.FC = () => {
               </div>
             </div>
           ) : videoFileName ? (
-            <span className="badge-pill success w-fit">
-              {videoFileName}
-              {videoDurationInSeconds ? `(${videoDurationInSeconds.toFixed(1)}秒)` : ""}
-            </span>
+            <div className="flex flex-col gap-1.5">
+              <span className="badge-pill success w-fit">
+                {videoFileName}
+                {videoDurationInSeconds ? `(${videoDurationInSeconds.toFixed(1)}秒)` : ""}
+              </span>
+              {durationError ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="badge-pill danger w-fit">{durationError}(長さが取得できず、次へ進めません)</span>
+                  <button
+                    type="button"
+                    className="btn-outline px-3 py-1 text-xs"
+                    onClick={() => pendingFile && detectDuration(pendingFile)}
+                  >
+                    長さの取得を再試行
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ) : (
             <span className="text-xs" style={{ color: "var(--muted-2)" }}>
               未アップロード

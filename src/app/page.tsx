@@ -62,20 +62,14 @@ export default function Home() {
           >
             動画を作成する →
           </Link>
-          <Link
-            href="/insights"
-            className="btn-outline flex h-12 items-center justify-center px-5 text-sm"
-          >
-            お店のクチコミを見る(Googleマップ)
-          </Link>
         </div>
 
         <ol className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
           {STEPS.map((step, index) => (
             <li
               key={step.label}
-              className="panel flex items-start gap-3 p-4 text-left"
-              style={{ background: step.color }}
+              className="panel-flat flex items-start gap-3 p-4 text-left"
+              style={{ background: step.color, cursor: "default" }}
             >
               <span className="step-badge" style={{ background: "var(--background)" }}>
                 {index + 1}
