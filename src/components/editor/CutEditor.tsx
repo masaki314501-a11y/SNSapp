@@ -515,13 +515,11 @@ export const CutEditor: React.FC = () => {
         onAddSegment={addSegment}
         selectedCount={selectedKeys.size}
         onDeleteSelected={() => removeSegments(selectedKeys)}
-        onOpenBulkEdit={() => {}}
-        canOpenBulkEdit={false}
         canSplitAtPlayhead={canSplitAtPlayhead}
         onSplitAtPlayhead={splitAtPlayhead}
         onTrimStartToPlayhead={trimStartToPlayhead}
         onTrimEndToPlayhead={trimEndToPlayhead}
-        hideAudioTracks
+        tracks={{ sfx: false, bgm: false }}
       />
 
       <button

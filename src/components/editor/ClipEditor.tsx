@@ -48,7 +48,10 @@ import {
 } from "./timelineUtils";
 import { TimelineRoot, type AudioSelection } from "./timeline/TimelineRoot";
 import { ClipInspectorPanel } from "./timeline/ClipInspectorPanel";
-import { AudioInspectorPanel } from "./timeline/AudioInspectorPanel";
+import { CaptionInspectorPanel } from "./timeline/CaptionInspectorPanel";
+import { SfxInspectorPanel } from "./timeline/SfxInspectorPanel";
+import { NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
+import { BgmInspectorPanel } from "./timeline/BgmInspectorPanel";
 
 /**
  * /create でアップロード・字幕生成された動画を、再生しながらトリム・並べ替え・
@@ -160,11 +163,11 @@ export const ClipEditor: React.FC = () => {
   const [narrationGenerating, setNarrationGenerating] = useState<{ current: number; total: number } | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "done">("idle");
   /**
-   * 「クリップ/音声/スタイル」のタブ切り替え。プレビュー・タイムライン・書き出しは常時表示。
-   * タイムライン(映像/SE/BGMトラック)自体はクリップ・音声どちらのタブでも表示し、
-   * 右側の編集パネルだけを「今やりたいこと」で切り替える。
+   * 「動画カット/字幕/SE/AI音声/BGM/スタイル」のタブ切り替え。
+   * プレビュー・書き出しは常時表示。タイムラインは残すが、タブごとに
+   * 今やりたいことに関係あるトラックだけを表示する(TimelineRootのtracks props)。
    */
-  const [activeTab, setActiveTab] = useState<"clip" | "audio" | "style">("clip");
+  const [activeTab, setActiveTab] = useState<"cut" | "caption" | "se" | "narration" | "bgm" | "style">("cut");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditText, setBulkEditText] = useState("");
 
@@ -345,6 +348,13 @@ export const ClipEditor: React.FC = () => {
     }),
     [durationInFrames, form.segments]
   );
+
+  // sfxClips配列にはSEとAIナレーションが同じ形で混在している(appendNarrationClip参照)。
+  // データモデルは変えず、ラベルの絵文字プレフィックスで表示上だけ区別する
+  // (「SE」「AI音声」タブそれぞれに、関係あるクリップだけを見せるため)。
+  const isNarrationClip = (clip: ProjectSfxClip) => clip.label.startsWith("🎙");
+  const sfxOnlyClips = useMemo(() => sfxClips.filter((c) => !isNarrationClip(c)), [sfxClips]);
+  const narrationOnlyClips = useMemo(() => sfxClips.filter(isNarrationClip), [sfxClips]);
 
   const updateSegment = (
     key: string,
@@ -992,8 +1002,19 @@ export const ClipEditor: React.FC = () => {
           </p>
         </div>
 
-        {activeTab === "clip" ? (
+        {activeTab === "cut" ? (
           <ClipInspectorPanel
+            segments={form.segments}
+            selectedSegmentKey={selectedSegmentKey}
+            selectedCount={selectedKeys.size}
+            onUpdateSegment={updateSegment}
+            onMergeWithNext={mergeSegmentWithNext}
+            onDuplicate={duplicateSegment}
+            onRemove={(key) => removeSegments(new Set([key]))}
+            onDeleteSelected={() => removeSegments(selectedKeys)}
+          />
+        ) : activeTab === "caption" ? (
+          <CaptionInspectorPanel
             segments={form.segments}
             selectedSegmentKey={selectedSegmentKey}
             selectedCount={selectedKeys.size}
@@ -1001,56 +1022,89 @@ export const ClipEditor: React.FC = () => {
             maxSfxClips={MAX_SFX_CLIPS}
             onUpdateSegment={updateSegment}
             onApplyAnimationToAll={applyAnimationToAll}
-            onMergeWithNext={mergeSegmentWithNext}
-            onDuplicate={duplicateSegment}
-            onRemove={(key) => removeSegments(new Set([key]))}
-            onDeleteSelected={() => removeSegments(selectedKeys)}
             narrationGenerating={narrationGenerating}
             onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
+            onOpenBulkEdit={openBulkEdit}
+            canOpenBulkEdit={form.segments.length > 0}
           />
-        ) : activeTab === "audio" ? (
-          <AudioInspectorPanel
-            segments={form.segments}
+        ) : activeTab === "se" ? (
+          <SfxInspectorPanel
             audioSelection={audioSelection}
-            sfxClips={sfxClips}
-            bgm={bgm}
+            sfxClips={sfxOnlyClips}
+            totalSfxCount={sfxClips.length}
             sfxUploading={sfxUploading}
-            bgmUploading={bgmUploading}
             maxSfxClips={MAX_SFX_CLIPS}
             sfxPresets={SFX_PRESETS}
-            bgmPresets={BGM_PRESETS}
             onUpdateSfx={updateSfxClip}
             onRemoveSfx={removeSfxClip}
-            onSetBgmField={(patch) => setBgm((prev) => (prev ? { ...prev, ...patch } : prev))}
-            onRemoveBgm={() => setBgm(null)}
             onAddSfxFile={(file) => void handleAddSfx(file)}
-            onSetBgmFile={(file) => void handleSetBgm(file)}
             onAddSfxPreset={handleAddSfxPreset}
-            onSetBgmPreset={handleSetBgmPreset}
+          />
+        ) : activeTab === "narration" ? (
+          <NarrationInspectorPanel
+            segments={form.segments}
+            audioSelection={audioSelection}
+            narrationClips={narrationOnlyClips}
+            totalSfxCount={sfxClips.length}
+            maxSfxClips={MAX_SFX_CLIPS}
+            onUpdateSfx={updateSfxClip}
+            onRemoveSfx={removeSfxClip}
             voiceOptions={VOICE_OPTIONS}
             narrationVoice={narrationVoice}
             onChangeNarrationVoice={setNarrationVoice}
             narrationGenerating={narrationGenerating}
             onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
           />
+        ) : activeTab === "bgm" ? (
+          <BgmInspectorPanel
+            audioSelection={audioSelection}
+            bgm={bgm}
+            bgmUploading={bgmUploading}
+            bgmPresets={BGM_PRESETS}
+            onSetBgmField={(patch) => setBgm((prev) => (prev ? { ...prev, ...patch } : prev))}
+            onRemoveBgm={() => setBgm(null)}
+            onSetBgmFile={(file) => void handleSetBgm(file)}
+            onSetBgmPreset={handleSetBgmPreset}
+          />
         ) : null}
       </div>
 
-      {/* タブ切り替え(クリップ/音声/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
+      {/* タブ切り替え(動画カット/字幕/SE/AI音声/BGM/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
       <div className="tab-bar">
         <button
           type="button"
-          onClick={() => setActiveTab("clip")}
-          className={`tab-button${activeTab === "clip" ? " active" : ""}`}
+          onClick={() => setActiveTab("cut")}
+          className={`tab-button${activeTab === "cut" ? " active" : ""}`}
         >
-          クリップ
+          動画カット
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("audio")}
-          className={`tab-button${activeTab === "audio" ? " active" : ""}`}
+          onClick={() => setActiveTab("caption")}
+          className={`tab-button${activeTab === "caption" ? " active" : ""}`}
         >
-          音声
+          字幕
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("se")}
+          className={`tab-button${activeTab === "se" ? " active" : ""}`}
+        >
+          SE
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("narration")}
+          className={`tab-button${activeTab === "narration" ? " active" : ""}`}
+        >
+          AI音声
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("bgm")}
+          className={`tab-button${activeTab === "bgm" ? " active" : ""}`}
+        >
+          BGM
         </button>
         <button
           type="button"
@@ -1169,10 +1223,10 @@ export const ClipEditor: React.FC = () => {
         </div>
       ) : null}
 
-      {activeTab === "clip" || activeTab === "audio" ? (
+      {activeTab !== "style" ? (
         <TimelineRoot
           segments={form.segments}
-          sfxClips={sfxClips}
+          sfxClips={activeTab === "se" ? sfxOnlyClips : activeTab === "narration" ? narrationOnlyClips : sfxClips}
           bgm={bgm}
           videoPath={project.videoPath}
           totalDurationSeconds={stats.totalSeconds}
@@ -1196,12 +1250,16 @@ export const ClipEditor: React.FC = () => {
           onAddSegment={addSegment}
           selectedCount={selectedKeys.size}
           onDeleteSelected={() => removeSegments(selectedKeys)}
-          onOpenBulkEdit={openBulkEdit}
-          canOpenBulkEdit={form.segments.length > 0}
           canSplitAtPlayhead={canSplitAtPlayhead}
           onSplitAtPlayhead={splitAtPlayhead}
           onTrimStartToPlayhead={trimStartToPlayhead}
           onTrimEndToPlayhead={trimEndToPlayhead}
+          showCutTools={activeTab === "cut"}
+          tracks={{
+            video: true,
+            sfx: activeTab === "se" || activeTab === "narration",
+            bgm: activeTab === "bgm",
+          }}
         />
       ) : null}
 

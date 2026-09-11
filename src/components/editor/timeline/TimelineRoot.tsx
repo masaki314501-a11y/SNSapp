@@ -43,15 +43,18 @@ type TimelineRootProps = {
   onAddSegment: () => void;
   selectedCount: number;
   onDeleteSelected: () => void;
-  onOpenBulkEdit: () => void;
-  canOpenBulkEdit: boolean;
   canSplitAtPlayhead: boolean;
   onSplitAtPlayhead: () => void;
   /** 再生ヘッドが乗っているクリップのイン点/アウト点(開始/終了)を、その位置に打ち直す。 */
   onTrimStartToPlayhead: () => void;
   onTrimEndToPlayhead: () => void;
-  /** ラフカット画面など、SE/BGMがまだ存在しない編集段階でトラック行自体を省く。 */
-  hideAudioTracks?: boolean;
+  /**
+   * どのトラックを表示するか(タブごとに今やりたいこと以外のトラックは隠す)。
+   * 省略時は全トラック表示(ラフカット画面等、値を明示的に渡さない呼び出し向けの既定値)。
+   */
+  tracks?: { video?: boolean; sfx?: boolean; bgm?: boolean };
+  /** +クリップ/分割/イン点/アウト点など、動画カット専用のツールバーボタンを表示するか。 */
+  showCutTools?: boolean;
 };
 
 const RULER_HEIGHT = 28;
@@ -82,14 +85,16 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   onAddSegment,
   selectedCount,
   onDeleteSelected,
-  onOpenBulkEdit,
-  canOpenBulkEdit,
   canSplitAtPlayhead,
   onSplitAtPlayhead,
   onTrimStartToPlayhead,
   onTrimEndToPlayhead,
-  hideAudioTracks = false,
+  tracks,
+  showCutTools = true,
 }) => {
+  const showVideoTrack = tracks?.video ?? true;
+  const showSfxTrack = tracks?.sfx ?? true;
+  const showBgmTrack = tracks?.bgm ?? true;
   const canTrimAtPlayhead = activeSegmentKey !== null;
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_PIXELS_PER_SECOND);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -126,46 +131,47 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   return (
     <div className="editor-timeline-wrap">
       <div className="editor-timeline-toolbar">
-        <button type="button" className="editor-toolbar-btn" onClick={onAddSegment} disabled={!canAddSegment}>
-          + クリップ
-        </button>
-        <button
-          type="button"
-          className="editor-toolbar-btn"
-          onClick={onSplitAtPlayhead}
-          disabled={!canSplitAtPlayhead}
-          title="再生ヘッドの位置でクリップを分割します (S)"
-        >
-          ✂ 分割
-        </button>
-        <button
-          type="button"
-          className="editor-toolbar-btn"
-          onClick={onTrimStartToPlayhead}
-          disabled={!canTrimAtPlayhead}
-          title="再生ヘッドの位置をクリップの開始点にします (I)"
-        >
-          [ イン点
-        </button>
-        <button
-          type="button"
-          className="editor-toolbar-btn"
-          onClick={onTrimEndToPlayhead}
-          disabled={!canTrimAtPlayhead}
-          title="再生ヘッドの位置をクリップの終了点にします (O)"
-        >
-          アウト点 ]
-        </button>
-        <button type="button" className="editor-toolbar-btn" onClick={onOpenBulkEdit} disabled={!canOpenBulkEdit}>
-          字幕を一括編集
-        </button>
+        {showCutTools ? (
+          <>
+            <button type="button" className="editor-toolbar-btn" onClick={onAddSegment} disabled={!canAddSegment}>
+              + クリップ
+            </button>
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              onClick={onSplitAtPlayhead}
+              disabled={!canSplitAtPlayhead}
+              title="再生ヘッドの位置でクリップを分割します (S)"
+            >
+              ✂ 分割
+            </button>
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              onClick={onTrimStartToPlayhead}
+              disabled={!canTrimAtPlayhead}
+              title="再生ヘッドの位置をクリップの開始点にします (I)"
+            >
+              [ イン点
+            </button>
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              onClick={onTrimEndToPlayhead}
+              disabled={!canTrimAtPlayhead}
+              title="再生ヘッドの位置をクリップの終了点にします (O)"
+            >
+              アウト点 ]
+            </button>
+          </>
+        ) : null}
         <button type="button" className="editor-toolbar-btn" onClick={onUndo} disabled={!canUndo} title="元に戻す (Ctrl/Cmd+Z)">
           ↶
         </button>
         <button type="button" className="editor-toolbar-btn" onClick={onRedo} disabled={!canRedo} title="やり直す (Ctrl/Cmd+Shift+Z)">
           ↷
         </button>
-        {selectedCount > 0 ? (
+        {showCutTools && selectedCount > 0 ? (
           <button type="button" className="editor-toolbar-btn danger" onClick={onDeleteSelected}>
             選択を削除({selectedCount})
           </button>
@@ -208,36 +214,38 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
           </div>
 
           <div className="editor-tracks">
-            <VideoTrack
-              segments={segments}
-              videoPath={videoPath}
-              pixelsPerSecond={pixelsPerSecond}
-              selectedKeys={selectedKeys}
-              activeSegmentKey={activeSegmentKey}
-              onSelect={onSelectSegment}
-              onTrimStart={onTrimStart}
-              onTrimEnd={onTrimEnd}
-              onReorder={onReorder}
-            />
-            {hideAudioTracks ? null : (
-              <>
-                <SfxTrack
-                  clips={sfxClips}
-                  totalDurationSeconds={totalDurationSeconds}
-                  pixelsPerSecond={pixelsPerSecond}
-                  selectedKey={audioSelection?.kind === "sfx" ? audioSelection.key : null}
-                  onSelect={onSelectSfx}
-                  onMove={onMoveSfx}
-                />
-                <BgmTrack
-                  bgm={bgm}
-                  totalDurationSeconds={totalDurationSeconds}
-                  pixelsPerSecond={pixelsPerSecond}
-                  isSelected={audioSelection?.kind === "bgm"}
-                  onSelect={onSelectBgm}
-                />
-              </>
-            )}
+            {showVideoTrack ? (
+              <VideoTrack
+                segments={segments}
+                videoPath={videoPath}
+                pixelsPerSecond={pixelsPerSecond}
+                selectedKeys={selectedKeys}
+                activeSegmentKey={activeSegmentKey}
+                onSelect={onSelectSegment}
+                onTrimStart={onTrimStart}
+                onTrimEnd={onTrimEnd}
+                onReorder={onReorder}
+              />
+            ) : null}
+            {showSfxTrack ? (
+              <SfxTrack
+                clips={sfxClips}
+                totalDurationSeconds={totalDurationSeconds}
+                pixelsPerSecond={pixelsPerSecond}
+                selectedKey={audioSelection?.kind === "sfx" ? audioSelection.key : null}
+                onSelect={onSelectSfx}
+                onMove={onMoveSfx}
+              />
+            ) : null}
+            {showBgmTrack ? (
+              <BgmTrack
+                bgm={bgm}
+                totalDurationSeconds={totalDurationSeconds}
+                pixelsPerSecond={pixelsPerSecond}
+                isSelected={audioSelection?.kind === "bgm"}
+                onSelect={onSelectBgm}
+              />
+            ) : null}
           </div>
 
           <div className="editor-playhead" style={{ left: playheadLeftPx }} />
