@@ -116,6 +116,24 @@ sequenceDiagram
   スタンプ画像アップロード等)を追加する時、この差し替えを忘れるとレンダー結果にだけ
   反映されない不具合になる。**
 
+### パス検証(多層防御)
+
+`/api/media/[...path]` と `/api/render` は、いずれも「`public/videos` `public/audio`
+`public/renders` 配下の、実際に生成されうる形式のパスだけを許可する」という同じ方針で
+入力を検証している。片方だけ緩めると、もう片方の防御に頼った不正なパスが通ってしまうため、
+新しいメディア種別やパスパターンを追加する際は**両方**を見直すこと。
+
+- `/api/media/[...path]/route.ts` の `isValidPathSegment()` — URLのパスセグメント単体を検証
+  し、`"."` `".."` や許可外の文字を拒否する(パストラバーサル対策)。
+- `remotion/shared/schema.ts` の `MEDIA_SRC_PATTERN` — `/api/render` に渡す
+  クリップ/SE/BGMの `src` 全体を検証し、`/api/upload` `/api/upload-audio`
+  `/api/generate-voiceover` が生成する形式(`videos/{uuid}.{ext}` 等)と同梱プリセット
+  (`audio/presets/sfx/*.mp3`)のパスのみを許可する(外部URL・任意パスを拒否)。
+
+いずれも副作用の無い純粋な関数/正規表現であり、`src/app/api/media/[...path]/route.test.ts`・
+`remotion/shared/schema.test.ts` でユニットテストされている(`docs/design/03-implementation-plan.md`
+H1・H2、`docs/design/04-review-notes.md` M-1参照)。
+
 ## その他の制約
 
 - **メモリ内ジョブストア前提**のため水平スケール不可(README「デプロイ」章の Render.com

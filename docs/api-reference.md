@@ -15,9 +15,9 @@
 | `POST /api/transcribe-captions` | [transcribe-captions/route.ts](../src/app/api/transcribe-captions/route.ts) | 動画音声の文字起こし→字幕候補生成 | `{ videoPath, videoDurationInSeconds }` | `{ jobId }` | ジョブ |
 | `GET /api/transcribe-captions/[jobId]` | [transcribe-captions/[jobId]/route.ts](../src/app/api/transcribe-captions/%5BjobId%5D/route.ts) | 上記の進捗取得 | — | `{status:"uploading"\|"processing"\|"generating"}` → `{status:"done", segments}` / `{status:"error", message}` | ポーリング |
 | `POST /api/generate-voiceover` | [generate-voiceover/route.ts](../src/app/api/generate-voiceover/route.ts) | テロップ1件をAIナレーション音声(WAV)に変換 | `{ text: string(1-200文字), voiceName?: string }` | `{ path: "audio/generated/{uuid}.wav" }` | **同期**(唯一ジョブ化していないAPI) |
-| `POST /api/render` | [render/route.ts](../src/app/api/render/route.ts) | Remotionでの動画書き出し開始 | `{ templateId: string, props: StandardVideoProps }`(zodで検証) | `{ jobId }` | ジョブ |
+| `POST /api/render` | [render/route.ts](../src/app/api/render/route.ts) | Remotionでの動画書き出し開始 | `{ templateId: string, props: StandardVideoProps }`(zodで検証。クリップ/SE/BGMの`src`は`MEDIA_SRC_PATTERN`で`videos/`・`audio/`配下の既知の生成パス形式のみ許可、外部URL・任意パスは拒否) | `{ jobId }` | ジョブ |
 | `GET /api/render/[jobId]` | [render/[jobId]/route.ts](../src/app/api/render/%5BjobId%5D/route.ts) | 上記の進捗取得 | — | `{status:"starting"\|"rendering", progress}` → `{status:"done", url}` / `{status:"error", message}` | ポーリング |
-| `GET /api/media/[...path]` | [media/[...path]/route.ts](../src/app/api/media/%5B...path%5D/route.ts) | `public/videos` `public/audio` `public/renders` をランタイムでファイルシステムから配信 | パス(例: `videos/xxx.mp4`) | メディアバイナリ(HTTP Range対応) | 同期 |
+| `GET /api/media/[...path]` | [media/[...path]/route.ts](../src/app/api/media/%5B...path%5D/route.ts) | `public/videos` `public/audio` `public/renders` をランタイムでファイルシステムから配信 | パス(例: `videos/xxx.mp4`)。`isValidPathSegment()`で`.`/`..`等のパストラバーサルを拒否 | メディアバイナリ(HTTP Range対応) | 同期 |
 
 ## インサイト系(`/insights`、動画編集とは別機能)
 
