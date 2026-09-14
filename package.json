@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "remotion:studio": "remotion studio",
-    "remotion:render": "remotion render ShortVideo out/short-video.mp4"
+    "remotion:render": "remotion render Standard out/short-video.mp4",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/genai": "^2.18.0",
@@ -33,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }

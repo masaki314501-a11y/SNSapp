@@ -2,6 +2,21 @@ import { z } from "zod";
 import { zColor } from "@remotion/zod-types";
 import { DEFAULT_CLIP_DURATION_IN_SECONDS } from "./constants";
 
+/**
+ * クリップ/SE/BGMの src として許容する public/ 配下の相対パス。UI上、これらは常に
+ * /api/upload・/api/upload-audio・/api/generate-voiceover が生成したパスか、同梱プリセット
+ * (audioPresets.ts)のパスのいずれかであり、それ以外(外部URLや任意のファイルパス)を
+ * 書き出しAPIが受け付ける必要は無い。/api/render はこの形式で src を検証することで、
+ * 不正なパスがヘッドレスChromiumに渡ることを防ぐ(src/app/api/media/[...path]/route.ts の
+ * パス検証と合わせた多層防御)。実際に生成されるパスは常に小文字(randomUUID()・固定拡張子)
+ * のため大文字小文字を区別する(緩める理由が無い)。
+ *
+ * BGM_PRESETS(audioPresets.ts)は現時点で空配列だが、将来 audio/presets/bgm/... 形式で
+ * 収録する場合はこのパターンにも追記が必要(忘れるとbgmSchemaの検証で弾かれる)。
+ */
+export const MEDIA_SRC_PATTERN =
+  /^(?:videos\/[0-9a-f-]+\.(?:mp4|mov|webm|m4v)|audio\/(?:[0-9a-f-]+\.(?:mp3|wav|m4a|ogg|aac)|generated\/[0-9a-f-]+\.wav|presets\/sfx\/[0-9a-zA-Z_-]+\.mp3))$/;
+
 // "remotion" / "@remotion/google-fonts" 等はReactのクライアント実行を前提にしており、
 // スキーマ定義(Node.jsのAPIルートからも読み込まれる)に混ぜるとRSC環境で例外になる。
 // そのためフォント名はここでは文字列リテラルの列挙として持つ(実際の読み込みは font.ts が担う)。
@@ -159,9 +174,10 @@ export const CAPTION_ANIMATION_OPTIONS: {
 export const mediaItemBaseSchema = z.object({
   src: z
     .string()
+    .regex(MEDIA_SRC_PATTERN)
     .optional()
     .describe(
-      "動画ファイルのパス(public/配下、staticFile()で参照)またはURL。未指定ならプレースホルダー背景で代替表示"
+      "動画ファイルのパス(public/配下の相対パスのみ許容、staticFile()で参照)。未指定ならプレースホルダー背景で代替表示"
     ),
   caption: z.string().describe("このカットに重ねるテロップ"),
   durationInSeconds: z
@@ -185,7 +201,7 @@ export const mediaItemBaseSchema = z.object({
 });
 
 export const sfxClipSchema = z.object({
-  src: z.string().describe("効果音ファイルのパス(public/配下)またはURL"),
+  src: z.string().regex(MEDIA_SRC_PATTERN).describe("効果音ファイルのパス(public/配下の相対パスのみ許容)"),
   label: z.string().default("SE").describe("表示用のラベル(元ファイル名など)"),
   startFromSeconds: z
     .number()
@@ -197,7 +213,7 @@ export const sfxClipSchema = z.object({
 export type SfxClip = z.infer<typeof sfxClipSchema>;
 
 export const bgmSchema = z.object({
-  src: z.string().describe("BGMファイルのパス(public/配下)またはURL"),
+  src: z.string().regex(MEDIA_SRC_PATTERN).describe("BGMファイルのパス(public/配下の相対パスのみ許容)"),
   volume: z.number().min(0).max(1).default(0.4),
   fadeInSeconds: z.number().min(0).max(5).default(0).describe("先頭でBGM音量を0から立ち上げる秒数"),
   fadeOutSeconds: z.number().min(0).max(5).default(0).describe("末尾でBGM音量を0まで下げる秒数"),

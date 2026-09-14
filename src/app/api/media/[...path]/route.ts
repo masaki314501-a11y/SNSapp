@@ -15,6 +15,14 @@ export const runtime = "nodejs";
 const ALLOWED_DIRS = new Set(["videos", "audio", "renders"]);
 const SAFE_SEGMENT = /^[0-9a-zA-Z_.-]+$/;
 
+/**
+ * パスの1セグメントとして許容できるか判定する。SAFE_SEGMENT は "." "-" を許可するため、
+ * セグメント単体では "." や ".." も文字種チェックだけは通ってしまう。path.join後に
+ * 上位ディレクトリへ抜けられないよう、"." ".." は明示的に禁止する。
+ */
+export const isValidPathSegment = (segment: string): boolean =>
+  segment !== "." && segment !== ".." && SAFE_SEGMENT.test(segment);
+
 const MIME_BY_EXTENSION: Record<string, string> = {
   mp4: "video/mp4",
   mov: "video/quicktime",
@@ -39,7 +47,7 @@ export async function GET(
     !ALLOWED_DIRS.has(dir) ||
     rest.length === 0 ||
     rest.length > 2 ||
-    rest.some((segment) => !SAFE_SEGMENT.test(segment))
+    rest.some((segment) => !isValidPathSegment(segment))
   ) {
     return NextResponse.json({ error: "不正なパスです" }, { status: 400 });
   }
@@ -48,7 +56,11 @@ export async function GET(
 
   let size: number;
   try {
-    size = (await stat(filePath)).size;
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) {
+      return NextResponse.json({ error: "ファイルが見つかりません" }, { status: 404 });
+    }
+    size = fileStat.size;
   } catch {
     return NextResponse.json({ error: "ファイルが見つかりません" }, { status: 404 });
   }

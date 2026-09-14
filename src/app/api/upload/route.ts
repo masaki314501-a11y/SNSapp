@@ -72,6 +72,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // ShortVideoProps.clips[].src にそのまま入れられる相対パス
+  // StandardVideoProps.clips[].src にそのまま入れられる相対パス
   return NextResponse.json({ path: `videos/${filename}` });
 }
