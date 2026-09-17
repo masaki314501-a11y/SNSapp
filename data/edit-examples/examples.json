@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "a720e19f-c61b-40c4-9b5a-a8ff84ec0e48",
+    "label": "日本と韓国の矯正治療の違い",
+    "correctMediaFilename": "日本と韓国の矯正治療の違い-9fc6c1e6.mp4",
+    "correctMimeType": "video/mp4",
+    "rawMediaFilename": "日本と韓国の矯正治療の違い-4bef6187.mp4",
+    "rawMimeType": "video/mp4",
+    "createdAt": "2026-09-17T14:59:59.690Z"
+  },
+  {
+    "id": "efc7bd22-f834-4818-b27c-239021821d97",
+    "label": "矯正した方がいい症状ランキング動画",
+    "correctMediaFilename": "矯正した方がいい症状ランキング動画-ec170f78.mp4",
+    "correctMimeType": "video/mp4",
+    "rawMediaFilename": "矯正した方がいい症状ランキング動画-0826d3dd.mp4",
+    "rawMimeType": "video/mp4",
+    "createdAt": "2026-09-17T15:01:45.555Z"
+  }
+]
