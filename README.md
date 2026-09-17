@@ -134,6 +134,8 @@ JSONエクスポート/インポートにも対応する。
     登録済みの正解データがあれば、リクエストのたびにfew-shot例として先頭に差し込む
   - `styleExamplesStore.ts` / `styleTypes.ts` — スタイル抽出のfew-shot例(正解データ)の
     保存・読み込み(`data/style-examples/`、詳細は後述の`/dev/style-examples`参照)
+  - `editExamplesStore.ts` — 自動編集のfew-shot例(学習動画・正解動画)の保存・読み込み
+    (`data/edit-examples/`、詳細は後述の`/dev/edit-examples`参照)
   - `generateVoiceover.ts` — Gemini TTSでテロップを読み上げ音声(WAV)に変換する
   - `voiceOptions.ts` — AIナレーションの声のプリセット一覧(クライアント/サーバー共用)
   - `geminiFiles.ts` — Gemini File APIアップロード後のACTIVE待ちポーリング(共通処理)
@@ -212,6 +214,25 @@ gitコミットする必要がある**。詳しい形式は `data/style-examples
 `GET/POST /import`(inbox内の件数確認・一括取り込み)、
 `POST /suggest`(登録前の素材を今の抽出にかけて下書きを返す。登録前なので`data/`には
 残さず一時ファイル経由で渡す)。
+
+## `/dev/edit-examples` — 自動編集の学習・正解動画登録(開発者用)
+
+エンドユーザー向けの導線は無く、URLを直接開いて使う(`/dev/style-examples`と同じ運用)。
+`/dev/style-examples`とは別のストア(色などの構造化値ではなく、動画ペアそのものが正解データ)。
+「正解動画」(完成度の高い参考動画)を登録しておくと、自動編集(`/create/auto-edit`)で
+few-shot例として自動的に使われる(新しいものから最大2件。動画のアップロード・解析は
+コスト/時間が重いため画像スタイルの6件より大幅に絞っている)。もとになった「学習動画」
+(生素材)も任意で一緒に保管できる。
+
+登録内容は `data/edit-examples/` にファイルとして保存される(`/dev/style-examples`と同じ
+git-commitの前提、詳細は `data/edit-examples/README.md` を参照)。ファイル名は
+`{ラベルのスラッグ}-{短いランダムID}.{拡張子}` で保存し、OSのファイルエクスプローラーから
+見ても中身が分かるようにしている(UUIDそのままにはしていない)。1件ずつの登録のみ対応
+(inboxからの一括取り込みは無い)。
+
+主なAPI(`src/app/api/dev/edit-examples/`): `GET/POST /`(一覧・1件登録。multipartで
+`label`必須+任意の`notes`+`correct`(正解動画、必須)+`raw`(学習動画、任意))、
+`DELETE /[id]`(削除)、`GET /[id]/media?which=correct|raw`(動画本体の取得)。
 
 ## 環境変数
 
