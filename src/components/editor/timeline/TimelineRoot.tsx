@@ -30,6 +30,8 @@ type TimelineRootProps = {
   onSelectSegment: (key: string, index: number, modifiers: SelectModifiers) => void;
   onTrimStart: (key: string, desiredStartSeconds: number) => void;
   onTrimEnd: (key: string, desiredDurationSeconds: number) => void;
+  /** トリムのドラッグ開始時に1回だけ呼ばれる(Undo履歴をドラッグ単位で積むため)。 */
+  onTrimBegin: () => void;
   onReorder: (draggedKey: string, targetKey: string) => void;
   onSelectSfx: (key: string) => void;
   onMoveSfx: (key: string, desiredStartSeconds: number) => void;
@@ -72,6 +74,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   onSelectSegment,
   onTrimStart,
   onTrimEnd,
+  onTrimBegin,
   onReorder,
   onSelectSfx,
   onMoveSfx,
@@ -224,6 +227,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
                 onSelect={onSelectSegment}
                 onTrimStart={onTrimStart}
                 onTrimEnd={onTrimEnd}
+                onTrimBegin={onTrimBegin}
                 onReorder={onReorder}
               />
             ) : null}

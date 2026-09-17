@@ -93,6 +93,62 @@ export const splitSegment = <T extends TimelineSegment & { caption: string; key:
 };
 
 /**
+ * 元動画上の区間[rangeStart, rangeEnd)を、全クリップから取り除く。区間がクリップの
+ * 真ん中にかかる場合は前後2つに分かれる(splitSegmentと同じく、後半はテロップを持たない
+ * 新しいキーのクリップになる)。取り除いた結果、最小尺を下回った断片は捨てる。
+ * ラフカット画面で「元動画のこのあたりは丸ごと要らない」を1操作で行うために使う。
+ */
+export const subtractSourceRange = <T extends TimelineSegment & { caption: string; key: string }>(
+  segments: T[],
+  rangeStart: number,
+  rangeEnd: number,
+  makeKey: () => string
+): T[] => {
+  const result: T[] = [];
+  for (const seg of segments) {
+    const segStart = seg.startFromSeconds;
+    const segEnd = segStart + seg.durationInSeconds;
+    const overlapStart = Math.max(segStart, rangeStart);
+    const overlapEnd = Math.min(segEnd, rangeEnd);
+    if (overlapEnd - overlapStart <= TIME_EPSILON_SECONDS) {
+      result.push(seg);
+      continue;
+    }
+    if (overlapStart - segStart >= MIN_SEGMENT_DURATION_IN_SECONDS) {
+      result.push({ ...seg, durationInSeconds: overlapStart - segStart });
+    }
+    if (segEnd - overlapEnd >= MIN_SEGMENT_DURATION_IN_SECONDS) {
+      result.push({
+        ...seg,
+        key: makeKey(),
+        caption: "",
+        startFromSeconds: overlapEnd,
+        durationInSeconds: segEnd - overlapEnd,
+      });
+    }
+  }
+  return result;
+};
+
+/**
+ * 元動画上の区間[rangeStart, rangeEnd)に重なる部分だけを残す(subtractSourceRangeの逆)。
+ * 何テイクも撮った中から「この1テイクだけ使う」を1操作で行うために使う。
+ */
+export const keepOnlySourceRange = <T extends TimelineSegment>(
+  segments: T[],
+  rangeStart: number,
+  rangeEnd: number
+): T[] =>
+  segments.reduce<T[]>((acc, seg) => {
+    const overlapStart = Math.max(seg.startFromSeconds, rangeStart);
+    const overlapEnd = Math.min(seg.startFromSeconds + seg.durationInSeconds, rangeEnd);
+    if (overlapEnd - overlapStart >= MIN_SEGMENT_DURATION_IN_SECONDS) {
+      acc.push({ ...seg, startFromSeconds: overlapStart, durationInSeconds: overlapEnd - overlapStart });
+    }
+    return acc;
+  }, []);
+
+/**
  * 与えられたクリップ群(元動画上の時刻順にソート済みであること)から、
  * まだどのクリップにも使われていない最大の空き区間を探す。
  * 「+ 字幕を追加」で新規クリップを配置する位置に使う。

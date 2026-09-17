@@ -19,6 +19,8 @@ type VideoClipBlockProps = {
   onSelect: (key: string, index: number, modifiers: SelectModifiers) => void;
   onTrimStart: (key: string, desiredStartSeconds: number) => void;
   onTrimEnd: (key: string, desiredDurationSeconds: number) => void;
+  /** トリムのドラッグを始めた瞬間。ドラッグ中は連続的に値が変わるため、Undo履歴はここで1回だけ積む。 */
+  onTrimBegin: () => void;
   onReorderDrop: (draggedKey: string, dropXPixels: number) => void;
 };
 
@@ -38,6 +40,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = memo(function VideoClipBlo
   onSelect,
   onTrimStart,
   onTrimEnd,
+  onTrimBegin,
   onReorderDrop,
 }) {
   const widthPx = Math.max(4, secondsToPixels(segment.durationInSeconds, pixelsPerSecond));
@@ -64,6 +67,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = memo(function VideoClipBlo
     e.stopPropagation();
     const originalStart = segment.startFromSeconds;
     beginPointerDrag(e, {
+      onStart: onTrimBegin,
       onMove: (dx) => onTrimStart(segment.key, originalStart + pixelsToSeconds(dx, pixelsPerSecond)),
     });
   };
@@ -72,6 +76,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = memo(function VideoClipBlo
     e.stopPropagation();
     const originalDuration = segment.durationInSeconds;
     beginPointerDrag(e, {
+      onStart: onTrimBegin,
       onMove: (dx) => onTrimEnd(segment.key, originalDuration + pixelsToSeconds(dx, pixelsPerSecond)),
     });
   };
@@ -114,6 +119,7 @@ type VideoTrackProps = {
   onSelect: (key: string, index: number, modifiers: SelectModifiers) => void;
   onTrimStart: (key: string, desiredStartSeconds: number) => void;
   onTrimEnd: (key: string, desiredDurationSeconds: number) => void;
+  onTrimBegin: () => void;
   onReorder: (draggedKey: string, targetKey: string) => void;
 };
 
@@ -126,6 +132,7 @@ export const VideoTrack: React.FC<VideoTrackProps> = memo(function VideoTrack({
   onSelect,
   onTrimStart,
   onTrimEnd,
+  onTrimBegin,
   onReorder,
 }) {
   const positioned = segments.reduce<{ segment: ProjectSegment; leftSeconds: number }[]>((acc, segment) => {
@@ -164,6 +171,7 @@ export const VideoTrack: React.FC<VideoTrackProps> = memo(function VideoTrack({
             onSelect={onSelect}
             onTrimStart={onTrimStart}
             onTrimEnd={onTrimEnd}
+            onTrimBegin={onTrimBegin}
             onReorderDrop={handleReorderDrop}
           />
         ))}

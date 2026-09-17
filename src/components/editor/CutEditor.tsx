@@ -24,8 +24,11 @@ import {
   clampTrimEnd,
   canSplitSegment,
   splitSegment,
+  subtractSourceRange,
+  keepOnlySourceRange,
 } from "./timelineUtils";
 import { TimelineRoot } from "./timeline/TimelineRoot";
+import { beginPointerDrag } from "./timeline/pointerDrag";
 
 /**
  * アップロード直後の動画から、実際に使う範囲だけを粗く選ぶラフカット画面(/create/cut)。
@@ -79,6 +82,9 @@ export const CutEditor: React.FC = () => {
   const [future, setFuture] = useState<ProjectSegment[][]>([]);
   const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  /** 元動画バー上でドラッグして選んだ範囲(元動画上の秒)。捨てる/ここだけ残すの対象。 */
+  const [sourceRange, setSourceRange] = useState<{ start: number; end: number } | null>(null);
+  const coverageBarRef = useRef<HTMLDivElement>(null);
 
   const videoDurationInSeconds = project?.videoDurationInSeconds ?? 0;
 
@@ -309,6 +315,7 @@ export const CutEditor: React.FC = () => {
     const { key, offsetSeconds } = activeProgramSegment;
     const segment = segments.find((s) => s.key === key);
     if (!segment) return;
+    pushHistory();
     updateSegmentTrim(key, { startFromSeconds: segment.startFromSeconds + offsetSeconds });
   };
 
@@ -316,7 +323,73 @@ export const CutEditor: React.FC = () => {
   const trimEndToPlayhead = () => {
     if (!activeProgramSegment) return;
     const { key, offsetSeconds } = activeProgramSegment;
+    pushHistory();
     updateSegmentTrim(key, { durationInSeconds: offsetSeconds });
+  };
+
+  /**
+   * 元動画上の時刻を、プレビュー(再生順に詰めた尺)上のフレームに直してシークする。
+   * 捨てた範囲を指した場合はその直後に残っているクリップの先頭へ寄せる。
+   */
+  const seekToSourceSeconds = (sourceSeconds: number) => {
+    let elapsed = 0;
+    let fallbackFrame: number | null = null;
+    for (const segment of segments) {
+      const segEnd = segment.startFromSeconds + segment.durationInSeconds;
+      if (sourceSeconds >= segment.startFromSeconds && sourceSeconds < segEnd) {
+        playerRef.current?.seekTo(Math.round((elapsed + sourceSeconds - segment.startFromSeconds) * VIDEO_FPS));
+        return;
+      }
+      if (fallbackFrame === null && segment.startFromSeconds >= sourceSeconds) {
+        fallbackFrame = Math.round(elapsed * VIDEO_FPS);
+      }
+      elapsed += segment.durationInSeconds;
+    }
+    playerRef.current?.seekTo(fallbackFrame ?? Math.max(0, Math.round(elapsed * VIDEO_FPS) - 1));
+  };
+
+  const sourceSecondsAtClientX = (clientX: number): number => {
+    const rect = coverageBarRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return 0;
+    const ratio = (clientX - rect.left) / rect.width;
+    return Math.min(Math.max(ratio, 0), 1) * videoDurationInSeconds;
+  };
+
+  /**
+   * 元動画バーの操作。クリックならその時刻へシーク、横にドラッグしたなら範囲選択。
+   * 「元動画のどこを捨てたか」を見せているバーの上でそのまま範囲を指定できるようにすることで、
+   * 分割→分割→選択→削除の4手を1手にする。
+   */
+  const handleCoveragePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (videoDurationInSeconds <= 0) return;
+    const anchorSeconds = sourceSecondsAtClientX(e.clientX);
+    const startClientX = e.clientX;
+    beginPointerDrag(e, {
+      onMove: (dx) => {
+        const current = sourceSecondsAtClientX(startClientX + dx);
+        setSourceRange({ start: Math.min(anchorSeconds, current), end: Math.max(anchorSeconds, current) });
+      },
+      onClick: () => {
+        setSourceRange(null);
+        seekToSourceSeconds(anchorSeconds);
+      },
+    });
+  };
+
+  const applySourceRange = (mode: "discard" | "keepOnly") => {
+    if (!sourceRange) return;
+    const next =
+      mode === "discard"
+        ? subtractSourceRange(segments, sourceRange.start, sourceRange.end, () => crypto.randomUUID())
+        : keepOnlySourceRange(segments, sourceRange.start, sourceRange.end);
+    if (next.length === 0) {
+      alert("その範囲を適用すると使うクリップが無くなってしまうため、実行できません");
+      return;
+    }
+    pushHistory();
+    setSegments(next);
+    setSourceRange(null);
+    selectOnly(null);
   };
 
   const selectSegment = useCallback((
@@ -401,7 +474,10 @@ export const CutEditor: React.FC = () => {
         const player = playerRef.current;
         if (!player) return;
         e.preventDefault();
-        const delta = e.key === "ArrowLeft" ? -1 : 1;
+        // 1フレーム送りだけだと数十秒の動画でも切り所を探すのに時間がかかるため、
+        // Shift併用で1秒単位の粗送りにする。
+        const step = e.shiftKey ? VIDEO_FPS : 1;
+        const delta = e.key === "ArrowLeft" ? -step : step;
         player.seekTo(Math.max(0, player.getCurrentFrame() + delta));
       }
     };
@@ -454,7 +530,7 @@ export const CutEditor: React.FC = () => {
         />
       </div>
       <p className="text-center text-xs" style={{ color: "var(--muted-2)" }}>
-        Space=再生/一時停止・←→=1フレーム送り・S=分割・I/O=再生位置をイン/アウト点に
+        Space=再生/一時停止・←→=1フレーム送り(Shift+←→=1秒)・S=分割・I/O=再生位置をイン/アウト点に・Delete=選択を削除
       </p>
 
       {videoDurationInSeconds > 0 ? (
@@ -468,7 +544,13 @@ export const CutEditor: React.FC = () => {
               %カット)
             </span>
           </div>
-          <div className="editor-coverage-bar">
+          <div
+            className="editor-coverage-bar"
+            ref={coverageBarRef}
+            onPointerDown={handleCoveragePointerDown}
+            style={{ cursor: "text" }}
+            title="クリックでその位置へ移動、横にドラッグで範囲を選択"
+          >
             {sourceCoverage.ranges.map(([start, end], i) => (
               <div
                 key={i}
@@ -479,6 +561,15 @@ export const CutEditor: React.FC = () => {
                 }}
               />
             ))}
+            {sourceRange ? (
+              <div
+                className="editor-coverage-selection"
+                style={{
+                  left: `${(sourceRange.start / videoDurationInSeconds) * 100}%`,
+                  width: `${((sourceRange.end - sourceRange.start) / videoDurationInSeconds) * 100}%`,
+                }}
+              />
+            ) : null}
             {activeSourceSeconds !== null ? (
               <div
                 className="editor-coverage-playhead"
@@ -486,6 +577,27 @@ export const CutEditor: React.FC = () => {
               />
             ) : null}
           </div>
+          {sourceRange ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                選択範囲 {sourceRange.start.toFixed(1)}秒 〜 {sourceRange.end.toFixed(1)}秒
+                ({(sourceRange.end - sourceRange.start).toFixed(1)}秒)
+              </span>
+              <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
+                この範囲を捨てる
+              </button>
+              <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
+                ここだけ残す
+              </button>
+              <button type="button" className="btn-ghost text-xs" onClick={() => setSourceRange(null)}>
+                選択解除
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+              バーをクリックでその位置へ移動・横にドラッグで範囲を選ぶと、まとめて捨てられます
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -502,6 +614,7 @@ export const CutEditor: React.FC = () => {
         onSelectSegment={selectSegment}
         onTrimStart={handleTrimStart}
         onTrimEnd={handleTrimEnd}
+        onTrimBegin={pushHistory}
         onReorder={reorderSegment}
         onSelectSfx={() => {}}
         onMoveSfx={() => {}}

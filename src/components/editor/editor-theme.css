@@ -47,7 +47,8 @@
 }
 .editor-coverage-bar {
   position: relative;
-  height: 18px;
+  height: 22px;
+  touch-action: none;
   border-radius: 6px;
   overflow: hidden;
   border: 1.5px solid var(--foreground);
@@ -73,6 +74,17 @@
   width: 2px;
   background: var(--danger);
   z-index: 2;
+}
+/* バー上をドラッグして選んだ、これから捨てる/残す範囲 */
+.editor-coverage-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  border-left: 2px solid var(--foreground);
+  border-right: 2px solid var(--foreground);
+  z-index: 1;
 }
 
 /* --- タイムライン・ツールバー --- */

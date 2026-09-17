@@ -564,6 +564,7 @@ export const ClipEditor: React.FC = () => {
     const { key, offsetSeconds } = activeProgramSegment;
     const segment = form.segments.find((s) => s.key === key);
     if (!segment) return;
+    pushHistory();
     updateSegment(key, { startFromSeconds: segment.startFromSeconds + offsetSeconds });
   };
 
@@ -571,6 +572,7 @@ export const ClipEditor: React.FC = () => {
   const trimEndToPlayhead = () => {
     if (!activeProgramSegment) return;
     const { key, offsetSeconds } = activeProgramSegment;
+    pushHistory();
     updateSegment(key, { durationInSeconds: offsetSeconds });
   };
 
@@ -1239,6 +1241,7 @@ export const ClipEditor: React.FC = () => {
           onSelectSegment={selectSegment}
           onTrimStart={(key, value) => updateSegment(key, { startFromSeconds: value })}
           onTrimEnd={(key, value) => updateSegment(key, { durationInSeconds: value })}
+          onTrimBegin={pushHistory}
           onReorder={reorderSegment}
           onSelectSfx={selectSfx}
           onMoveSfx={(key, value) => updateSfxClip(key, { startFromSeconds: value })}
