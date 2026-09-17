@@ -266,10 +266,13 @@ Render無料プラン(512MB)で大きい動画をアップロードするとメ�
 (`src/app/api/upload/route.ts`と同じ問題、詳細はそちらのコメント・
 `editExamplesStore.ts`のコメント参照)。
 
-本番(Render)で登録した内容はデプロイのたびに消えるため、画面から
-「examples.jsonをダウンロード」(`GET /export`)と各動画の「ダウンロード」
-(`GET /[id]/media`)を取得し、ローカルの`data/edit-examples/`に同じファイル名で
-配置してgitコミットする運用が必要。
+本番(Render)で登録した内容はデプロイのたびに消えるため、ローカルの
+`data/edit-examples/`に取り込んでgitコミットする運用が必要。
+`npm run sync:edit-examples -- https://<本番のURL>` を実行すると、本番の
+`GET /export`(examples.json相当)と各動画(`GET /[id]/media`)を取得し、
+まだローカルに無いもの(id基準)だけ`data/edit-examples/`に追記する
+(`scripts/sync-edit-examples.mjs`)。画面からの手動ダウンロード
+(「examples.jsonをダウンロード」「各動画のダウンロード」)は1件だけ確認したい時用。
 
 主なAPI(`src/app/api/dev/edit-examples/`): `GET /`(一覧)、
 `POST /upload?which=correct|raw`(動画本体をストリームで保存。ヘッダーで

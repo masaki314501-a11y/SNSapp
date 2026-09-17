@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "remotion:studio": "remotion studio",
-    "remotion:render": "remotion render ShortVideo out/short-video.mp4"
+    "remotion:render": "remotion render ShortVideo out/short-video.mp4",
+    "sync:edit-examples": "node scripts/sync-edit-examples.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.18.0",
