@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listInboxFiles, listStyleExamples } from "@/lib/gemini/styleExamplesStore";
 import { StyleExamplesManager } from "./StyleExamplesManager";
 
@@ -13,6 +14,10 @@ export default async function StyleExamplesPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
+      <Link href="/" className="btn-ghost w-fit px-3 py-1.5 text-sm">
+        ← トップへ戻る
+      </Link>
+
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-2xl tracking-tight sm:text-3xl">
           スタイル抽出の正解データ
