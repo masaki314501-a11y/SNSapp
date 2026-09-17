@@ -69,12 +69,22 @@ export async function POST(request: Request) {
     );
   }
 
+  // clips[].srcだけでなく、sfx[].src・bgm.srcも同じ理由(コメント参照)で絶対URL化が必要。
+  // ここが漏れていると、SE/AIナレーション/BGMを使った動画の書き出しがヘッドレスChromeの
+  // 相対パス解決先(バンドルの静的配信サーバー、Next.js本体とは別ポート)への404で失敗する。
   const inputProps = {
     ...parsed.data,
     clips: parsed.data.clips.map((clip) => ({
       ...clip,
       src: resolveUploadedSrc(clip.src),
     })),
+    sfx: parsed.data.sfx.map((clip) => ({
+      ...clip,
+      src: resolveUploadedSrc(clip.src) ?? clip.src,
+    })),
+    bgm: parsed.data.bgm
+      ? { ...parsed.data.bgm, src: resolveUploadedSrc(parsed.data.bgm.src) ?? parsed.data.bgm.src }
+      : parsed.data.bgm,
   };
   const jobId = createRenderJob();
 

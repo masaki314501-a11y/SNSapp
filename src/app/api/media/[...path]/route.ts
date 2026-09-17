@@ -14,6 +14,13 @@ export const runtime = "nodejs";
  */
 const ALLOWED_DIRS = new Set(["videos", "audio", "renders"]);
 const SAFE_SEGMENT = /^[0-9a-zA-Z_.-]+$/;
+/**
+ * audio/generated/<file> (2階層)だけでなく audio/presets/sfx/<file> (3階層、
+ * audioPresets.tsのSFX_PRESETS参照)も配信できるよう3階層まで許容する。
+ * レンダー時はSFXプリセットもresolveClipSrc(remotion/shared/resolveSrc.ts)経由で
+ * ここに来るため、2階層までしか許可していないと404ではなく「不正なパスです」で弾かれる。
+ */
+const MAX_PATH_SEGMENTS = 3;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   mp4: "video/mp4",
@@ -38,7 +45,7 @@ export async function GET(
     !dir ||
     !ALLOWED_DIRS.has(dir) ||
     rest.length === 0 ||
-    rest.length > 2 ||
+    rest.length > MAX_PATH_SEGMENTS ||
     rest.some((segment) => !SAFE_SEGMENT.test(segment))
   ) {
     return NextResponse.json({ error: "不正なパスです" }, { status: 400 });
