@@ -454,6 +454,27 @@ export const ClipEditor: React.FC = () => {
     router.push("/edit/export");
   };
 
+  /**
+   * 手動編集の途中からでも自動編集(バズる動画)を試せるようにする入口。
+   * handleGoToExportと同じ理由で、遷移前に同期的にlocalStorageへ書き戻す。
+   */
+  const handleGoToAutoEdit = () => {
+    if (!project) return;
+    saveProject({
+      ...project,
+      primaryColor,
+      captionStyle,
+      fontFamily,
+      captionPosition,
+      fontSize,
+      fadeInOut,
+      segments: form.segments,
+      sfx: sfxClips,
+      bgm,
+    });
+    router.push("/create/auto-edit");
+  };
+
   const addSegment = () => {
     if (!canAddSegment || !largestGap) return;
     const durationInSeconds = Math.min(
@@ -966,6 +987,9 @@ export const ClipEditor: React.FC = () => {
           ← 別の動画からやり直す
         </button>
         <div className="flex items-center gap-1.5">
+          <button type="button" onClick={handleGoToAutoEdit} className="btn-ghost text-xs">
+            ✨ 自動編集を試す
+          </button>
           <button type="button" onClick={handleExportProject} className="btn-ghost text-xs">
             ⬇ プロジェクトを書き出す
           </button>
