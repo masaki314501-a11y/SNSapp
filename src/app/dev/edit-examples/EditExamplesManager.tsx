@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { uploadEditExampleMedia } from "./uploadEditExampleMedia";
 
 type EditExampleListItem = {
   id: string;
@@ -24,6 +25,7 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
   const [correctFile, setCorrectFile] = useState<File | null>(null);
   const [rawFile, setRawFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState<"correct" | "raw" | "registering" | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const correctPreviewUrl = useMemo(() => (correctFile ? URL.createObjectURL(correctFile) : null), [correctFile]);
@@ -44,13 +46,30 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const formData = new FormData();
-      formData.append("label", label.trim());
-      if (notes.trim()) formData.append("notes", notes.trim());
-      formData.append("correct", correctFile);
-      if (rawFile) formData.append("raw", rawFile);
+      const trimmedLabel = label.trim();
 
-      const res = await fetch("/api/dev/edit-examples", { method: "POST", body: formData });
+      setSubmitStage("correct");
+      const correctUpload = await uploadEditExampleMedia("correct", correctFile, trimmedLabel);
+
+      let rawUpload: { filename: string; mimeType: string } | null = null;
+      if (rawFile) {
+        setSubmitStage("raw");
+        rawUpload = await uploadEditExampleMedia("raw", rawFile, trimmedLabel);
+      }
+
+      setSubmitStage("registering");
+      const res = await fetch("/api/dev/edit-examples", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: trimmedLabel,
+          notes: notes.trim() || undefined,
+          correctMediaFilename: correctUpload.filename,
+          correctMimeType: correctUpload.mimeType,
+          rawMediaFilename: rawUpload?.filename,
+          rawMimeType: rawUpload?.mimeType,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "登録に失敗しました");
 
@@ -63,8 +82,18 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
       setSubmitError(error instanceof Error ? error.message : "登録に失敗しました");
     } finally {
       setSubmitting(false);
+      setSubmitStage(null);
     }
   };
+
+  const submitLabel =
+    submitStage === "correct"
+      ? "正解動画をアップロード中..."
+      : submitStage === "raw"
+        ? "学習動画をアップロード中..."
+        : submitStage === "registering"
+          ? "登録中..."
+          : "登録";
 
   const handleDelete = async (id: string) => {
     if (!confirm("この編集例を削除しますか?")) return;
@@ -139,7 +168,7 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
           disabled={!correctFile || !label.trim() || submitting}
           className="btn-primary w-fit px-4 py-1.5 text-sm"
         >
-          {submitting ? "登録中..." : "登録"}
+          {submitLabel}
         </button>
       </div>
 

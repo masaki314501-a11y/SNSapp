@@ -79,35 +79,41 @@ const writeMetadata = async (examples: EditExample[]): Promise<void> => {
 
 export const listEditExamples = (): Promise<EditExample[]> => readMetadata();
 
-export const addEditExample = async (input: {
+/**
+ * アップロード先のファイルパスを予約する(ディレクトリ作成込み)。実際のバイト列の書き込みは
+ * 呼び出し元(APIルート)がリクエストボディをストリームのまま流し込む形で行う。
+ * request.formData()を使うとファイル全体が一度メモリ上のBlobに載ってしまい、メモリの少ない
+ * 本番環境(Render無料プラン=512MB)で大きい動画のアップロード時にクラッシュするため
+ * (詳細はsrc/app/api/upload/route.tsのコメント参照、同じ問題をここでも回避する)。
+ */
+export const reserveEditExampleMediaPath = async (
+  which: "correct" | "raw",
+  label: string,
+  extension: string
+): Promise<{ filename: string; absolutePath: string }> => {
+  const dir = which === "raw" ? RAW_MEDIA_DIR : CORRECT_MEDIA_DIR;
+  await mkdir(dir, { recursive: true });
+  const filename = buildMediaFilename(label, extension);
+  return { filename, absolutePath: path.join(dir, filename) };
+};
+
+/** ストリーム書き込み済みのメディアファイルをメタデータに登録する。 */
+export const registerEditExample = async (input: {
   label: string;
   notes?: string;
-  correctBuffer: Buffer;
-  correctExtension: string;
+  correctMediaFilename: string;
   correctMimeType: string;
-  rawBuffer?: Buffer;
-  rawExtension?: string;
+  rawMediaFilename?: string;
   rawMimeType?: string;
 }): Promise<EditExample> => {
-  await mkdir(CORRECT_MEDIA_DIR, { recursive: true });
-  const correctMediaFilename = buildMediaFilename(input.label, input.correctExtension);
-  await writeFile(path.join(CORRECT_MEDIA_DIR, correctMediaFilename), input.correctBuffer);
-
-  let rawMediaFilename: string | undefined;
-  if (input.rawBuffer && input.rawExtension && input.rawMimeType) {
-    await mkdir(RAW_MEDIA_DIR, { recursive: true });
-    rawMediaFilename = buildMediaFilename(input.label, input.rawExtension);
-    await writeFile(path.join(RAW_MEDIA_DIR, rawMediaFilename), input.rawBuffer);
-  }
-
   const example: EditExample = {
     id: randomUUID(),
     label: input.label,
     notes: input.notes,
-    correctMediaFilename,
+    correctMediaFilename: input.correctMediaFilename,
     correctMimeType: input.correctMimeType,
-    rawMediaFilename,
-    rawMimeType: input.rawBuffer ? input.rawMimeType : undefined,
+    rawMediaFilename: input.rawMediaFilename,
+    rawMimeType: input.rawMediaFilename ? input.rawMimeType : undefined,
     createdAt: new Date().toISOString(),
   };
 
