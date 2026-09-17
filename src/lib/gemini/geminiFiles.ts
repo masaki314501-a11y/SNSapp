@@ -1,6 +1,11 @@
 import type { GoogleGenAI } from "@google/genai";
 
-const FILE_ACTIVE_TIMEOUT_MS = 60_000;
+/**
+ * 大きい/長い動画ほどGemini側のACTIVE化(解析可能になるまで)に時間がかかる。
+ * 編集例(few-shot、数十〜100MB超)や長めのユーザー動画で60秒に収まらないことがあったため
+ * 余裕を持たせる(autoEditPlan.ts/transcribeCaptions.tsのGEMINI_TIMEOUT_MSと同程度)。
+ */
+const FILE_ACTIVE_TIMEOUT_MS = 180_000;
 const FILE_ACTIVE_POLL_INTERVAL_MS = 1_500;
 
 /**

@@ -6,7 +6,8 @@ import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
-const GEMINI_TIMEOUT_MS = 120_000;
+/** 動画が長い/大きいと生成に時間がかかるため余裕を持たせる(autoEditPlan.tsと同じ理由)。 */
+const GEMINI_TIMEOUT_MS = 180_000;
 const MAX_GENERATE_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 

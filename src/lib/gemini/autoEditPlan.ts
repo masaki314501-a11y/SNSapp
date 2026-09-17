@@ -18,7 +18,13 @@ import { loadEditFewShotContext } from "./editExamplesStore";
 import { autoEditPlanSchema } from "./autoEditTypes";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
-const GEMINI_TIMEOUT_MS = 60_000;
+/**
+ * few-shot例(loadEditFewShotContext)が読み込めるようになった後、登録済みの編集例
+ * (実際の参考動画、数十〜100MB超)を毎回モデルに読ませるようになったため、テキストのみの
+ * 応答より生成に時間がかかる。60秒だと動画込みの実測(約70秒)にすら足りず頻繁にタイムアウト
+ * していたため、transcribeCaptions.ts(動画本体を扱う文字起こし)と同程度まで余裕を持たせる。
+ */
+const GEMINI_TIMEOUT_MS = 180_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 
