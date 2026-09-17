@@ -260,9 +260,24 @@ git-commitの前提、詳細は `data/edit-examples/README.md` を参照)。フ�
 見ても中身が分かるようにしている(UUIDそのままにはしていない)。1件ずつの登録のみ対応
 (inboxからの一括取り込みは無い)。
 
-主なAPI(`src/app/api/dev/edit-examples/`): `GET/POST /`(一覧・1件登録。multipartで
-`label`必須+任意の`notes`+`correct`(正解動画、必須)+`raw`(学習動画、任意))、
-`DELETE /[id]`(削除)、`GET /[id]/media?which=correct|raw`(動画本体の取得)。
+動画のアップロードは2段階(`POST /upload`でストリーム保存 → `POST /`でJSON登録)に
+分かれている。`request.formData()`はファイル全体を一度メモリ上のBlobに読み込む実装のため、
+Render無料プラン(512MB)で大きい動画をアップロードするとメモリ不足でクラッシュしていた
+(`src/app/api/upload/route.ts`と同じ問題、詳細はそちらのコメント・
+`editExamplesStore.ts`のコメント参照)。
+
+本番(Render)で登録した内容はデプロイのたびに消えるため、画面から
+「examples.jsonをダウンロード」(`GET /export`)と各動画の「ダウンロード」
+(`GET /[id]/media`)を取得し、ローカルの`data/edit-examples/`に同じファイル名で
+配置してgitコミットする運用が必要。
+
+主なAPI(`src/app/api/dev/edit-examples/`): `GET /`(一覧)、
+`POST /upload?which=correct|raw`(動画本体をストリームで保存。ヘッダーで
+`X-Mime-Type`必須+`X-Label`任意、ボディは生バイト列)、
+`POST /`(JSONで`label`必須+任意の`notes`+`correctMediaFilename`/`correctMimeType`必須+
+任意の`rawMediaFilename`/`rawMimeType`を渡して登録)、
+`DELETE /[id]`(削除)、`GET /[id]/media?which=correct|raw`(動画本体の取得・ダウンロード)、
+`GET /export`(`examples.json`と同じ形式のメタデータをダウンロード)。
 
 ## 環境変数
 

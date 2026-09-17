@@ -173,13 +173,28 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
       </div>
 
       <div className="panel flex flex-col gap-3 p-5">
-        <div className="flex items-baseline gap-2.5">
+        <div className="flex flex-wrap items-baseline gap-2.5">
           <span className="step-badge">{examples.length}</span>
           <h2 className="text-sm font-semibold">登録済みの編集例</h2>
           <span className="text-xs" style={{ color: "var(--muted-2)" }}>
             自動編集では新しいものから最大2件をfew-shot例として使用します
           </span>
+          {examples.length > 0 ? (
+            <a
+              href="/api/dev/edit-examples/export"
+              download="examples.json"
+              className="badge-pill w-fit"
+            >
+              examples.jsonをダウンロード
+            </a>
+          ) : null}
         </div>
+        <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+          本番(Render)で登録した場合、ここでの保存はデプロイのたびに消えます。残したい場合は
+          「examples.jsonをダウンロード」と各動画の「ダウンロード」を取得し、ローカルの
+          <code>data/edit-examples/</code>(examples.jsonと media/correct・media/raw)に
+          同じファイル名で配置してgitコミットしてください。
+        </p>
 
         {examples.length === 0 ? (
           <p className="text-xs" style={{ color: "var(--muted-2)" }}>まだ登録がありません</p>
@@ -189,7 +204,16 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
               <li key={example.id} className="preset-card flex flex-col gap-2 p-3">
                 <span className="font-semibold text-xs">{example.label}</span>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs" style={{ color: "var(--muted-2)" }}>正解動画</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs" style={{ color: "var(--muted-2)" }}>正解動画</span>
+                    <a
+                      href={`/api/dev/edit-examples/${example.id}/media?which=correct`}
+                      download={example.correctMediaFilename}
+                      className="text-xs underline"
+                    >
+                      ダウンロード
+                    </a>
+                  </div>
                   <video
                     src={`/api/dev/edit-examples/${example.id}/media?which=correct`}
                     controls
@@ -198,7 +222,16 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
                 </div>
                 {example.rawMediaFilename ? (
                   <div className="flex flex-col gap-1">
-                    <span className="text-xs" style={{ color: "var(--muted-2)" }}>学習動画</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs" style={{ color: "var(--muted-2)" }}>学習動画</span>
+                      <a
+                        href={`/api/dev/edit-examples/${example.id}/media?which=raw`}
+                        download={example.rawMediaFilename}
+                        className="text-xs underline"
+                      >
+                        ダウンロード
+                      </a>
+                    </div>
                     <video
                       src={`/api/dev/edit-examples/${example.id}/media?which=raw`}
                       controls
