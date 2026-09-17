@@ -62,6 +62,12 @@ export default function Home() {
           >
             動画を作成する →
           </Link>
+          <Link
+            href="/dev/edit-examples"
+            className="btn-outline flex h-12 items-center justify-center px-7 text-sm"
+          >
+            学習・正解動画をアップロード(開発者用)
+          </Link>
         </div>
 
         <ol className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
