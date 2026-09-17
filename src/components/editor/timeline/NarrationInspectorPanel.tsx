@@ -22,6 +22,8 @@ type Props = {
   narrationGenerating: { current: number; total: number } | null;
   onGenerateNarrationForSegment: (key: string) => void;
   onGenerateNarrationForAll: () => void;
+  /** 実行中の一括生成を、今のクリップが終わった時点で止める。 */
+  onCancelNarrationGeneration: () => void;
 };
 
 /**
@@ -44,6 +46,7 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
   narrationGenerating,
   onGenerateNarrationForSegment,
   onGenerateNarrationForAll,
+  onCancelNarrationGeneration,
 }) => {
   const selected =
     audioSelection?.kind === "sfx" ? narrationClips.find((c) => c.key === audioSelection.key) ?? null : null;
@@ -51,6 +54,15 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
     ? segments.findIndex((segment) => segment.key === selectedSegmentKey)
     : -1;
   const selectedSegment = selectedSegmentIndex >= 0 ? segments[selectedSegmentIndex] : null;
+
+  // 生成済みのクリップは一括生成の対象外になる(ClipEditor側で同じ判定をしている)。
+  // 「あと何件ぶんAPIを使うのか」が押す前に分かるよう、残り件数として見せる。
+  const generatedSegmentKeys = new Set(
+    narrationClips.map((clip) => clip.narrationSegmentKey).filter((key): key is string => Boolean(key))
+  );
+  const captionedSegments = segments.filter((segment) => segment.caption.trim().length > 0);
+  const pendingCount = captionedSegments.filter((segment) => !generatedSegmentKeys.has(segment.key)).length;
+  const selectedHasNarration = selectedSegment ? generatedSegmentKeys.has(selectedSegment.key) : false;
 
   return (
     <div className="editor-inspector">
@@ -103,16 +115,22 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
               disabled={
                 selectedSegment.caption.trim().length === 0 ||
                 narrationGenerating !== null ||
-                totalSfxCount >= maxSfxClips
+                (!selectedHasNarration && totalSfxCount >= maxSfxClips)
               }
               onClick={() => onGenerateNarrationForSegment(selectedSegment.key)}
               title={
-                totalSfxCount >= maxSfxClips
+                !selectedHasNarration && totalSfxCount >= maxSfxClips
                   ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
-                  : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
+                  : selectedHasNarration
+                    ? "このクリップのナレーションを作り直して差し替えます"
+                    : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
               }
             >
-              {narrationGenerating ? "生成中..." : "🎙 このクリップのナレーション生成"}
+              {narrationGenerating
+                ? "生成中..."
+                : selectedHasNarration
+                  ? "🎙 このクリップのナレーションを作り直す"
+                  : "🎙 このクリップのナレーション生成"}
             </button>
           </div>
         ) : (
@@ -136,23 +154,27 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          className="editor-toolbar-btn"
-          disabled={
-            narrationGenerating !== null ||
-            segments.every((segment) => segment.caption.trim().length === 0) ||
-            totalSfxCount >= maxSfxClips
-          }
-          onClick={onGenerateNarrationForAll}
-          title={
-            totalSfxCount >= maxSfxClips
-              ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
-              : "テロップが入っている全クリップ分、順番にAIナレーションを生成して追加します"
-          }
-        >
-          {narrationGenerating ? `生成中... (${narrationGenerating.current}/${narrationGenerating.total})` : "🎙 全クリップに一括生成"}
-        </button>
+        {narrationGenerating ? (
+          <button type="button" className="editor-toolbar-btn danger" onClick={onCancelNarrationGeneration}>
+            生成中... ({narrationGenerating.current}/{narrationGenerating.total}) 中断
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="editor-toolbar-btn"
+            disabled={pendingCount === 0 || totalSfxCount >= maxSfxClips}
+            onClick={onGenerateNarrationForAll}
+            title={
+              totalSfxCount >= maxSfxClips
+                ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
+                : pendingCount === 0
+                  ? "テロップのあるクリップは全て生成済みです"
+                  : `まだナレーションが無い${pendingCount}件だけを、順番に生成して追加します(生成済みの分はAPIを使いません)`
+            }
+          >
+            🎙 未生成の{pendingCount}件を一括生成
+          </button>
+        )}
       </div>
     </div>
   );

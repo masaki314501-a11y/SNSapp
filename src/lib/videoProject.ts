@@ -44,6 +44,12 @@ export type ProjectSfxClip = {
   /** 書き出し後の動画上でこの効果音を鳴らし始める秒数。 */
   startFromSeconds: number;
   volume: number;
+  /**
+   * AIナレーションの場合、読み上げ元のクリップのkey。一括生成で「もう作ってある分」を
+   * 飛ばす判定と、作り直しのときに古いナレーションを置き換える判定に使う。
+   * 手動で追加したSEには無い。
+   */
+  narrationSegmentKey?: string;
 };
 
 export type ProjectBgm = {

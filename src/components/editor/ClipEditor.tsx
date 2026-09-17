@@ -161,6 +161,8 @@ export const ClipEditor: React.FC = () => {
   const [narrationVoice, setNarrationVoice] = useState(DEFAULT_VOICE_NAME);
   /** AIナレーション一括生成の進捗(nullなら未実行)。単発生成もtotal=1として同じ状態を使う。 */
   const [narrationGenerating, setNarrationGenerating] = useState<{ current: number; total: number } | null>(null);
+  /** 一括生成の中断要求。生成ループは毎回このrefを見るため、stateと違い即座に伝わる。 */
+  const narrationCancelRef = useRef(false);
   const [copyStatus, setCopyStatus] = useState<"idle" | "done">("idle");
   /**
    * 「動画カット/字幕/SE/AI音声/BGM/スタイル」のタブ切り替え。
@@ -352,7 +354,9 @@ export const ClipEditor: React.FC = () => {
   // sfxClips配列にはSEとAIナレーションが同じ形で混在している(appendNarrationClip参照)。
   // データモデルは変えず、ラベルの絵文字プレフィックスで表示上だけ区別する
   // (「SE」「AI音声」タブそれぞれに、関係あるクリップだけを見せるため)。
-  const isNarrationClip = (clip: ProjectSfxClip) => clip.label.startsWith("🎙");
+  // narrationSegmentKeyを持たない古い保存データもあるため、ラベルの絵文字も引き続き見る。
+  const isNarrationClip = (clip: ProjectSfxClip) =>
+    clip.narrationSegmentKey !== undefined || clip.label.startsWith("🎙");
   const sfxOnlyClips = useMemo(() => sfxClips.filter((c) => !isNarrationClip(c)), [sfxClips]);
   const narrationOnlyClips = useMemo(() => sfxClips.filter(isNarrationClip), [sfxClips]);
 
@@ -763,19 +767,31 @@ export const ClipEditor: React.FC = () => {
   const segmentStartSeconds = (index: number): number =>
     form.segments.slice(0, index).reduce((sum, segment) => sum + segment.durationInSeconds, 0);
 
-  const appendNarrationClip = (startFromSeconds: number, caption: string, path: string) => {
+  /**
+   * 生成したナレーションをタイムラインに載せる。同じクリップのナレーションが既にあれば
+   * 置き換える(作り直しのたびに同じ台詞が重なって二重に聞こえるのを防ぐ)。
+   */
+  const upsertNarrationClip = (
+    segmentKey: string,
+    startFromSeconds: number,
+    caption: string,
+    path: string
+  ) => {
     setSfxClips((prev) => {
+      const next: ProjectSfxClip = {
+        key: crypto.randomUUID(),
+        src: path,
+        label: `🎙 ${caption.slice(0, 12)}`,
+        startFromSeconds,
+        volume: DEFAULT_CLIP_VOLUME,
+        narrationSegmentKey: segmentKey,
+      };
+      const existingIndex = prev.findIndex((clip) => clip.narrationSegmentKey === segmentKey);
+      if (existingIndex !== -1) {
+        return prev.map((clip, i) => (i === existingIndex ? { ...next, key: clip.key, volume: clip.volume } : clip));
+      }
       if (prev.length >= MAX_SFX_CLIPS) return prev;
-      return [
-        ...prev,
-        {
-          key: crypto.randomUUID(),
-          src: path,
-          label: `🎙 ${caption.slice(0, 12)}`,
-          startFromSeconds,
-          volume: DEFAULT_CLIP_VOLUME,
-        },
-      ];
+      return [...prev, next];
     });
   };
 
@@ -785,14 +801,15 @@ export const ClipEditor: React.FC = () => {
     if (index === -1) return;
     const caption = form.segments[index].caption.trim();
     if (!caption) return;
-    if (sfxClips.length >= MAX_SFX_CLIPS) {
+    const isReplacing = sfxClips.some((clip) => clip.narrationSegmentKey === key);
+    if (!isReplacing && sfxClips.length >= MAX_SFX_CLIPS) {
       alert(`効果音/ナレーションの上限(${MAX_SFX_CLIPS}件)に達しているため追加できません`);
       return;
     }
     setNarrationGenerating({ current: 0, total: 1 });
     try {
       const { path } = await requestVoiceover(caption, narrationVoice);
-      appendNarrationClip(segmentStartSeconds(index), caption, path);
+      upsertNarrationClip(key, segmentStartSeconds(index), caption, path);
     } catch (error) {
       alert(error instanceof Error ? error.message : "ナレーション生成に失敗しました");
     } finally {
@@ -800,16 +817,33 @@ export const ClipEditor: React.FC = () => {
     }
   };
 
-  /** テロップが入っている全クリップ分、順番にAIナレーションを生成してタイムラインに追加する。 */
+  /**
+   * テロップが入っている全クリップ分、順番にAIナレーションを生成してタイムラインに追加する。
+   * 既に同じ声で作ってあるクリップは飛ばす(無料枠のTTSは1日あたりの上限が厳しく、
+   * やり直しのたびに全件を作り直すとすぐ上限に達するため)。
+   */
   const handleGenerateNarrationForAll = async () => {
-    const targets = form.segments
+    const withCaption = form.segments
       .map((segment, index) => ({ segment, index }))
       .filter(({ segment }) => segment.caption.trim().length > 0);
-    if (targets.length === 0) return;
+    const alreadyGenerated = new Set(
+      sfxClips.map((clip) => clip.narrationSegmentKey).filter((key): key is string => Boolean(key))
+    );
+    const targets = withCaption.filter(({ segment }) => !alreadyGenerated.has(segment.key));
+    if (targets.length === 0) {
+      alert(
+        withCaption.length > 0
+          ? "テロップのあるクリップは全てナレーション生成済みです。作り直したいクリップは、そのクリップを選んで個別に生成してください"
+          : "テロップが入っているクリップがありません"
+      );
+      return;
+    }
 
+    narrationCancelRef.current = false;
     let sfxCount = sfxClips.length;
     setNarrationGenerating({ current: 0, total: targets.length });
     for (let i = 0; i < targets.length; i++) {
+      if (narrationCancelRef.current) break;
       if (sfxCount >= MAX_SFX_CLIPS) {
         alert(`効果音/ナレーションの上限(${MAX_SFX_CLIPS}件)に達したため、途中で停止しました`);
         break;
@@ -819,16 +853,21 @@ export const ClipEditor: React.FC = () => {
       try {
         // Gemini APIはアプリ全体で直列実行が前提(rateLimiter.ts)のため、あえて逐次待つ
         const { path } = await requestVoiceover(caption, narrationVoice);
-        appendNarrationClip(segmentStartSeconds(index), caption, path);
+        upsertNarrationClip(segment.key, segmentStartSeconds(index), caption, path);
         sfxCount += 1;
       } catch (error) {
+        // ここまでに生成できた分はタイムラインに残るため、上限に達した場合でも
+        // 翌日に「全クリップに一括生成」を押し直せば、残りの分だけが生成される。
         alert(
-          `「${caption.slice(0, 10)}」のナレーション生成に失敗しました: ${error instanceof Error ? error.message : ""}`
+          `「${caption.slice(0, 10)}」のナレーション生成に失敗したため、ここで中断しました(${i}/${targets.length}件完了)。\n\n${
+            error instanceof Error ? error.message : ""
+          }`
         );
         break;
       }
       setNarrationGenerating({ current: i + 1, total: targets.length });
     }
+    narrationCancelRef.current = false;
     setNarrationGenerating(null);
   };
 
@@ -1058,6 +1097,9 @@ export const ClipEditor: React.FC = () => {
             narrationGenerating={narrationGenerating}
             onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
             onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
+            onCancelNarrationGeneration={() => {
+              narrationCancelRef.current = true;
+            }}
           />
         ) : activeTab === "bgm" ? (
           <BgmInspectorPanel

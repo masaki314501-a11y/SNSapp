@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { runWithGeminiRateLimit } from "./rateLimiter";
-import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 
 const DEFAULT_MODEL = "gemini-2.5-flash-preview-tts";
 const GEMINI_TIMEOUT_MS = 60_000;
@@ -12,6 +12,9 @@ export type GenerateVoiceoverInput = {
   text: string;
   voiceName: string;
 };
+
+/** 実際に使うTTSモデル名。生成済み音声のキャッシュキーにも含める(モデルが変われば声も変わるため)。 */
+export const resolveVoiceoverModel = (): string => process.env.GEMINI_TTS_MODEL || DEFAULT_MODEL;
 
 /**
  * GeminiのTTSプレビューモデルは、リクエスト自体は200 OKで成功するのに音声データが
@@ -64,7 +67,7 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_TTS_MODEL || DEFAULT_MODEL;
+  const model = resolveVoiceoverModel();
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
@@ -110,6 +113,11 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
       return pcmToWav(pcmData, sampleRate);
     } catch (error) {
       lastError = error;
+      // 1日あたりの上限は待っても翌日まで回復しないため、再試行はトークンを無駄に
+      // 消費するだけでなく利用者を数十秒待たせるだけになる。すぐに諦めて伝える。
+      if (isDailyQuotaError(error)) {
+        throw toFriendlyGeminiError(error);
+      }
       // ここまでに確認できた失敗(429/503、音声データ空、原因不明の一過性エラー)は
       // いずれも一時的なもので、時間を置いて再試行すれば成功することが多い。
       // 原因を個別に判定しきれない以上、このAPI呼び出しに限っては種類を問わず
