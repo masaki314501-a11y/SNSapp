@@ -8,7 +8,7 @@
 ## 使い方
 
 `npm run dev` 後、`http://localhost:3000/create` を開く。編集の流れは
-**アップロード → カット → 参考画像・字幕生成 → クリップ編集 → 書き出し** の5画面。
+**アップロード → カット → 参考画像・字幕生成 → 自動編集 → クリップ編集 → 書き出し** の6画面。
 
 ### 1. `/create` — アップロード
 
@@ -43,9 +43,29 @@
    (アップロード中→処理中→生成中→完了)を取得する。文字起こしは動画全体に対して行うが、
    結果はカットで選んだ範囲だけに切り詰められる(`clipTranscribedToKeepRanges`)。
 3. 完了する(または「字幕生成をスキップして編集へ進む」を押す)と、編集内容が
-   `videoProject.ts` 経由で localStorage に保存され `/edit` に遷移する。
+   `videoProject.ts` 経由で localStorage に保存され `/create/auto-edit` に遷移する。
 
-### 4. `/edit` — クリップ編集
+### 4. `/create/auto-edit` — 自動編集(バズる動画)
+
+字幕生成後・手動編集に入る前に割り込む、AIによる編集提案の画面。「🪄 自動編集する」を押すと
+`/api/auto-edit` がジョブを開始し(非同期ジョブ+ポーリング、`useAutoEditJob.ts`)、以下を提案する。
+
+- クリップごとの演出(captionAnimation)の上書き(強調したい区間だけ)
+- クリップごとのAIナレーション追加要否(最大5クリップまで。TTSの1日あたりの利用上限を
+  踏まえた歯止め)
+- クリップごとの効果音プリセット配置
+- (手順3で参考画像/動画を渡していない場合のみ)配色・フォント・テロップ位置・背景の付き方
+
+**クリップの並び替え・トリミング・削除・BGM選定は行わない**(生動画を見ずに判断すると内容を
+壊すリスクがあるため明確にスコープ外。BGMはプリセットが未収録のため選びようがない)。
+ユーザー自身の動画はコスト抑制のためGeminiに再送しない(テロップ文言と尺だけを渡す)。
+`/dev/edit-examples`(開発者用、下記参照)で正解動画を登録しておくと、few-shot例として
+使われ提案の質が上がる。
+
+生成結果は「この案を使う」を押すまでプロジェクトに書き込まれない。ジョブが失敗・処理中でも
+「スキップして編集へ進む」は常に押せる(自動編集がパイプラインを詰まらせないようにするため)。
+
+### 5. `/edit` — クリップ編集
 
 Remotion Playerでのプレビューを見ながら、以下を編集できる。
 
@@ -63,9 +83,10 @@ Remotion Playerでのプレビューを見ながら、以下を編集できる�
 減らす作りにしている。
 
 - **生成済み音声の使い回し**: 「モデル名+声+文言」から決まるファイル名で
-  `public/audio/generated/` に保存し、同じ組み合わせなら再生成せずそのファイルを返す。
-  テロップを直して作り直す・一括生成をやり直す・失敗した続きからやり直す、といった
-  場面でAPIを消費しない
+  `public/audio/generated/` に保存し、同じ組み合わせなら再生成せずそのファイルを返す
+  (`src/lib/gemini/voiceoverCache.ts` の `getOrGenerateVoiceover`、手動生成・自動編集の
+  両方から共有)。テロップを直して作り直す・一括生成をやり直す・失敗した続きからやり直す、
+  といった場面でAPIを消費しない
 - **未生成分だけを一括生成**: ナレーションは読み上げ元クリップの `narrationSegmentKey` を
   持つため、一括生成は「まだ作っていないクリップ」だけを対象にする(ボタンにも残り件数を
   表示)。個別生成は作り直しとして既存のナレーションを差し替える(同じ台詞が重ならない)
@@ -77,7 +98,7 @@ Remotion Playerでのプレビューを見ながら、以下を編集できる�
 編集内容は操作のたびに自動保存され、リロード/再訪問時に復元される。プロジェクトの
 JSONエクスポート/インポートにも対応する。
 
-### 5. `/edit/export` — 書き出し
+### 6. `/edit/export` — 書き出し
 
 「動画を書き出す」を実行すると `/api/render` がジョブを開始し、`/api/render/[jobId]` を
 ポーリングして進捗・残り時間の目安・完成した動画のURLを取得する(Remotionのヘッドレス
@@ -93,6 +114,8 @@ JSONエクスポート/インポートにも対応する。
   - `useExtractStyleJob.ts` — スタイル抽出ジョブ(画像/動画どちらも)の開始とポーリング
   - `cut/` — ラフカットのUI(`CutEditor.tsx` を配置)
   - `style/` — 参考画像・動画/字幕生成のUI(`StyleAndTranscribe.tsx` を配置)
+  - `useAutoEditJob.ts` — 自動編集ジョブの開始とポーリング
+  - `auto-edit/` — 自動編集(バズる動画)のUI(`AutoEditScreen.tsx` を配置)
 - `src/app/edit/` — クリップ編集のUI(`ClipEditor.tsx` を配置)
 - `src/app/edit/export/` — 書き出しのUI(`ExportScreen.tsx` を配置)
 - `src/components/editor/` — 編集画面のコンポーネント・ロジック
@@ -121,6 +144,8 @@ JSONエクスポート/インポートにも対応する。
   - `generate-voiceover/` — テロップをAIナレーション音声(WAV)に変換(Gemini TTS、同期レスポンス、
     内容から決まるファイル名で生成済み音声を使い回す)
   - `render/` — Remotionでの動画書き出し(非同期ジョブ+ポーリング)
+  - `auto-edit/` — 自動編集(バズる動画)の提案を生成(Gemini、非同期ジョブ+ポーリング)。
+    プラン生成に続けてAIナレーション/効果音クリップの生成まで同じジョブ内で行う
   - `media/[...path]/` — `public/videos` `public/audio` `public/renders` を都度ファイル
     システムから配信するRoute Handler。通常のpublic配信はビルド時点のスナップショット
     しか返さず、起動後にアップロード/生成されたファイルは本番ビルドで404になるため必要。
@@ -134,9 +159,14 @@ JSONエクスポート/インポートにも対応する。
     登録済みの正解データがあれば、リクエストのたびにfew-shot例として先頭に差し込む
   - `styleExamplesStore.ts` / `styleTypes.ts` — スタイル抽出のfew-shot例(正解データ)の
     保存・読み込み(`data/style-examples/`、詳細は後述の`/dev/style-examples`参照)
+  - `autoEditPlan.ts` / `autoEditTypes.ts` / `autoEditJobs.ts` — 自動編集(バズる動画)の
+    提案を生成する。コスト抑制のためユーザー自身の動画は再アップロードせず、テロップ文言と
+    尺だけを渡す。`editExamplesStore.ts` に登録済みの編集例があれば、few-shotとして先頭に差し込む
   - `editExamplesStore.ts` — 自動編集のfew-shot例(学習動画・正解動画)の保存・読み込み
     (`data/edit-examples/`、詳細は後述の`/dev/edit-examples`参照)
   - `generateVoiceover.ts` — Gemini TTSでテロップを読み上げ音声(WAV)に変換する
+  - `voiceoverCache.ts` — 生成済み音声の使い回し(キャッシュ)ロジック。手動生成
+    (`/api/generate-voiceover`)と自動編集の両方から共有する
   - `voiceOptions.ts` — AIナレーションの声のプリセット一覧(クライアント/サーバー共用)
   - `geminiFiles.ts` — Gemini File APIアップロード後のACTIVE待ちポーリング(共通処理)
   - `geminiErrors.ts` — 429/503などリトライ可能なエラーの判定と日本語エラーメッセージ変換

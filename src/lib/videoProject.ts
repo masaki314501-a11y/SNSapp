@@ -75,6 +75,9 @@ export type VideoProject = {
   segments: ProjectSegment[];
   sfx: ProjectSfxClip[];
   bgm: ProjectBgm | null;
+  /** 参考画像/動画からスタイル抽出が成功したか。自動編集(/create/auto-edit)が
+   *  配色・フォント等を自分で決めてよいか(=参考が無かった場合のみ)を判断するのに使う。 */
+  styleReferenceApplied?: boolean;
 };
 
 const PROJECT_STORAGE_KEY = "sns-app:video-project:v1";
@@ -116,6 +119,7 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
         fadeOutSeconds: raw.bgm.fadeOutSeconds ?? 0,
       }
     : null,
+  styleReferenceApplied: raw.styleReferenceApplied ?? false,
 });
 
 /** 保存されているプロジェクトを読み込む。無ければnull(SSR/壊れたデータの場合もnull)。 */

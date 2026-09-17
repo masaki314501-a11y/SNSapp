@@ -134,8 +134,11 @@ export const StyleAndTranscribe: React.FC = () => {
       captionPosition: captionPosition ?? project.captionPosition,
       captionStyle: captionStyle ?? project.captionStyle,
       segments,
+      // 自動編集(/create/auto-edit)が「参考画像/動画から既にスタイルが決まっているか」を
+      // 判断するのに使う。ここで決まらなければ自動編集自身が配色等を提案する。
+      styleReferenceApplied: primaryColor !== null,
     });
-    router.push("/edit");
+    router.push("/create/auto-edit");
   };
 
   const { transcribeState, handleTranscribe: startTranscribe } = useTranscribeJob({
