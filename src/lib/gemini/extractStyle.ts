@@ -1,5 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { z } from "zod";
+import { GoogleGenAI, Type, type Content } from "@google/genai";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
@@ -9,6 +8,11 @@ import {
 import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
+import { loadStyleFewShotContext } from "./styleExamplesStore";
+import { extractedStyleSchema, type ExtractedStyle } from "./styleTypes";
+
+export type { ExtractedStyle } from "./styleTypes";
+export { extractedStyleSchema } from "./styleTypes";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const GEMINI_TIMEOUT_MS = 60_000;
@@ -18,14 +22,6 @@ const RETRY_BASE_DELAY_MS = 8_000;
 export type ExtractStyleInput =
   | { kind: "image"; imageBase64: string; mimeType: string }
   | { kind: "video"; absoluteVideoPath: string; mimeType: string };
-
-export type ExtractedStyle = {
-  primaryColor: string;
-  fontFamily: (typeof CAPTION_FONT_FAMILY_OPTIONS)[number]["value"];
-  captionPosition: (typeof CAPTION_POSITION_OPTIONS)[number]["value"];
-  captionStyle: (typeof CAPTION_STYLE_OPTIONS)[number]["value"];
-  captionAnimation: (typeof CAPTION_ANIMATION_OPTIONS)[number]["value"];
-};
 
 const FONT_FAMILY_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value);
 const CAPTION_POSITION_VALUES = CAPTION_POSITION_OPTIONS.map((option) => option.value);
@@ -112,14 +108,6 @@ const responseSchema = {
   required: ["primaryColor", "fontFamily", "captionPosition", "captionStyle", "captionAnimation"],
 } as const;
 
-const rawResultSchema = z.object({
-  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  fontFamily: z.enum(FONT_FAMILY_VALUES as [string, ...string[]]),
-  captionPosition: z.enum(CAPTION_POSITION_VALUES as [string, ...string[]]),
-  captionStyle: z.enum(CAPTION_STYLE_VALUES as [string, ...string[]]),
-  captionAnimation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]),
-});
-
 /**
  * 参考画像/参考動画(競合の投稿など)からテロップに使う配色・フォント・配置位置・背景の付き方・
  * 出現演出をまとめて抽出する。動画の場合はGemini File API経由で渡すことで、静止画からは
@@ -155,8 +143,17 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
     return { fileData: { fileUri: uploaded.uri, mimeType: input.mimeType } };
   };
 
+  let fewShotUploadedFileNames: string[] = [];
   try {
     const contentPart = await buildContentPart();
+    // 登録済みの正解データ(styleExamplesStore)をfew-shot例として先頭に付け、
+    // 実際の抽出対象を最後のユーザーターンとして渡す。登録が無ければ従来通り単発の依頼になる。
+    const fewShot = await loadStyleFewShotContext(ai);
+    fewShotUploadedFileNames = fewShot.uploadedFileNames;
+    const contents: Content[] = [
+      ...fewShot.contents,
+      { role: "user", parts: [contentPart, { text: prompt }] },
+    ];
 
     let lastError: unknown;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -164,7 +161,7 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
         const response = await runWithGeminiRateLimit(() => {
           const generatePromise = ai.models.generateContent({
             model,
-            contents: [{ role: "user", parts: [contentPart, { text: prompt }] }],
+            contents,
             config: {
               responseMimeType: "application/json",
               responseSchema,
@@ -181,7 +178,7 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
           throw new Error("Gemini APIから空の応答が返されました");
         }
 
-        const parsed = rawResultSchema.safeParse(JSON.parse(text));
+        const parsed = extractedStyleSchema.safeParse(JSON.parse(text));
         if (!parsed.success) {
           throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
         }
@@ -203,6 +200,9 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
   } finally {
     if (uploadedFileName) {
       await ai.files.delete({ name: uploadedFileName }).catch(() => {});
+    }
+    for (const name of fewShotUploadedFileNames) {
+      await ai.files.delete({ name }).catch(() => {});
     }
   }
 };

@@ -1,0 +1,12 @@
+{
+  "clip1.mp4": {
+    "correctStyle": {
+      "primaryColor": "#FF3366",
+      "fontFamily": "Noto Sans JP",
+      "captionPosition": "bottom",
+      "captionStyle": "pill",
+      "captionAnimation": "slide-up"
+    },
+    "label": "競合A社のTikTok投稿(任意のメモ)"
+  }
+}

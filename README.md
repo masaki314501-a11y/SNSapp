@@ -36,7 +36,8 @@
    Geminiが配色・フォント・テロップ位置・テロップの背景の付き方・出現演出をまとめて抽出する
    (`/api/extract-style` または `/api/extract-style-from-video`、非同期ジョブ+ポーリング)。
    動画を渡した場合はテロップが実際にどう動いて出てくるかも見て演出を判定する。手動で
-   後から変更してもよい。
+   後から変更してもよい。`/dev/style-examples`(開発者用、下記参照)で正解データを登録して
+   おくと、抽出のたびにfew-shot例として自動的に使われ精度が上がる。
 2. 「音声から字幕を生成」を実行する。`/api/transcribe-captions` がジョブを開始し、
    `/api/transcribe-captions/[jobId]` をポーリングして進捗
    (アップロード中→処理中→生成中→完了)を取得する。文字起こしは動画全体に対して行うが、
@@ -113,7 +114,10 @@ JSONエクスポート/インポートにも対応する。
     ごとの `{startFromSeconds, durationInSeconds, caption}` 配列を取得する。ジョブはインメモリ管理
     (単一プロセス前提)
   - `extractStyle.ts` / `extractStyleJobs.ts` — 参考画像/動画から配色・フォント・位置・背景・
-    演出を抽出する(画像はinlineData、動画はFile API経由)
+    演出を抽出する(画像はinlineData、動画はFile API経由)。`styleExamplesStore.ts` に
+    登録済みの正解データがあれば、リクエストのたびにfew-shot例として先頭に差し込む
+  - `styleExamplesStore.ts` / `styleTypes.ts` — スタイル抽出のfew-shot例(正解データ)の
+    保存・読み込み(`data/style-examples/`、詳細は後述の`/dev/style-examples`参照)
   - `generateVoiceover.ts` — Gemini TTSでテロップを読み上げ音声(WAV)に変換する
   - `voiceOptions.ts` — AIナレーションの声のプリセット一覧(クライアント/サーバー共用)
   - `geminiFiles.ts` — Gemini File APIアップロード後のACTIVE待ちポーリング(共通処理)
@@ -164,6 +168,34 @@ SNS投稿ネタ探し用の簡易ツール。
 (現状はlocalStorageのみの単一ユーザー前提)。競合アカウントの分析は両プラットフォームとも
 公式APIでは提供されておらず非対応。投稿APIも実運用にはアプリの本審査と動画の公開URLホス
 ティングが要る。詳細な段階分けは開発時のやり取りを参照。
+
+## `/dev/style-examples` — スタイル抽出の正解データ登録(開発者用)
+
+エンドユーザー向けの導線は無く、URLを直接開いて使う(`/insights`と同じ運用)。参考画像/
+参考動画と「本来抽出してほしいスタイル」の組を正解データとして登録しておくと、以後の
+スタイル抽出(`extractStyle.ts`)でfew-shot例として自動的に使われ、抽出精度が上がる
+(新しいものから最大6件)。
+
+登録内容は `data/style-examples/` にファイルとして保存される。Render等のデプロイ環境は
+実行時に書いたファイルを永続化しないため、**本番にも反映したい場合は開発者がそのまま
+gitコミットする必要がある**。詳しい形式は `data/style-examples/README.md` を参照。
+
+- 1件ずつ登録: `/dev/style-examples` の画面から画像/動画をアップロードし、正解の
+  スタイル値をフォームで入力する。「🤖 今のAIの判定を下書きにする」
+  (`POST /api/dev/style-examples/suggest`)を押すと、その素材を今の抽出にかけた結果が
+  フォームに入るので、全項目を手入力せず外れている項目だけ直せばよい。人が直した項目には
+  「AIの判定: ○○」が添えられ、全項目一致なら「この素材は既に正しく読めています」と出る
+  (=登録しても増えるものが少ない素材だと分かる)
+- まとめて取り込み: 手元にある動画・画像を `data/style-examples/inbox/` に置き、
+  同じ場所の `answers.json` に正解データを記入してから、画面の
+  「inboxから取り込み」ボタン(または `POST /api/dev/style-examples/import`)を実行する
+  (書式は `data/style-examples/inbox/README.md` を参照)
+
+主なAPI(`src/app/api/dev/style-examples/`): `GET/POST /`(一覧・1件登録)、
+`DELETE /[id]`(削除)、`GET /[id]/media`(画像/動画本体の取得)、
+`GET/POST /import`(inbox内の件数確認・一括取り込み)、
+`POST /suggest`(登録前の素材を今の抽出にかけて下書きを返す。登録前なので`data/`には
+残さず一時ファイル経由で渡す)。
 
 ## 環境変数
 
