@@ -1,4 +1,5 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -179,9 +180,16 @@ export const loadEditFewShotContext = async (
   const uploadedFileNames: string[] = [];
 
   for (const example of examples) {
+    // Geminiの@google/genai SDKはアップロード時に元ファイル名をそのままHTTPヘッダー
+    // (X-Goog-Upload-File-Name)に入れるため、日本語ラベルを含むファイル名(buildMediaFilename
+    // 参照)だとByteString変換エラーで必ず失敗する。ASCIIのみの一時コピーを経由して回避する
+    // (ai.files.uploadにBlobを渡す手もあるが、動画全体をメモリに載せてしまいメモリ不足の
+    // 原因になるため、コピーで済ませてメモリには載せない)。
+    const tempPath = path.join(os.tmpdir(), `edit-example-${randomUUID()}${path.extname(example.correctMediaFilename)}`);
     try {
       const mediaPath = path.join(CORRECT_MEDIA_DIR, example.correctMediaFilename);
-      const uploaded = await ai.files.upload({ file: mediaPath, config: { mimeType: example.correctMimeType } });
+      await copyFile(mediaPath, tempPath);
+      const uploaded = await ai.files.upload({ file: tempPath, config: { mimeType: example.correctMimeType } });
       if (!uploaded.name || !uploaded.uri) continue;
       uploadedFileNames.push(uploaded.name);
       await waitForGeminiFileActive(ai, uploaded.name);
@@ -190,6 +198,8 @@ export const loadEditFewShotContext = async (
       contents.push({ role: "user", parts: [mediaPart, { text: `参考になる編集例: ${description}` }] });
     } catch (error) {
       console.warn(`[editExamplesStore] few-shot例(${example.id})の読み込みに失敗したためスキップします`, error);
+    } finally {
+      await unlink(tempPath).catch(() => {});
     }
   }
   return { contents, uploadedFileNames };

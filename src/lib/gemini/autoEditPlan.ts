@@ -213,7 +213,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           if (!segment) continue;
           segments.push({
             key: segment.key,
-            captionAnimation: s.captionAnimation as CaptionAnimation | undefined,
+            captionAnimation: (s.captionAnimation ?? undefined) as CaptionAnimation | undefined,
             addNarration: s.addNarration,
             sfxPresetId: s.sfxPresetId,
           });

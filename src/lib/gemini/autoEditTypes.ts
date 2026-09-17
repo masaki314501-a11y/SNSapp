@@ -24,8 +24,13 @@ const SFX_PRESET_IDS = SFX_PRESETS.map((preset) => preset.id);
  */
 export const autoEditSegmentSchema = z.object({
   segmentIndex: z.number().int().min(0),
-  /** 演出に強弱をつけたい区間だけ上書きする。省略時は元のcaptionAnimation(既定演出)を維持する。 */
-  captionAnimation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).optional(),
+  /**
+   * 演出に強弱をつけたい区間だけ上書きする。省略時は元のcaptionAnimation(既定演出)を維持する。
+   * Gemini側のresponseSchema(autoEditPlan.ts)ではnullable:trueにしているため、
+   * 「上書きしない」判断時にnullが返ってくる。.optional()だけだとnullを弾いてしまうため
+   * .nullable()も付ける(undefined/nullどちらも「省略」として扱う、呼び出し元で吸収)。
+   */
+  captionAnimation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
   /** このクリップをAIナレーションで読み上げるべきか(フックや結論など、声で強調したい箇所のみtrue)。 */
   addNarration: z.boolean(),
   /** このクリップの開始時点で鳴らす効果音。無ければnull。SFX_PRESETSの実在idのみ。 */
