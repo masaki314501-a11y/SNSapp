@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@google/genai";
-import { GeminiTimeoutError, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import {
+  GeminiTimeoutError,
+  isDailyQuotaError,
+  isRetryableApiError,
+  isTtsRefusedAudioError,
+  toFriendlyGeminiError,
+} from "./geminiErrors";
+
+const ttsRefusedAudioErrorBody = {
+  error: {
+    code: 400,
+    message:
+      "Model tried to generate text, but it should only be used for TTS. Make sure your instructions are clear to only generate audio from a given text transcript.",
+    status: "INVALID_ARGUMENT",
+  },
+};
 
 const dailyQuotaErrorBody = {
   error: {
@@ -51,7 +66,29 @@ describe("isDailyQuotaError", () => {
   });
 });
 
+describe("isTtsRefusedAudioError", () => {
+  it("TTSがテキストで応答しようとした400と判定する", () => {
+    const error = new ApiError({ message: JSON.stringify(ttsRefusedAudioErrorBody), status: 400 });
+    expect(isTtsRefusedAudioError(error)).toBe(true);
+  });
+
+  it("同じメッセージでも400以外のステータスはfalseを返す", () => {
+    const error = new ApiError({ message: JSON.stringify(ttsRefusedAudioErrorBody), status: 500 });
+    expect(isTtsRefusedAudioError(error)).toBe(false);
+  });
+
+  it("無関係な400はfalseを返す", () => {
+    const error = new ApiError({ message: "{}", status: 400 });
+    expect(isTtsRefusedAudioError(error)).toBe(false);
+  });
+});
+
 describe("isRetryableApiError", () => {
+  it("TTSがテキストで応答しようとした400はリトライ対象にする", () => {
+    const error = new ApiError({ message: JSON.stringify(ttsRefusedAudioErrorBody), status: 400 });
+    expect(isRetryableApiError(error)).toBe(true);
+  });
+
   it("日次枠切れの429はリトライ対象にしない", () => {
     const error = new ApiError({ message: JSON.stringify(dailyQuotaErrorBody), status: 429 });
     expect(isRetryableApiError(error)).toBe(false);
@@ -129,5 +166,12 @@ describe("toFriendlyGeminiError", () => {
   it("GeminiTimeoutErrorには時間がかかりすぎた旨のメッセージを返す", () => {
     const message = toFriendlyGeminiError(new GeminiTimeoutError("timeout")).message;
     expect(message).toContain("時間がかかりすぎた");
+  });
+
+  it("TTSがテキストで応答しようとした400には専門用語を避けたメッセージを返す", () => {
+    const error = new ApiError({ message: JSON.stringify(ttsRefusedAudioErrorBody), status: 400 });
+    const message = toFriendlyGeminiError(error).message;
+    expect(message).toContain("音声に変換できません");
+    expect(message).not.toContain("INVALID_ARGUMENT");
   });
 });

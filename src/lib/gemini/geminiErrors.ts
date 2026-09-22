@@ -29,12 +29,25 @@ export const parseRetryDelaySeconds = (error: unknown): number | null => {
 };
 
 /**
+ * Gemini TTSは、読み上げ用のテキストしか渡していないにもかかわらず、まれに「音声ではなく
+ * テキストで応答しようとした」として400 INVALID_ARGUMENTを返すことがある
+ * (「Model tried to generate text, but it should only be used for TTS.」)。
+ * 空の音声データが返るのと同種の、TTSプレビューモデル特有の一過性の不具合で、同じ文章で
+ * 再試行すると成功することが多いため、専用に判定してリトライ対象に含められるようにする。
+ */
+export const isTtsRefusedAudioError = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 400 &&
+  /should only be used for TTS/i.test(typeof error.message === "string" ? error.message : "");
+
+/**
  * 日次上限は待っても翌日まで回復しないため、リトライしても無駄にトークン/待ち時間を
  * 消費するだけ。呼び出し側の再試行ループはこれをfalseとして扱い、即座に諦めさせる。
  * タイムアウト(GeminiTimeoutError)は一過性の遅さのことが多いためリトライ対象に含める。
  */
 export const isRetryableApiError = (error: unknown): boolean =>
   error instanceof GeminiTimeoutError ||
+  isTtsRefusedAudioError(error) ||
   (error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status) && !isDailyQuotaError(error));
 
 /**
@@ -61,6 +74,11 @@ export const toFriendlyGeminiError = (error: unknown): Error => {
     if (error.status === 401 || error.status === 403) {
       return new Error(
         "設定した自分のAPIキーがうまく使えないようです。右下の設定からキーを確認するか、削除すれば共有の枠に戻れます"
+      );
+    }
+    if (isTtsRefusedAudioError(error)) {
+      return new Error(
+        "この文章はうまく音声に変換できませんでした。少し文章を変えるか、時間を置いてから、もう一度お試しください"
       );
     }
     if (error.status === 503) {

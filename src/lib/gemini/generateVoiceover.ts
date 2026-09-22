@@ -128,10 +128,12 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
       if (isDailyQuotaError(error)) {
         recordGeminiDailyQuotaExceeded("generateVoiceover");
       }
-      // 音声データが空(既知の一過性不具合)、429(日次上限を除く)/503は一時的なことが
-      // 多く、時間を置いて再試行すれば成功することが多い。一方それ以外(引数エラー・
-      // 無効なAPIキー・日次上限など)は再試行しても同じ結果になる可能性が高く、TTSは
-      // 無料枠のRPM上限が極端に厳しいため、無駄なリトライで枠を消費しないよう即座に諦める。
+      // 音声データが空(既知の一過性不具合)、TTSがテキストで応答しようとした400
+      // (isTtsRefusedAudioError、同種の一過性不具合)、429(日次上限を除く)/503は
+      // 一時的なことが多く、時間を置いて再試行すれば成功することが多い。一方それ以外
+      // (引数エラー・無効なAPIキー・日次上限など)は再試行しても同じ結果になる可能性が
+      // 高く、TTSは無料枠のRPM上限が極端に厳しいため、無駄なリトライで枠を消費しないよう
+      // 即座に諦める。
       const isRetryable = error instanceof NoAudioDataError || isRetryableApiError(error);
       if (!isRetryable) {
         console.error(
