@@ -1,14 +1,22 @@
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { GoogleGenAI, Type } from "@google/genai";
+import { RenderInternals } from "@remotion/renderer";
 import { z } from "zod";
 import { CLIP_CAPTION_MAX_CHARS, truncateNaturally } from "./textUtils";
 import { runWithGeminiRateLimit } from "./rateLimiter";
-import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { MISSING_API_KEY_MESSAGE, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
+import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
+import { isGeminiMockEnabled } from "./mockMode";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.6-flash";
 const GEMINI_TIMEOUT_MS = 120_000;
 const MAX_GENERATE_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
+const AUDIO_MIME_TYPE = "audio/wav";
 
 export type TranscribedSegment = {
   startFromSeconds: number;
@@ -24,6 +32,7 @@ export type TranscribeCaptionsInput = {
   minClips: number;
   maxClips: number;
   onProgress?: (phase: "uploading" | "processing" | "generating") => void;
+  apiKeyOverride?: string;
 };
 
 const formatTimestamp = (totalSeconds: number): string => {
@@ -94,114 +103,180 @@ const rawResultSchema = z.object({
     .min(1),
 });
 
+/** GEMINI_MOCK=1のときに返す固定のダミー結果(開発中の動作確認用)。動画長をクリップ数で均等分割する。 */
+const buildMockSegments = (params: {
+  videoDurationInSeconds: number;
+  minClips: number;
+  maxClips: number;
+}): TranscribedSegment[] => {
+  const { videoDurationInSeconds, minClips, maxClips } = params;
+  const clipCount = Math.min(Math.max(minClips, 3), maxClips);
+  const clipDuration = videoDurationInSeconds / clipCount;
+  return Array.from({ length: clipCount }, (_, i) => ({
+    startFromSeconds: i * clipDuration,
+    durationInSeconds: clipDuration,
+    caption: `(モック字幕 ${i + 1})`,
+  }));
+};
+
 /**
- * アップロード済み動画をGemini File APIに渡し、動画全体を対象に音声を文字起こしした上で、
- * 機械的な均等分割ではなく実際の発話の区切りを基準にクリップの開始秒・長さ・テロップを
- * 決定する。フォールバックは持たない(失敗時に架空の文言で埋め合わせると誤情報になるため、
- * 呼び出し元でエラー表示する)。
+ * 文字起こしにしか使わない動画から音声トラックだけを抽出し、一時WAVファイルに書き出す。
+ * 映像フレームを一切Geminiに渡さないことで、動画まるごとアップロードする場合に比べて
+ * 入力トークンを大幅に削減できる(音声は32トークン/秒、映像込みの動画は263トークン/秒)。
+ * PCM WAVへの変換を明示するため@remotion/rendererのffmpegバイナリを直接呼び出す
+ * (extractAudio()相当の処理を、出力フォーマットを固定した上で自前で行う)。
+ */
+const extractAudioTrack = async (videoPath: string): Promise<string> => {
+  const audioPath = path.join(tmpdir(), `transcribe-audio-${randomUUID()}.wav`);
+  await RenderInternals.callFf({
+    bin: "ffmpeg",
+    args: ["-y", "-i", videoPath, "-vn", "-ac", "1", "-ar", "16000", "-f", "wav", audioPath],
+    indent: false,
+    logLevel: "error",
+    binariesDirectory: null,
+    cancelSignal: undefined,
+  });
+  return audioPath;
+};
+
+/**
+ * アップロード済み動画から音声トラックのみを抽出してGemini File APIに渡し、音声全体を
+ * 対象に文字起こしした上で、機械的な均等分割ではなく実際の発話の区切りを基準にクリップの
+ * 開始秒・長さ・テロップを決定する。文字起こし用途では映像フレームの内容は使わないため、
+ * 動画をまるごと渡さず音声だけを送ることでトークン消費を抑える。フォールバックは持たない
+ * (失敗時に架空の文言で埋め合わせると誤情報になるため、呼び出し元でエラー表示する)。
  */
 export const transcribeCaptions = async (
   input: TranscribeCaptionsInput
 ): Promise<TranscribedSegment[]> => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (isGeminiMockEnabled()) {
+    input.onProgress?.("uploading");
+    input.onProgress?.("processing");
+    input.onProgress?.("generating");
+    return buildMockSegments({
+      videoDurationInSeconds: input.videoDurationInSeconds,
+      minClips: input.minClips,
+      maxClips: input.maxClips,
+    });
+  }
+
+  const apiKey = input.apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEYが未設定です");
+    console.error("[transcribeCaptions] GEMINI_API_KEYが未設定です(共有キーも自分のキーも無し)");
+    throw new Error(MISSING_API_KEY_MESSAGE);
   }
 
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
   input.onProgress?.("uploading");
-  const uploaded = await ai.files.upload({
-    file: input.absoluteVideoPath,
-    config: { mimeType: input.mimeType },
-  });
-  if (!uploaded.name || !uploaded.uri) {
-    throw new Error("動画のアップロードに失敗しました");
-  }
+  // 文字起こしにしか使わないため、映像フレームは送らず音声トラックのみアップロードする。
+  const audioPath = await extractAudioTrack(input.absoluteVideoPath);
 
   try {
-    input.onProgress?.("processing");
-    await waitForGeminiFileActive(ai, uploaded.name);
-
-    input.onProgress?.("generating");
-    const prompt = buildPrompt({
-      videoDurationInSeconds: input.videoDurationInSeconds,
-      minClips: input.minClips,
-      maxClips: input.maxClips,
+    const uploaded = await ai.files.upload({
+      file: audioPath,
+      config: { mimeType: AUDIO_MIME_TYPE },
     });
+    if (!uploaded.name || !uploaded.uri) {
+      throw new Error("音声のアップロードに失敗しました");
+    }
 
-    let text: string | undefined;
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
-      try {
-        const response = await runWithGeminiRateLimit(() => {
-          const generatePromise = ai.models.generateContent({
-            model,
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { fileData: { fileUri: uploaded.uri!, mimeType: input.mimeType } },
-                  { text: prompt },
-                ],
+    try {
+      input.onProgress?.("processing");
+      await waitForGeminiFileActive(ai, uploaded.name);
+
+      input.onProgress?.("generating");
+      const prompt = buildPrompt({
+        videoDurationInSeconds: input.videoDurationInSeconds,
+        minClips: input.minClips,
+        maxClips: input.maxClips,
+      });
+
+      let text: string | undefined;
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
+        try {
+          const response = await runWithGeminiRateLimit(() => {
+            const generatePromise = ai.models.generateContent({
+              model,
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    { fileData: { fileUri: uploaded.uri!, mimeType: AUDIO_MIME_TYPE } },
+                    { text: prompt },
+                  ],
+                },
+              ],
+              config: {
+                responseMimeType: "application/json",
+                responseSchema,
               },
-            ],
-            config: {
-              responseMimeType: "application/json",
-              responseSchema,
-            },
+            });
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
+            });
+            return Promise.race([generatePromise, timeoutPromise]);
           });
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
-          });
-          return Promise.race([generatePromise, timeoutPromise]);
-        });
-        text = response.text;
-        break;
-      } catch (error) {
-        lastError = error;
-        if (isRetryableApiError(error) && attempt < MAX_GENERATE_ATTEMPTS) {
-          const delayMs = RETRY_BASE_DELAY_MS * attempt;
-          console.warn(
-            `[transcribeCaptions] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`
+          recordGeminiUsage("transcribeCaptions", model, response.usageMetadata);
+          text = response.text;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (isDailyQuotaError(error)) {
+            recordGeminiDailyQuotaExceeded("transcribeCaptions");
+          }
+          if (isRetryableApiError(error) && attempt < MAX_GENERATE_ATTEMPTS) {
+            const delayMs = RETRY_BASE_DELAY_MS * attempt;
+            console.warn(
+              `[transcribeCaptions] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_GENERATE_ATTEMPTS}): ${
+                error instanceof Error ? error.message : error
+              }`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue;
+          }
+          console.error(
+            `[transcribeCaptions] リトライ上限(${MAX_GENERATE_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`,
+            error
           );
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          continue;
+          throw toFriendlyGeminiError(error);
         }
-        throw toFriendlyGeminiError(error);
       }
-    }
-    if (!text) {
-      if (lastError) throw toFriendlyGeminiError(lastError);
-      throw new Error("Gemini APIから空の応答が返されました");
-    }
+      if (!text) {
+        if (lastError) throw toFriendlyGeminiError(lastError);
+        throw new Error("Gemini APIから空の応答が返されました");
+      }
 
-    const parsed = rawResultSchema.safeParse(JSON.parse(text));
-    if (!parsed.success) {
-      throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
-    }
+      const parsed = rawResultSchema.safeParse(JSON.parse(text));
+      if (!parsed.success) {
+        throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
+      }
 
-    const sorted = [...parsed.data.segments].sort(
-      (a, b) => a.startFromSeconds - b.startFromSeconds
-    );
-    if (sorted.length < input.minClips || sorted.length > input.maxClips) {
-      throw new Error(
-        `Gemini応答のクリップ数が不正です(${sorted.length}個、期待値${input.minClips}〜${input.maxClips}個)`
+      const sorted = [...parsed.data.segments].sort(
+        (a, b) => a.startFromSeconds - b.startFromSeconds
       );
+      if (sorted.length < input.minClips || sorted.length > input.maxClips) {
+        throw new Error(
+          `Gemini応答のクリップ数が不正です(${sorted.length}個、期待値${input.minClips}〜${input.maxClips}個)`
+        );
+      }
+
+      // 開始秒を基準に隙間・重複なく連続するよう長さを再計算する
+      // (Gemini側のstartFromSecondsとdurationInSecondsの丸め誤差を吸収するため)。
+      const starts = [...sorted.map((s) => Math.max(0, s.startFromSeconds)), input.videoDurationInSeconds];
+      starts[0] = 0;
+
+      return sorted.map((segment, i) => ({
+        startFromSeconds: starts[i],
+        durationInSeconds: Math.max(0.1, starts[i + 1] - starts[i]),
+        caption: truncateNaturally(segment.caption.trim(), CLIP_CAPTION_MAX_CHARS),
+      }));
+    } finally {
+      await ai.files.delete({ name: uploaded.name }).catch(() => {});
     }
-
-    // 開始秒を基準に隙間・重複なく連続するよう長さを再計算する
-    // (Gemini側のstartFromSecondsとdurationInSecondsの丸め誤差を吸収するため)。
-    const starts = [...sorted.map((s) => Math.max(0, s.startFromSeconds)), input.videoDurationInSeconds];
-    starts[0] = 0;
-
-    return sorted.map((segment, i) => ({
-      startFromSeconds: starts[i],
-      durationInSeconds: Math.max(0.1, starts[i + 1] - starts[i]),
-      caption: truncateNaturally(segment.caption.trim(), CLIP_CAPTION_MAX_CHARS),
-    }));
   } finally {
-    await ai.files.delete({ name: uploaded.name }).catch(() => {});
+    await rm(audioPath, { force: true }).catch(() => {});
   }
 };

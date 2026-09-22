@@ -1,16 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
-import { runWithGeminiRateLimit } from "./rateLimiter";
-import { isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { runWithGeminiTtsRateLimit } from "./rateLimiter";
+import { MISSING_API_KEY_MESSAGE, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
+import { isGeminiMockEnabled } from "./mockMode";
 
 const DEFAULT_MODEL = "gemini-2.5-flash-preview-tts";
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_GENERATE_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 const DEFAULT_SAMPLE_RATE = 24_000;
+const MOCK_AUDIO_DURATION_SECONDS = 0.3;
 
 export type GenerateVoiceoverInput = {
   text: string;
   voiceName: string;
+  apiKeyOverride?: string;
 };
 
 /** 実際に使うTTSモデル名。生成済み音声のキャッシュキーにも含める(モデルが変われば声も変わるため)。 */
@@ -61,9 +65,15 @@ const pcmToWav = (pcmData: Buffer, sampleRate: number, channels = 1, bitsPerSamp
  * (失敗時に無音を返すと気づかれないまま書き出されてしまうため、呼び出し元でエラー表示する)。
  */
 export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<Buffer> => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (isGeminiMockEnabled()) {
+    const silentPcm = Buffer.alloc(Math.round(DEFAULT_SAMPLE_RATE * MOCK_AUDIO_DURATION_SECONDS) * 2);
+    return pcmToWav(silentPcm, DEFAULT_SAMPLE_RATE);
+  }
+
+  const apiKey = input.apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEYが未設定です");
+    console.error("[generateVoiceover] GEMINI_API_KEYが未設定です(共有キーも自分のキーも無し)");
+    throw new Error(MISSING_API_KEY_MESSAGE);
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -72,7 +82,7 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_GENERATE_ATTEMPTS; attempt++) {
     try {
-      const response = await runWithGeminiRateLimit(() => {
+      const response = await runWithGeminiTtsRateLimit(() => {
         const generatePromise = ai.models.generateContent({
           model,
           contents: [{ role: "user", parts: [{ text: input.text }] }],
@@ -88,6 +98,8 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
         });
         return Promise.race([generatePromise, timeoutPromise]);
       });
+
+      recordGeminiUsage("generateVoiceover", model, response.usageMetadata);
 
       const candidate = response.candidates?.[0];
       const part = candidate?.content?.parts?.[0];
@@ -113,20 +125,20 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
       return pcmToWav(pcmData, sampleRate);
     } catch (error) {
       lastError = error;
-      // 1日あたりの上限は待っても翌日まで回復しないため、再試行はトークンを無駄に
-      // 消費するだけでなく利用者を数十秒待たせるだけになる。すぐに諦めて伝える。
       if (isDailyQuotaError(error)) {
-        throw toFriendlyGeminiError(error);
+        recordGeminiDailyQuotaExceeded("generateVoiceover");
       }
-      // ここまでに確認できた失敗(429/503、音声データ空、原因不明の一過性エラー)は
-      // いずれも一時的なもので、時間を置いて再試行すれば成功することが多い。
-      // 原因を個別に判定しきれない以上、このAPI呼び出しに限っては種類を問わず
-      // リトライ対象にする(GEMINI_API_KEY未設定などはループに入る前に弾いている)。
-      if (!(error instanceof NoAudioDataError) && !isRetryableApiError(error)) {
+      // 音声データが空(既知の一過性不具合)、429(日次上限を除く)/503は一時的なことが
+      // 多く、時間を置いて再試行すれば成功することが多い。一方それ以外(引数エラー・
+      // 無効なAPIキー・日次上限など)は再試行しても同じ結果になる可能性が高く、TTSは
+      // 無料枠のRPM上限が極端に厳しいため、無駄なリトライで枠を消費しないよう即座に諦める。
+      const isRetryable = error instanceof NoAudioDataError || isRetryableApiError(error);
+      if (!isRetryable) {
         console.error(
-          `[generateVoiceover] 想定外のエラー(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`,
+          `[generateVoiceover] リトライ対象外のエラーのため中断します(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`,
           error
         );
+        throw toFriendlyGeminiError(error);
       }
       if (attempt < MAX_GENERATE_ATTEMPTS) {
         const delayMs = RETRY_BASE_DELAY_MS * attempt;

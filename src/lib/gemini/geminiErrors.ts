@@ -3,9 +3,6 @@ import { ApiError } from "@google/genai";
 /** 過負荷(503)・レート制限(429)は一時的なことが多いため、呼び出し側で再試行の対象にする。 */
 export const RETRYABLE_STATUS_CODES = new Set([429, 503]);
 
-export const isRetryableApiError = (error: unknown): boolean =>
-  error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status);
-
 /**
  * 429には「1分あたりの上限(すぐ回復する)」と「1日あたりの上限(翌日まで回復しない)」の
  * 2種類があり、利用者が取るべき行動が全く違う。Geminiは前者をRPM/RPS、後者をPerDayを含む
@@ -23,29 +20,52 @@ export const parseRetryDelaySeconds = (error: unknown): number | null => {
   return match ? Math.ceil(Number(match[1])) : null;
 };
 
-/** Gemini SDKが返す生のエラー(JSON文字列そのまま)を、画面にそのまま出しても
- *  分かるような日本語メッセージに変換する。 */
+/**
+ * 日次上限は待っても翌日まで回復しないため、リトライしても無駄にトークン/待ち時間を
+ * 消費するだけ。呼び出し側の再試行ループはこれをfalseとして扱い、即座に諦めさせる。
+ */
+export const isRetryableApiError = (error: unknown): boolean =>
+  error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status) && !isDailyQuotaError(error);
+
+/**
+ * 共有・自分のどちらのAPIキーも無い場合に画面へ出すメッセージ。「GEMINI_API_KEY」
+ * のような環境変数名を出さず、利用者が次に何をすればよいか分かる表現にする。
+ * サーバーログ側には別途、環境変数が未設定である旨を出しておくこと。
+ */
+export const MISSING_API_KEY_MESSAGE =
+  "AIがまだ使える状態になっていません。右下の設定から自分のAPIキーを登録すると使えるようになります";
+
+/**
+ * Gemini SDKが返す生のエラー(JSON文字列そのまま、またはステータスコードのような
+ * 専門用語)を、非エンジニアの利用者が読んでも状況と次にすることが分かるような
+ * 平易な日本語メッセージに変換する。「API」「クォータ」「レート制限」のような
+ * 用語は避け、「AI」「回数」「時間を置く」といった言葉で言い換える。
+ */
 export const toFriendlyGeminiError = (error: unknown): Error => {
   if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) {
+      return new Error(
+        "設定した自分のAPIキーがうまく使えないようです。右下の設定からキーを確認するか、削除すれば共有の枠に戻れます"
+      );
+    }
     if (error.status === 503) {
       return new Error(
-        "Geminiが混雑しています(サーバー過負荷)。しばらく時間を置いてから再度お試しください"
+        "AIが混み合っていて、うまく処理できませんでした。少し時間を置いてから、もう一度お試しください"
       );
     }
     if (error.status === 429) {
       if (isDailyQuotaError(error)) {
         return new Error(
-          "Gemini APIの1日あたりの利用上限に達しました。上限は日付が変わる頃(太平洋時間の午前0時)にリセットされます。" +
-            "それまで待つか、Google AI Studioで課金を有効にして上限を引き上げてください"
+          "本日使えるAIの回数が上限に達しました。明日になればまた使えます。今すぐ試したい場合は、右下の設定から自分のAPIキーを登録すると、自分専用の回数で使えます"
         );
       }
       const retryAfterSeconds = parseRetryDelaySeconds(error);
       return new Error(
         retryAfterSeconds !== null
-          ? `Gemini APIのレート制限に達しました。約${retryAfterSeconds}秒後に再度お試しください`
-          : "Gemini APIのレート制限に達しました。しばらく時間を置いてから再度お試しください"
+          ? `AIへのリクエストが短時間に集中してしまいました。約${retryAfterSeconds}秒後に、もう一度お試しください`
+          : "AIへのリクエストが短時間に集中してしまいました。1分ほど待ってから、もう一度お試しください"
       );
     }
   }
-  return error instanceof Error ? error : new Error("Gemini APIの呼び出しに失敗しました");
+  return error instanceof Error ? error : new Error("AIの処理に失敗しました。もう一度お試しください");
 };

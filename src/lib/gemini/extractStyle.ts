@@ -6,22 +6,25 @@ import {
   CAPTION_STYLE_OPTIONS,
 } from "@video/shared/schema";
 import { runWithGeminiRateLimit } from "./rateLimiter";
-import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { MISSING_API_KEY_MESSAGE, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
 import { loadStyleFewShotContext } from "./styleExamplesStore";
 import { extractedStyleSchema, type ExtractedStyle } from "./styleTypes";
+import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
+import { isGeminiMockEnabled } from "./mockMode";
+import { computeExtractStyleCacheKey, getCachedExtractedStyle, setCachedExtractedStyle } from "./extractStyleCache";
 
 export type { ExtractedStyle } from "./styleTypes";
 export { extractedStyleSchema } from "./styleTypes";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.6-flash";
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 
 export type ExtractStyleInput =
-  | { kind: "image"; imageBase64: string; mimeType: string }
-  | { kind: "video"; absoluteVideoPath: string; mimeType: string };
+  | { kind: "image"; imageBase64: string; mimeType: string; apiKeyOverride?: string }
+  | { kind: "video"; absoluteVideoPath: string; mimeType: string; apiKeyOverride?: string };
 
 const FONT_FAMILY_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value);
 const CAPTION_POSITION_VALUES = CAPTION_POSITION_OPTIONS.map((option) => option.value);
@@ -108,6 +111,15 @@ const responseSchema = {
   required: ["primaryColor", "fontFamily", "captionPosition", "captionStyle", "captionAnimation"],
 } as const;
 
+/** GEMINI_MOCK=1のときに返す固定のダミー結果(開発中の動作確認用)。 */
+const MOCK_STYLE: ExtractedStyle = {
+  primaryColor: "#FF3366",
+  fontFamily: FONT_FAMILY_VALUES[0],
+  captionPosition: CAPTION_POSITION_VALUES[0],
+  captionStyle: CAPTION_STYLE_VALUES[0],
+  captionAnimation: CAPTION_ANIMATION_VALUES[0],
+};
+
 /**
  * 参考画像/参考動画(競合の投稿など)からテロップに使う配色・フォント・配置位置・背景の付き方・
  * 出現演出をまとめて抽出する。動画の場合はGemini File API経由で渡すことで、静止画からは
@@ -117,9 +129,20 @@ const responseSchema = {
  * フォールバックは持たない(呼び出し元でエラー表示し、既定値のまま使うかは利用者に委ねる)。
  */
 export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedStyle> => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (isGeminiMockEnabled()) {
+    return MOCK_STYLE;
+  }
+
+  const cacheKey = await computeExtractStyleCacheKey(input);
+  const cached = getCachedExtractedStyle(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const apiKey = input.apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEYが未設定です");
+    console.error("[extractStyle] GEMINI_API_KEYが未設定です(共有キーも自分のキーも無し)");
+    throw new Error(MISSING_API_KEY_MESSAGE);
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -173,6 +196,8 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
           return Promise.race([generatePromise, timeoutPromise]);
         });
 
+        recordGeminiUsage("extractStyle", model, response.usageMetadata);
+
         const text = response.text;
         if (!text) {
           throw new Error("Gemini APIから空の応答が返されました");
@@ -182,17 +207,28 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
         if (!parsed.success) {
           throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
         }
-        return parsed.data as ExtractedStyle;
+        const style = parsed.data as ExtractedStyle;
+        setCachedExtractedStyle(cacheKey, style);
+        return style;
       } catch (error) {
         lastError = error;
+        if (isDailyQuotaError(error)) {
+          recordGeminiDailyQuotaExceeded("extractStyle");
+        }
         if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
           const delayMs = RETRY_BASE_DELAY_MS * attempt;
           console.warn(
-            `[extractStyle] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS})`
+            `[extractStyle] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS}): ${
+              error instanceof Error ? error.message : error
+            }`
           );
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
+        console.error(
+          `[extractStyle] リトライ上限(${MAX_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_ATTEMPTS})`,
+          error
+        );
         throw toFriendlyGeminiError(error);
       }
     }

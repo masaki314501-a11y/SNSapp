@@ -13,11 +13,13 @@ import {
 } from "@video/shared/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { runWithGeminiRateLimit } from "./rateLimiter";
-import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { MISSING_API_KEY_MESSAGE, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { loadEditFewShotContext } from "./editExamplesStore";
 import { autoEditPlanSchema } from "./autoEditTypes";
+import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
+import { isGeminiMockEnabled } from "./mockMode";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.6-flash";
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
@@ -37,6 +39,7 @@ export type AutoEditPlanInput = {
   };
   /** 参考画像/動画からのスタイル抽出が既に成功しているか。trueならtheme欄の判断は不要。 */
   hasStyleReference: boolean;
+  apiKeyOverride?: string;
 };
 
 export type AutoEditSegmentPlan = {
@@ -166,9 +169,21 @@ const responseSchema = {
  * フォールバックは持たない(失敗時は呼び出し元でエラー表示し、常にスキップできるようにする)。
  */
 export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<AutoEditPlan> => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (isGeminiMockEnabled()) {
+    return {
+      segments: input.segments.map((segment) => ({
+        key: segment.key,
+        addNarration: false,
+        sfxPresetId: null,
+      })),
+      summary: "(モック提案)",
+    };
+  }
+
+  const apiKey = input.apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEYが未設定です");
+    console.error("[autoEditPlan] GEMINI_API_KEYが未設定です(共有キーも自分のキーも無し)");
+    throw new Error(MISSING_API_KEY_MESSAGE);
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -195,6 +210,8 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           });
           return Promise.race([generatePromise, timeoutPromise]);
         });
+
+        recordGeminiUsage("autoEditPlan", model, response.usageMetadata);
 
         const text = response.text;
         if (!text) {
@@ -226,14 +243,23 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
         };
       } catch (error) {
         lastError = error;
+        if (isDailyQuotaError(error)) {
+          recordGeminiDailyQuotaExceeded("autoEditPlan");
+        }
         if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
           const delayMs = RETRY_BASE_DELAY_MS * attempt;
           console.warn(
-            `[autoEditPlan] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS})`
+            `[autoEditPlan] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS}): ${
+              error instanceof Error ? error.message : error
+            }`
           );
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
+        console.error(
+          `[autoEditPlan] リトライ上限(${MAX_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_ATTEMPTS})`,
+          error
+        );
         throw toFriendlyGeminiError(error);
       }
     }

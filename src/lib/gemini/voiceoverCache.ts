@@ -23,7 +23,8 @@ const fileExists = (filePath: string): Promise<boolean> =>
 
 export const getOrGenerateVoiceover = async (
   text: string,
-  voiceName: string
+  voiceName: string,
+  apiKeyOverride?: string
 ): Promise<{ path: string; cached: boolean }> => {
   const filename = `${cacheKeyFor(text, voiceName)}.wav`;
   const absolutePath = path.join(GENERATED_DIR, filename);
@@ -31,7 +32,7 @@ export const getOrGenerateVoiceover = async (
     return { path: `audio/generated/${filename}`, cached: true };
   }
 
-  const wavBuffer = await generateVoiceover({ text, voiceName });
+  const wavBuffer = await generateVoiceover({ text, voiceName, apiKeyOverride });
   await mkdir(GENERATED_DIR, { recursive: true });
   await writeFile(absolutePath, wavBuffer);
 
