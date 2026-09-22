@@ -154,8 +154,17 @@ export const regenerateEditExampleDigest = async (id: string, apiKeyOverride?: s
   const target = examples.find((example) => example.id === id);
   if (!target) return false;
 
+  // loadEditFewShotContext()と同じ理由(日本語ラベルを含むファイル名だとGemini
+  // アップロード時にByteString変換エラーになる)で、ASCIIのみの一時コピーを経由する。
   const mediaPath = path.join(CORRECT_MEDIA_DIR, target.correctMediaFilename);
-  const digest = await generateEditExampleDigest(mediaPath, target.correctMimeType, apiKeyOverride);
+  const tempPath = path.join(os.tmpdir(), `edit-example-digest-${randomUUID()}${path.extname(target.correctMediaFilename)}`);
+  let digest;
+  try {
+    await copyFile(mediaPath, tempPath);
+    digest = await generateEditExampleDigest(tempPath, target.correctMimeType, apiKeyOverride);
+  } finally {
+    await unlink(tempPath).catch(() => {});
+  }
 
   const updated = examples.map((example) => (example.id === id ? { ...example, digest } : example));
   await writeMetadata(updated);
