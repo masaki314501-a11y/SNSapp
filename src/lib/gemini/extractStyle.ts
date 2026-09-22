@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, type Content } from "@google/genai";
+import { GoogleGenAI, MediaResolution, Type, type Content } from "@google/genai";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
@@ -21,6 +21,9 @@ const DEFAULT_MODEL = "gemini-3.6-flash";
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
+// 「テロップが最初に出る瞬間の動き」だけ見れば足りるため、動画は先頭のみをGeminiに解析させる
+// (File API自体へのアップロードは全体を行うが、generateContent側で解析範囲を絞る)。
+const VIDEO_ANALYSIS_END_OFFSET = "12s";
 
 export type ExtractStyleInput =
   | { kind: "image"; imageBase64: string; mimeType: string; apiKeyOverride?: string }
@@ -150,7 +153,10 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
   const prompt = buildPrompt(input.kind);
 
   let uploadedFileName: string | undefined;
-  const buildContentPart = async (): Promise<{ inlineData: { mimeType: string; data: string } } | { fileData: { fileUri: string; mimeType: string } }> => {
+  type ContentPart =
+    | { inlineData: { mimeType: string; data: string } }
+    | { fileData: { fileUri: string; mimeType: string }; videoMetadata: { endOffset: string } };
+  const buildContentPart = async (): Promise<ContentPart> => {
     if (input.kind === "image") {
       return { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } };
     }
@@ -163,7 +169,12 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
     }
     uploadedFileName = uploaded.name;
     await waitForGeminiFileActive(ai, uploaded.name);
-    return { fileData: { fileUri: uploaded.uri, mimeType: input.mimeType } };
+    // テロップが最初に出る瞬間の動きだけ見れば足りるため、解析範囲を先頭のみに絞る
+    // (動画が短ければGemini側で実際の長さに合わせて扱われる)。
+    return {
+      fileData: { fileUri: uploaded.uri, mimeType: input.mimeType },
+      videoMetadata: { endOffset: VIDEO_ANALYSIS_END_OFFSET },
+    };
   };
 
   let fewShotUploadedFileNames: string[] = [];
@@ -188,6 +199,7 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
             config: {
               responseMimeType: "application/json",
               responseSchema,
+              mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW,
             },
           });
           const timeoutPromise = new Promise<never>((_, reject) => {
