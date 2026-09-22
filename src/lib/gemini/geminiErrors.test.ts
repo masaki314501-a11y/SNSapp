@@ -123,6 +123,14 @@ describe("toFriendlyGeminiError", () => {
     expect(message).not.toContain("レート制限");
   });
 
+  it("自分のAPIキー使用中に日次枠切れになった場合は、キー登録を勧めない専用メッセージを返す", () => {
+    const error = new ApiError({ message: JSON.stringify(dailyQuotaErrorBody), status: 429 });
+    const message = toFriendlyGeminiError(error, true).message;
+    expect(message).toContain("登録した自分のAPIキー");
+    expect(message).toContain("本日使えるAIの回数");
+    expect(message).not.toContain("登録すると");
+  });
+
   it("分単位のレート制限には専門用語を避けたメッセージを返す", () => {
     const error = new ApiError({ message: JSON.stringify(minuteRateLimitErrorBody), status: 429 });
     const message = toFriendlyGeminiError(error).message;

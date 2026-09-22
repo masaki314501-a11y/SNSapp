@@ -141,10 +141,10 @@ export const generateEditExampleDigest = async (
           `[editExampleDigest] リトライ上限(${MAX_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_ATTEMPTS})`,
           error
         );
-        throw toFriendlyGeminiError(error);
+        throw toFriendlyGeminiError(error, Boolean(apiKeyOverride));
       }
     }
-    throw toFriendlyGeminiError(lastError);
+    throw toFriendlyGeminiError(lastError, Boolean(apiKeyOverride));
   } finally {
     await ai.files.delete({ name: uploaded.name }).catch(() => {});
   }

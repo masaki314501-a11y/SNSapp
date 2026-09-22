@@ -154,7 +154,7 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
           `[generateVoiceover] リトライ対象外のエラーのため中断します(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`,
           error
         );
-        throw toFriendlyGeminiError(error);
+        throw toFriendlyGeminiError(error, Boolean(input.apiKeyOverride));
       }
       if (attempt < MAX_GENERATE_ATTEMPTS) {
         const delayMs = RETRY_BASE_DELAY_MS * attempt;
@@ -166,8 +166,8 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
-      throw toFriendlyGeminiError(error);
+      throw toFriendlyGeminiError(error, Boolean(input.apiKeyOverride));
     }
   }
-  throw toFriendlyGeminiError(lastError);
+  throw toFriendlyGeminiError(lastError, Boolean(input.apiKeyOverride));
 };

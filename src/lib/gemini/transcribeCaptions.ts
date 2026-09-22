@@ -244,11 +244,11 @@ export const transcribeCaptions = async (
             `[transcribeCaptions] リトライ上限(${MAX_GENERATE_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_GENERATE_ATTEMPTS})`,
             error
           );
-          throw toFriendlyGeminiError(error);
+          throw toFriendlyGeminiError(error, Boolean(input.apiKeyOverride));
         }
       }
       if (!text) {
-        if (lastError) throw toFriendlyGeminiError(lastError);
+        if (lastError) throw toFriendlyGeminiError(lastError, Boolean(input.apiKeyOverride));
         throw new Error("Gemini APIから空の応答が返されました");
       }
 

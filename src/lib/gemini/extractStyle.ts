@@ -244,10 +244,10 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
           `[extractStyle] リトライ上限(${MAX_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_ATTEMPTS})`,
           error
         );
-        throw toFriendlyGeminiError(error);
+        throw toFriendlyGeminiError(error, Boolean(input.apiKeyOverride));
       }
     }
-    throw toFriendlyGeminiError(lastError);
+    throw toFriendlyGeminiError(lastError, Boolean(input.apiKeyOverride));
   } finally {
     if (uploadedFileName) {
       await ai.files.delete({ name: uploadedFileName }).catch(() => {});

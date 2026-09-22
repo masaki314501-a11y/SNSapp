@@ -286,10 +286,10 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           `[autoEditPlan] リトライ上限(${MAX_ATTEMPTS}回)に到達、または再試行不可のエラーで中断します(試行${attempt}/${MAX_ATTEMPTS})`,
           error
         );
-        throw toFriendlyGeminiError(error);
+        throw toFriendlyGeminiError(error, Boolean(input.apiKeyOverride));
       }
     }
-    throw toFriendlyGeminiError(lastError);
+    throw toFriendlyGeminiError(lastError, Boolean(input.apiKeyOverride));
   } finally {
     for (const name of fewShotUploadedFileNames) {
       await ai.files.delete({ name }).catch(() => {});

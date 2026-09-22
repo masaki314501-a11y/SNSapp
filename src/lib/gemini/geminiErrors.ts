@@ -63,8 +63,13 @@ export const MISSING_API_KEY_MESSAGE =
  * 専門用語)を、非エンジニアの利用者が読んでも状況と次にすることが分かるような
  * 平易な日本語メッセージに変換する。「API」「クォータ」「レート制限」のような
  * 用語は避け、「AI」「回数」「時間を置く」といった言葉で言い換える。
+ *
+ * usedOwnApiKeyは、そのリクエストで実際に自分のAPIキー(BYOK)を使ったかどうか。
+ * 自分のキーでも無料枠には1日あたりの上限があり、使い込めば同じ429(日次上限)に
+ * 到達しうる。その場合「自分のキーを登録すれば使える」という案内は既にやっている
+ * ことを勧める的外れな内容になるため、日次上限のメッセージを出し分ける。
  */
-export const toFriendlyGeminiError = (error: unknown): Error => {
+export const toFriendlyGeminiError = (error: unknown, usedOwnApiKey = false): Error => {
   if (error instanceof GeminiTimeoutError) {
     return new Error(
       "AIの処理に時間がかかりすぎたため中断しました。少し時間を置いてから、もう一度お試しください"
@@ -89,7 +94,9 @@ export const toFriendlyGeminiError = (error: unknown): Error => {
     if (error.status === 429) {
       if (isDailyQuotaError(error)) {
         return new Error(
-          "本日使えるAIの回数が上限に達しました。明日になればまた使えます。今すぐ試したい場合は、右下の設定から自分のAPIキーを登録すると、自分専用の回数で使えます"
+          usedOwnApiKey
+            ? "登録した自分のAPIキーで、本日使えるAIの回数が上限に達しました。明日になればまた使えます"
+            : "本日使えるAIの回数が上限に達しました。明日になればまた使えます。今すぐ試したい場合は、右下の設定から自分のAPIキーを登録すると、自分専用の回数で使えます"
         );
       }
       const retryAfterSeconds = parseRetryDelaySeconds(error);
