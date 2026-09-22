@@ -1,4 +1,4 @@
-import { GoogleGenAI, MediaResolution, Type, type Content } from "@google/genai";
+import { GoogleGenAI, MediaResolution, ThinkingLevel, Type, type Content } from "@google/genai";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
@@ -200,6 +200,9 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
               responseMimeType: "application/json",
               responseSchema,
               mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW,
+              // 単純な分類・抽出タスクで深い思考は不要なため、内部の「思考」トークン消費を
+              // 最小にする(Gemini 3系は完全な無効化はできず、MINIMALが下限)。
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
             },
           });
           const timeoutPromise = new Promise<never>((_, reject) => {

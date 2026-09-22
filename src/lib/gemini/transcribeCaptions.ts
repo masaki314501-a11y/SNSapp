@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { RenderInternals } from "@remotion/renderer";
 import { z } from "zod";
 import { CLIP_CAPTION_MAX_CHARS, truncateNaturally } from "./textUtils";
@@ -212,6 +212,9 @@ export const transcribeCaptions = async (
               config: {
                 responseMimeType: "application/json",
                 responseSchema,
+                // 文字起こし+区切り判定は単純作業寄りのため思考トークンを最小にする。
+                // ただし発話の区切り判定の精度が落ちないか、他の2機能より注意して確認する。
+                thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
               },
             });
             const timeoutPromise = new Promise<never>((_, reject) => {
