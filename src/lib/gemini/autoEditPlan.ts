@@ -270,7 +270,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
       } catch (error) {
         lastError = error;
         if (isDailyQuotaError(error)) {
-          recordGeminiDailyQuotaExceeded("autoEditPlan");
+          recordGeminiDailyQuotaExceeded("autoEditPlan", model, error);
         }
         if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
           const delayMs = RETRY_BASE_DELAY_MS * attempt;

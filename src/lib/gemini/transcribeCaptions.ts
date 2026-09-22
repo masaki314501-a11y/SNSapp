@@ -228,7 +228,7 @@ export const transcribeCaptions = async (
         } catch (error) {
           lastError = error;
           if (isDailyQuotaError(error)) {
-            recordGeminiDailyQuotaExceeded("transcribeCaptions");
+            recordGeminiDailyQuotaExceeded("transcribeCaptions", model, error);
           }
           if (isRetryableApiError(error) && attempt < MAX_GENERATE_ATTEMPTS) {
             const delayMs = RETRY_BASE_DELAY_MS * attempt;

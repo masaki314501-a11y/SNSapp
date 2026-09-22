@@ -5,6 +5,7 @@ import {
   isDailyQuotaError,
   isRetryableApiError,
   isTtsRefusedAudioError,
+  parseDailyQuotaLimit,
   toFriendlyGeminiError,
 } from "./geminiErrors";
 
@@ -63,6 +64,40 @@ describe("isDailyQuotaError", () => {
 
   it("ApiError以外のエラーはfalseを返す", () => {
     expect(isDailyQuotaError(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("parseDailyQuotaLimit", () => {
+  it("quotaValueがあれば上限回数を数値で取り出す", () => {
+    const body = {
+      error: {
+        code: 429,
+        status: "RESOURCE_EXHAUSTED",
+        details: [
+          {
+            "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+            violations: [
+              {
+                quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                quotaDimensions: { location: "global", model: "gemini-3.6-flash" },
+                quotaValue: "20",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const error = new ApiError({ message: JSON.stringify(body), status: 429 });
+    expect(parseDailyQuotaLimit(error)).toBe(20);
+  });
+
+  it("quotaValueが無ければnullを返す", () => {
+    const error = new ApiError({ message: JSON.stringify(dailyQuotaErrorBody), status: 429 });
+    expect(parseDailyQuotaLimit(error)).toBeNull();
+  });
+
+  it("ApiError以外はnullを返す", () => {
+    expect(parseDailyQuotaLimit(new Error("boom"))).toBeNull();
   });
 });
 

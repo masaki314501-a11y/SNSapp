@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MediaModality } from "@google/genai";
+import { ApiError, MediaModality } from "@google/genai";
 import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
 
 describe("usageLog", () => {
@@ -58,9 +58,50 @@ describe("usageLog", () => {
   });
 
   it("日次の無料枠上限到達を記録する", () => {
-    recordGeminiDailyQuotaExceeded("transcribeCaptions");
+    recordGeminiDailyQuotaExceeded("transcribeCaptions", "gemini-3.6-flash");
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0][0]).toContain("transcribeCaptions");
+  });
+
+  it("上限到達エラーからquotaValueを読み取れれば、以後のログに残り目安を出す", () => {
+    const quotaExceededError = new ApiError({
+      message: JSON.stringify({
+        error: {
+          code: 429,
+          message: "Quota exceeded",
+          status: "RESOURCE_EXHAUSTED",
+          details: [
+            {
+              "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+              violations: [
+                {
+                  quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                  quotaValue: "20",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      status: 429,
+    });
+
+    recordGeminiDailyQuotaExceeded("autoEditPlan", "gemini-3.6-flash", quotaExceededError);
+    expect(warnSpy.mock.calls[0][0]).toContain("残り目安=0/20回");
+
+    recordGeminiUsage("autoEditPlan", "gemini-3.6-flash", {
+      promptTokenCount: 10,
+      candidatesTokenCount: 5,
+      totalTokenCount: 15,
+    });
+    // 上限到達直後にカウンタが上限へ揃えられているため、次の1回でも残りは0のまま。
+    expect(logSpy.mock.calls[0][0]).toContain("残り目安=0/20回");
+  });
+
+  it("quotaValueが読み取れない場合は残り目安を出さない", () => {
+    recordGeminiDailyQuotaExceeded("extractStyle", "gemini-3.6-flash");
+
+    expect(warnSpy.mock.calls[0][0]).not.toContain("残り目安");
   });
 });

@@ -29,6 +29,19 @@ export const parseRetryDelaySeconds = (error: unknown): number | null => {
 };
 
 /**
+ * 日次上限に到達した429のquotaViolationsに含まれる`quotaValue`(例: "20")から、
+ * そのモデルの1日あたりの上限回数を取り出す。Gemini APIは成功レスポンスに残り枠数を
+ * 一切含めない(ai.google.dev/gemini-api/docs/rate-limits で確認済み。RPDが太平洋時間の
+ * 深夜にリセットされる旨の記載はあるが、残数を返すヘッダ/フィールドは存在しない)ため、
+ * 上限そのものを知る唯一の手がかりはこの、上限に達した際のエラー内容だけになる。
+ */
+export const parseDailyQuotaLimit = (error: unknown): number | null => {
+  if (!(error instanceof ApiError) || typeof error.message !== "string") return null;
+  const match = error.message.match(/"quotaValue"\s*:\s*"(\d+)"/);
+  return match ? Number(match[1]) : null;
+};
+
+/**
  * Gemini TTSは、読み上げ用のテキストしか渡していないにもかかわらず、まれに「音声ではなく
  * テキストで応答しようとした」として400 INVALID_ARGUMENTを返すことがある
  * (「Model tried to generate text, but it should only be used for TTS.」)。

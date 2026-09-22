@@ -125,7 +125,7 @@ export const generateEditExampleDigest = async (
       } catch (error) {
         lastError = error;
         if (isDailyQuotaError(error)) {
-          recordGeminiDailyQuotaExceeded("editExampleDigest");
+          recordGeminiDailyQuotaExceeded("editExampleDigest", model, error);
         }
         if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
           const delayMs = RETRY_BASE_DELAY_MS * attempt;

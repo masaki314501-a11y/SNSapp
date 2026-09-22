@@ -140,7 +140,7 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
     } catch (error) {
       lastError = error;
       if (isDailyQuotaError(error)) {
-        recordGeminiDailyQuotaExceeded("generateVoiceover");
+        recordGeminiDailyQuotaExceeded("generateVoiceover", model, error);
       }
       // 音声データが空(既知の一過性不具合)、TTSがテキストで応答しようとした400
       // (isTtsRefusedAudioError、同種の一過性不具合)、429(日次上限を除く)/503は

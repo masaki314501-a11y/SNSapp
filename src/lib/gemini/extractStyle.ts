@@ -228,7 +228,7 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
       } catch (error) {
         lastError = error;
         if (isDailyQuotaError(error)) {
-          recordGeminiDailyQuotaExceeded("extractStyle");
+          recordGeminiDailyQuotaExceeded("extractStyle", model, error);
         }
         if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
           const delayMs = RETRY_BASE_DELAY_MS * attempt;
