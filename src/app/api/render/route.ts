@@ -20,8 +20,8 @@ const DELAY_RENDER_TIMEOUT_IN_MILLISECONDS = 90000;
 
 /**
  * @remotion/bundler の bundle() はプロセス内で1度だけ public/ をコピーして
- * 静的配信するため(bundle.ts参照)、サーバー起動後にアップロードされた動画は
- * そのスナップショットに存在せず404になる。レンダー時だけは絶対URLに差し替え、
+ * 静的配信するため(bundle.ts参照)、サーバー起動後にアップロードされた動画・SE・
+ * AIナレーション音声はそのスナップショットに存在せず404になる。レンダー時だけは絶対URLに差し替え、
  * 実際に稼働中のNext.jsサーバーから /api/media 経由で直接読ませることでこれを回避する
  * (/api/media はリクエスト都度ファイルシステムを見るため、本番ビルドでも
  * 起動後に増えたファイルを返せる。通常のpublicフォルダ配信はビルド時点の
@@ -40,6 +40,9 @@ const resolveUploadedSrc = (src?: string): string | undefined => {
   if (!src || src.startsWith("http://") || src.startsWith("https://")) return src;
   return `${LOCAL_ORIGIN}/api/media/${src}`;
 };
+
+/** sfx/bgmのsrcは必須フィールドのため、resolveUploadedSrcの`string | undefined`をstringに戻す。 */
+const resolveRequiredUploadedSrc = (src: string): string => resolveUploadedSrc(src) ?? src;
 
 export async function POST(request: Request) {
   const json = await request.json().catch(() => null);
@@ -75,6 +78,17 @@ export async function POST(request: Request) {
       ...clip,
       src: resolveUploadedSrc(clip.src),
     })),
+    // SE・AIナレーション音声(sfxClips、ClipEditor.tsx参照)も同梱プリセット/生成音声の
+    // どちらも public/ 配下の相対パスで持っているため、動画クリップと同じ理由で
+    // 絶対URLに差し替える必要がある(未対応だとレンダラーが自身のバンドルサーバーの
+    // 相対パスとして誤解決し、404になる)。
+    sfx: parsed.data.sfx.map((clip) => ({
+      ...clip,
+      src: resolveRequiredUploadedSrc(clip.src),
+    })),
+    bgm: parsed.data.bgm
+      ? { ...parsed.data.bgm, src: resolveRequiredUploadedSrc(parsed.data.bgm.src) }
+      : undefined,
   };
   const jobId = createRenderJob();
 
