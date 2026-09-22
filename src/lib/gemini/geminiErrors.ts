@@ -4,6 +4,14 @@ import { ApiError } from "@google/genai";
 export const RETRYABLE_STATUS_CODES = new Set([429, 503]);
 
 /**
+ * 各Gemini呼び出し箇所が独自に実装している「一定時間で諦める」タイムアウトの
+ * 目印。素のErrorだと`isRetryableApiError`のApiError判定に引っかからず、
+ * 一度時間切れになっただけでリトライされずに終わってしまうため、専用の型で
+ * リトライ対象に含められるようにする。
+ */
+export class GeminiTimeoutError extends Error {}
+
+/**
  * 429には「1分あたりの上限(すぐ回復する)」と「1日あたりの上限(翌日まで回復しない)」の
  * 2種類があり、利用者が取るべき行動が全く違う。Geminiは前者をRPM/RPS、後者をPerDayを含む
  * quotaIdとして返すため、メッセージ本文から日次上限かどうかを見分ける。
@@ -23,9 +31,11 @@ export const parseRetryDelaySeconds = (error: unknown): number | null => {
 /**
  * 日次上限は待っても翌日まで回復しないため、リトライしても無駄にトークン/待ち時間を
  * 消費するだけ。呼び出し側の再試行ループはこれをfalseとして扱い、即座に諦めさせる。
+ * タイムアウト(GeminiTimeoutError)は一過性の遅さのことが多いためリトライ対象に含める。
  */
 export const isRetryableApiError = (error: unknown): boolean =>
-  error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status) && !isDailyQuotaError(error);
+  error instanceof GeminiTimeoutError ||
+  (error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status) && !isDailyQuotaError(error));
 
 /**
  * 共有・自分のどちらのAPIキーも無い場合に画面へ出すメッセージ。「GEMINI_API_KEY」
@@ -42,6 +52,11 @@ export const MISSING_API_KEY_MESSAGE =
  * 用語は避け、「AI」「回数」「時間を置く」といった言葉で言い換える。
  */
 export const toFriendlyGeminiError = (error: unknown): Error => {
+  if (error instanceof GeminiTimeoutError) {
+    return new Error(
+      "AIの処理に時間がかかりすぎたため中断しました。少し時間を置いてから、もう一度お試しください"
+    );
+  }
   if (error instanceof ApiError) {
     if (error.status === 401 || error.status === 403) {
       return new Error(

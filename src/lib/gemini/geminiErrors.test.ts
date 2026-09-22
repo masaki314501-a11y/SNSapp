@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@google/genai";
-import { isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { GeminiTimeoutError, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 
 const dailyQuotaErrorBody = {
   error: {
@@ -71,6 +71,10 @@ describe("isRetryableApiError", () => {
     const error = new ApiError({ message: "{}", status: 400 });
     expect(isRetryableApiError(error)).toBe(false);
   });
+
+  it("GeminiTimeoutErrorはリトライ対象にする", () => {
+    expect(isRetryableApiError(new GeminiTimeoutError("timeout"))).toBe(true);
+  });
 });
 
 describe("toFriendlyGeminiError", () => {
@@ -120,5 +124,10 @@ describe("toFriendlyGeminiError", () => {
   it("403にはAPIキーが正しくない旨のメッセージを返す", () => {
     const error = new ApiError({ message: "{}", status: 403 });
     expect(toFriendlyGeminiError(error).message).toContain("APIキー");
+  });
+
+  it("GeminiTimeoutErrorには時間がかかりすぎた旨のメッセージを返す", () => {
+    const message = toFriendlyGeminiError(new GeminiTimeoutError("timeout")).message;
+    expect(message).toContain("時間がかかりすぎた");
   });
 });

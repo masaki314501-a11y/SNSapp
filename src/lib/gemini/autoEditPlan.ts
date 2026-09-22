@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, type Content } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, Type, type Content } from "@google/genai";
 import type {
   CaptionAnimation,
   CaptionFontFamily,
@@ -13,14 +13,25 @@ import {
 } from "@video/shared/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { runWithGeminiRateLimit } from "./rateLimiter";
-import { MISSING_API_KEY_MESSAGE, isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import {
+  GeminiTimeoutError,
+  MISSING_API_KEY_MESSAGE,
+  isDailyQuotaError,
+  isRetryableApiError,
+  toFriendlyGeminiError,
+} from "./geminiErrors";
 import { loadEditFewShotContext } from "./editExamplesStore";
 import { autoEditPlanSchema } from "./autoEditTypes";
 import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
 import { isGeminiMockEnabled } from "./mockMode";
 
 const DEFAULT_MODEL = "gemini-3.6-flash";
-const GEMINI_TIMEOUT_MS = 60_000;
+// クリップ数が多いほどプロンプト・応答とも長くなり生成に時間がかかるため、固定値ではなく
+// クリップ数に応じて猶予を延ばす(上限3分)。60秒固定だとクリップ数が多い動画で
+// 一律タイムアウトしていた。
+const GEMINI_BASE_TIMEOUT_MS = 60_000;
+const GEMINI_TIMEOUT_PER_SEGMENT_MS = 2_000;
+const GEMINI_MAX_TIMEOUT_MS = 180_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 
@@ -91,10 +102,15 @@ ${captionStyleHints}`;
   return `
 あなたはショート動画(9:16)の編集ディレクターです。以下は既にカット・文字起こし済みの
 クリップ一覧(再生順)です。この動画が「バズる(拡散される)」可能性を高めるため、
-各クリップに対して演出・AIナレーション・効果音の追加を提案してください。
+演出・AIナレーション・効果音のいずれかを追加すべきクリップだけを選んで提案してください。
 
 ## クリップ一覧(index. "テロップ" (尺))
 ${segmentsList}
+
+## 出力について(重要)
+segmentsには、**演出・ナレーション・効果音のいずれか1つでも追加するクリップだけ**を
+含めてください。何も追加しないクリップは含めなくてよく、全クリップ分を列挙する必要は
+ありません(クリップ数が多い動画では、そのほうが応答が速く軽くなります)。
 
 ## あなたが決めてよいこと
 1. captionAnimation: 特に強調したい区間だけ演出を上書きする(省略可)。候補:
@@ -189,6 +205,10 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const prompt = buildPrompt(input);
+  const timeoutMs = Math.min(
+    GEMINI_MAX_TIMEOUT_MS,
+    GEMINI_BASE_TIMEOUT_MS + input.segments.length * GEMINI_TIMEOUT_PER_SEGMENT_MS
+  );
 
   let fewShotUploadedFileNames: string[] = [];
   try {
@@ -203,10 +223,16 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           const generatePromise = ai.models.generateContent({
             model,
             contents,
-            config: { responseMimeType: "application/json", responseSchema },
+            config: {
+              responseMimeType: "application/json",
+              responseSchema,
+              // 演出の要否・ナレーション対象の選定は単純な分類寄りのタスクのため、
+              // 内部の「思考」トークン消費を最小にする(生成時間の短縮にもつながる)。
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            },
           });
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
+            setTimeout(() => reject(new GeminiTimeoutError("Gemini API timeout")), timeoutMs);
           });
           return Promise.race([generatePromise, timeoutPromise]);
         });
