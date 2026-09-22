@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { withGeminiApiKeyHeader } from "@/lib/geminiApiKeyClient";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -57,7 +58,7 @@ export const useTranscribeJob = (options?: {
     try {
       const res = await fetch("/api/transcribe-captions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withGeminiApiKeyHeader({ "Content-Type": "application/json" }),
         body: JSON.stringify({ videoPath, videoDurationInSeconds }),
       });
       const data = await res.json();

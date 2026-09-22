@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CaptionAnimation, CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
+import { withGeminiApiKeyHeader } from "@/lib/geminiApiKeyClient";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -54,7 +55,11 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
     try {
       const body = new FormData();
       body.set("image", file);
-      const res = await fetch("/api/extract-style", { method: "POST", body });
+      const res = await fetch("/api/extract-style", {
+        method: "POST",
+        headers: withGeminiApiKeyHeader(),
+        body,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "スタイル抽出の開始に失敗しました");
       pollJob(data.jobId);
@@ -75,7 +80,7 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
     try {
       const res = await fetch("/api/extract-style-from-video", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withGeminiApiKeyHeader({ "Content-Type": "application/json" }),
         body: JSON.stringify({ videoPath }),
       });
       const data = await res.json();

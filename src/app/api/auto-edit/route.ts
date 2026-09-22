@@ -10,6 +10,7 @@ import {
 import { MAX_SFX_CLIPS } from "@video/templates/standard/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import type { ProjectSfxClip } from "@/lib/videoProject";
+import { readGeminiApiKeyOverride } from "@/lib/gemini/apiKeyHeader";
 import { DEFAULT_VOICE_NAME } from "@/lib/gemini/voiceOptions";
 import { generateAutoEditPlan, MAX_AUTO_NARRATION_SEGMENTS, type AutoEditPlanInput } from "@/lib/gemini/autoEditPlan";
 import { getOrGenerateVoiceover } from "@/lib/gemini/voiceoverCache";
@@ -64,11 +65,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const apiKeyOverride = readGeminiApiKeyOverride(request);
   const jobId = createAutoEditJob();
 
   after(async () => {
     try {
-      const plan = await generateAutoEditPlan(parsed.data as AutoEditPlanInput);
+      const plan = await generateAutoEditPlan({ ...(parsed.data as AutoEditPlanInput), apiKeyOverride });
 
       // ナレーション/SFXの配置は、書き出し後の動画上での累積開始秒(segmentStartSeconds、
       // ClipEditor.tsxのhandleGenerateNarrationForAllと同じ計算式)を使う。
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
           sfxCount < MAX_SFX_CLIPS
         ) {
           // Gemini APIはアプリ全体で直列実行が前提(rateLimiter.ts)のため、あえて逐次待つ。
-          const { path } = await getOrGenerateVoiceover(segment.caption.trim(), DEFAULT_VOICE_NAME);
+          const { path } = await getOrGenerateVoiceover(segment.caption.trim(), DEFAULT_VOICE_NAME, apiKeyOverride);
           generatedClips.push({
             key: randomUUID(),
             src: path,

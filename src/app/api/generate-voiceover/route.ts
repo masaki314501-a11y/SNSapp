@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { readGeminiApiKeyOverride } from "@/lib/gemini/apiKeyHeader";
 import { getOrGenerateVoiceover } from "@/lib/gemini/voiceoverCache";
 import { DEFAULT_VOICE_NAME, isKnownVoiceName } from "@/lib/gemini/voiceOptions";
 
@@ -32,7 +33,8 @@ export async function POST(request: Request) {
       : DEFAULT_VOICE_NAME;
 
   try {
-    const result = await getOrGenerateVoiceover(parsed.data.text, voiceName);
+    const apiKeyOverride = readGeminiApiKeyOverride(request);
+    const result = await getOrGenerateVoiceover(parsed.data.text, voiceName, apiKeyOverride);
     return NextResponse.json(result);
   } catch (error) {
     console.error("[generate-voiceover] 音声生成に失敗しました", error);

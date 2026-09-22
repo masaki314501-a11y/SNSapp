@@ -1,8 +1,10 @@
+import { withGeminiApiKeyHeader } from "@/lib/geminiApiKeyClient";
+
 /** テロップ1件分の文言をAIナレーション音声に変換する(/api/generate-voiceoverの薄いラッパー)。 */
 export const requestVoiceover = async (text: string, voiceName: string): Promise<{ path: string }> => {
   const res = await fetch("/api/generate-voiceover", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: withGeminiApiKeyHeader({ "Content-Type": "application/json" }),
     body: JSON.stringify({ text, voiceName }),
   });
   const data = await res.json();

@@ -1,4 +1,5 @@
 import { NextResponse, after } from "next/server";
+import { readGeminiApiKeyOverride } from "@/lib/gemini/apiKeyHeader";
 import { extractStyle } from "@/lib/gemini/extractStyle";
 import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extractStyleJobs";
 
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const imageBase64 = buffer.toString("base64");
   const mimeType = file.type;
+  const apiKeyOverride = readGeminiApiKeyOverride(request);
 
   const jobId = createExtractStyleJob();
 
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
   // ジョブ化してポーリングで結果を取得する方式にする。
   after(async () => {
     try {
-      const style = await extractStyle({ kind: "image", imageBase64, mimeType });
+      const style = await extractStyle({ kind: "image", imageBase64, mimeType, apiKeyOverride });
       updateExtractStyleJob(jobId, { status: "done", ...style });
     } catch (error) {
       console.error("[extract-style] スタイル抽出に失敗しました", error);

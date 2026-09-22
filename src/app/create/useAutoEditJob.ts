@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CaptionAnimation, CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
+import { withGeminiApiKeyHeader } from "@/lib/geminiApiKeyClient";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -80,7 +81,7 @@ export const useAutoEditJob = () => {
     try {
       const res = await fetch("/api/auto-edit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withGeminiApiKeyHeader({ "Content-Type": "application/json" }),
         body: JSON.stringify({ segments, theme, hasStyleReference }),
       });
       const data = await res.json();

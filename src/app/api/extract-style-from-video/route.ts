@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod";
+import { readGeminiApiKeyOverride } from "@/lib/gemini/apiKeyHeader";
 import { extractStyle } from "@/lib/gemini/extractStyle";
 import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extractStyleJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "参考動画が見つかりません" }, { status: 400 });
   }
 
+  const apiKeyOverride = readGeminiApiKeyOverride(request);
   const jobId = createExtractStyleJob();
 
   after(async () => {
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
         kind: "video",
         absoluteVideoPath: resolved.absolutePath,
         mimeType: resolved.mimeType,
+        apiKeyOverride,
       });
       updateExtractStyleJob(jobId, { status: "done", ...style });
     } catch (error) {
