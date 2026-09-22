@@ -20,3 +20,12 @@ export const MicIcon: React.FC<IconProps> = ({ size = 16, className }) => (
     <path d="M8 22h8" />
   </svg>
 );
+
+export const KeyIcon: React.FC<IconProps> = ({ size = 16, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base}>
+    <circle cx="8" cy="15" r="4" />
+    <path d="M11 12 20 3" />
+    <path d="M16 8l3 3" />
+    <path d="M13 11l2.5 2.5" />
+  </svg>
+);
