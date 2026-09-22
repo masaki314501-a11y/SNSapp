@@ -38,7 +38,11 @@ export async function GET(
     !dir ||
     !ALLOWED_DIRS.has(dir) ||
     rest.length === 0 ||
-    rest.length > 2 ||
+    // audio/presets/sfx/<file> のように、同梱プリセット音源はサブディレクトリが
+    // 2階層(presets/sfx)になるため、アップロード/生成物の最大1階層(audio/generated/<file>)
+    // より1段深い3階層まで許容する。SAFE_SEGMENTで各セグメントの文字種は制限済みのため、
+    // 階層数自体はパストラバーサル対策としての意味は持たない(単に想定外の深さを弾く目安)。
+    rest.length > 3 ||
     rest.some((segment) => !SAFE_SEGMENT.test(segment))
   ) {
     return NextResponse.json({ error: "不正なパスです" }, { status: 400 });
