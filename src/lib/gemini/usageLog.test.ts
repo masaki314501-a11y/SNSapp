@@ -35,7 +35,7 @@ describe("usageLog", () => {
   });
 
   it("promptTokensDetailsがあればモダリティ別の内訳もログに出力する", () => {
-    recordGeminiUsage("autoEditPlan", "gemini-3.6-flash", {
+    recordGeminiUsage("editExampleDigest", "gemini-3.6-flash", {
       promptTokenCount: 14663,
       candidatesTokenCount: 293,
       totalTokenCount: 14956,
@@ -58,10 +58,10 @@ describe("usageLog", () => {
   });
 
   it("日次の無料枠上限到達を記録する", () => {
-    recordGeminiDailyQuotaExceeded("transcribeCaptions", "gemini-3.6-flash");
+    recordGeminiDailyQuotaExceeded("generateVoiceover", "gemini-3.6-flash");
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0][0]).toContain("transcribeCaptions");
+    expect(warnSpy.mock.calls[0][0]).toContain("generateVoiceover");
   });
 
   it("上限到達エラーからquotaValueを読み取れれば、以後のログに残り目安を出す", () => {
@@ -87,10 +87,10 @@ describe("usageLog", () => {
       status: 429,
     });
 
-    recordGeminiDailyQuotaExceeded("autoEditPlan", "gemini-3.6-flash", quotaExceededError);
+    recordGeminiDailyQuotaExceeded("editExampleDigest", "gemini-3.6-flash", quotaExceededError);
     expect(warnSpy.mock.calls[0][0]).toContain("残り目安=0/20回");
 
-    recordGeminiUsage("autoEditPlan", "gemini-3.6-flash", {
+    recordGeminiUsage("editExampleDigest", "gemini-3.6-flash", {
       promptTokenCount: 10,
       candidatesTokenCount: 5,
       totalTokenCount: 15,

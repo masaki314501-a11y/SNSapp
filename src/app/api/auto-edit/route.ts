@@ -12,7 +12,7 @@ import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import type { ProjectSfxClip } from "@/lib/videoProject";
 import { readGeminiApiKeyOverride } from "@/lib/gemini/apiKeyHeader";
 import { DEFAULT_VOICE_NAME } from "@/lib/gemini/voiceOptions";
-import { generateAutoEditPlan, MAX_AUTO_NARRATION_SEGMENTS, type AutoEditPlanInput } from "@/lib/gemini/autoEditPlan";
+import { generateAutoEditPlan, MAX_AUTO_NARRATION_SEGMENTS, type AutoEditPlanInput } from "@/lib/groq/autoEditPlan";
 import { getOrGenerateVoiceover } from "@/lib/gemini/voiceoverCache";
 import { createAutoEditJob, updateAutoEditJob } from "@/lib/gemini/autoEditJobs";
 
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
-      const plan = await generateAutoEditPlan({ ...(parsed.data as AutoEditPlanInput), apiKeyOverride });
+      const plan = await generateAutoEditPlan(parsed.data as AutoEditPlanInput);
 
       // ナレーション/SFXの配置は、書き出し後の動画上での累積開始秒(segmentStartSeconds、
       // ClipEditor.tsxのhandleGenerateNarrationForAllと同じ計算式)を使う。

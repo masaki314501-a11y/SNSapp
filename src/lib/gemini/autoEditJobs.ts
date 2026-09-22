@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ProjectSfxClip } from "@/lib/videoProject";
-import type { AutoEditPlan } from "./autoEditPlan";
+import type { AutoEditPlan } from "../groq/autoEditPlan";
 
 export type AutoEditJob =
   | { status: "processing" }

@@ -6,12 +6,7 @@ import { parseDailyQuotaLimit } from "./geminiErrors";
  * 判断するための計測。ログに出すだけで、集計自体は行わない(Render Freeの制約でDBを
  * 増やしたくないため、ログ上で目視・grepして把握する運用を前提にする)。
  */
-export type GeminiCallType =
-  | "extractStyle"
-  | "transcribeCaptions"
-  | "generateVoiceover"
-  | "autoEditPlan"
-  | "editExampleDigest";
+export type GeminiCallType = "extractStyle" | "generateVoiceover" | "editExampleDigest";
 
 type CallStats = {
   calls: number;

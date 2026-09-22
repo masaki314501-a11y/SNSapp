@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { TranscribedSegment } from "./transcribeCaptions";
+import type { TranscribedSegment } from "../groq/transcribeCaptions";
 
 export type TranscribeJobPhase = "uploading" | "processing" | "generating";
 

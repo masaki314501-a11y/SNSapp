@@ -33,8 +33,10 @@
 [gemini_usage] call=extractStyle model=gemini-3.6-flash tokens(prompt/output/thoughts/total)=1523/42/580/2145 累計(このプロセス起動から): calls=3 totalTokens=4210
 ```
 
-- `call=` … どの機能か(`extractStyle`=スタイル抽出、`transcribeCaptions`=字幕生成、
-  `generateVoiceover`=AIナレーション、`autoEditPlan`=自動編集「バズる動画」の提案生成)
+- `call=` … どの機能か(`extractStyle`=スタイル抽出、`generateVoiceover`=AIナレーション、
+  `editExampleDigest`=編集例の要約生成。字幕生成・自動編集の提案生成は
+  [gemini-multi-provider-offload](../gemini-multi-provider-offload/README.md)でGroqに
+  移行したため、現在はここには出てこない)
 - `tokens(prompt/output/thoughts/total)=` … その1回の呼び出しで使ったトークン数。
   `thoughts`はAIが画面に出さない「内部の思考」に使った分で、テキストとしては見えないが
   無料枠はきちんと消費する。実際に計測したところ、これが全体の3〜4割を占めるケースがあった
@@ -103,9 +105,10 @@ Quota exceeded ... limit: 3, model: gemini-2.5-flash-tts
 ## 付録(エンジニア向け技術メモ)
 
 - 計測ロジック: `src/lib/gemini/usageLog.ts`(`recordGeminiUsage` / `recordGeminiDailyQuotaExceeded`)
-- 呼び出し箇所: `extractStyle.ts` / `transcribeCaptions.ts` / `generateVoiceover.ts` /
-  `autoEditPlan.ts` の各Gemini呼び出し成功時、および `geminiErrors.ts` の
-  `isDailyQuotaError()` がtrueになった時
+- 呼び出し箇所: `extractStyle.ts` / `generateVoiceover.ts` / `editExampleDigest.ts` の
+  各Gemini呼び出し成功時、および `geminiErrors.ts` の `isDailyQuotaError()` が
+  trueになった時(`transcribeCaptions.ts`/`autoEditPlan.ts`は`src/lib/groq/`へ移行済み。
+  [gemini-multi-provider-offload](../gemini-multi-provider-offload/README.md)参照)
 - トークン数はGemini APIのレスポンスに含まれる `usageMetadata`(実測値)を使用。
   推定値ではない
 - 現状はログ出力のみで、集計・保存は行っていない(DBやファイルへの永続化は

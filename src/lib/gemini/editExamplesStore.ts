@@ -251,3 +251,25 @@ export const loadEditFewShotContext = async (
   }
   return { contents, uploadedFileNames };
 };
+
+/**
+ * autoEditPlan.ts(Groq移行版)向けの、テキストのみのfew-shotコンテキスト。
+ * Groqには動画をアップロードする手段が無いため、digest(要約)が無い編集例は
+ * そのまま渡せず、警告ログを出してスキップする(digestは登録直後にバックグラウンドで
+ * 自動生成されるため、通常は数秒〜数分のラグで揃う想定)。
+ */
+export const loadEditFewShotTextContext = async (): Promise<string[]> => {
+  const examples = (await readMetadata()).slice(-MAX_EDIT_FEW_SHOT_EXAMPLES);
+  const parts: string[] = [];
+  for (const example of examples) {
+    if (!example.digest) {
+      console.warn(
+        `[editExamplesStore] few-shot例(${example.id})はdigest未生成のため、Groq向けfew-shotからスキップします`
+      );
+      continue;
+    }
+    const description = example.notes?.trim() || example.label;
+    parts.push(`参考になる編集例: ${description}\n${JSON.stringify(example.digest)}`);
+  }
+  return parts;
+};

@@ -1,7 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod";
-import { readGeminiApiKeyOverride } from "@/lib/gemini/apiKeyHeader";
-import { transcribeCaptions } from "@/lib/gemini/transcribeCaptions";
+import { transcribeCaptions } from "@/lib/groq/transcribeCaptions";
 import { createTranscribeJob, updateTranscribeJob } from "@/lib/gemini/transcribeJobs";
 import { MIN_CLIPS, MAX_CLIPS } from "@video/templates/standard/schema";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
@@ -28,9 +27,8 @@ export async function POST(request: Request) {
   if (!resolved) {
     return NextResponse.json({ error: "動画が見つかりません" }, { status: 400 });
   }
-  const { absolutePath: absoluteVideoPath, mimeType } = resolved;
+  const { absolutePath: absoluteVideoPath } = resolved;
 
-  const apiKeyOverride = readGeminiApiKeyOverride(request);
   const jobId = createTranscribeJob();
 
   // 動画アップロード・処理待ち・生成に数十秒かかるため、レンダーAPIと同様に
@@ -39,12 +37,10 @@ export async function POST(request: Request) {
     try {
       const segments = await transcribeCaptions({
         absoluteVideoPath,
-        mimeType,
         videoDurationInSeconds,
         minClips: MIN_CLIPS,
         maxClips: MAX_CLIPS,
         onProgress: (phase) => updateTranscribeJob(jobId, { status: phase }),
-        apiKeyOverride,
       });
       updateTranscribeJob(jobId, { status: "done", segments });
     } catch (error) {
