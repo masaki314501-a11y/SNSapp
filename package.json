@@ -9,7 +9,8 @@
     "lint": "eslint",
     "remotion:studio": "remotion studio",
     "remotion:render": "remotion render ShortVideo out/short-video.mp4",
-    "sync:edit-examples": "node scripts/sync-edit-examples.mjs"
+    "sync:edit-examples": "node scripts/sync-edit-examples.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/genai": "^2.18.0",
@@ -34,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }
