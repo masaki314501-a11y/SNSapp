@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MediaModality } from "@google/genai";
 import { recordGeminiDailyQuotaExceeded, recordGeminiUsage } from "./usageLog";
 
 describe("usageLog", () => {
@@ -31,6 +32,22 @@ describe("usageLog", () => {
     expect(line).toContain("20");
     expect(line).toContain("50");
     expect(line).toContain("170");
+  });
+
+  it("promptTokensDetailsがあればモダリティ別の内訳もログに出力する", () => {
+    recordGeminiUsage("autoEditPlan", "gemini-3.6-flash", {
+      promptTokenCount: 14663,
+      candidatesTokenCount: 293,
+      totalTokenCount: 14956,
+      promptTokensDetails: [
+        { modality: MediaModality.TEXT, tokenCount: 1200 },
+        { modality: MediaModality.VIDEO, tokenCount: 13463 },
+      ],
+    });
+
+    const line = logSpy.mock.calls[0][0] as string;
+    expect(line).toContain("TEXT=1200");
+    expect(line).toContain("VIDEO=13463");
   });
 
   it("トークン数が取得できなくても呼び出し自体は記録する", () => {

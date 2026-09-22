@@ -46,7 +46,7 @@ export const recordGeminiUsage = (
   model: string,
   usage?: Pick<
     GenerateContentResponseUsageMetadata,
-    "promptTokenCount" | "candidatesTokenCount" | "thoughtsTokenCount" | "totalTokenCount"
+    "promptTokenCount" | "candidatesTokenCount" | "thoughtsTokenCount" | "totalTokenCount" | "promptTokensDetails"
   >
 ): void => {
   const s = getOrCreateStats(call);
@@ -56,11 +56,18 @@ export const recordGeminiUsage = (
   s.thoughtsTokens += usage?.thoughtsTokenCount ?? 0;
   s.totalTokens += usage?.totalTokenCount ?? 0;
 
+  // 入力トークンがモダリティ(TEXT/VIDEO/IMAGE等)別にどれだけ使われたかを見えるようにする。
+  // few-shot例の動画のように、呼び出し元のコード上は分かりにくい消費源を特定するのに使う。
+  const details = usage?.promptTokensDetails
+    ?.map((d) => `${d.modality ?? "?"}=${d.tokenCount ?? "?"}`)
+    .join(",");
+
   console.log(
     `[gemini_usage] call=${call} model=${model} ` +
       `tokens(prompt/output/thoughts/total)=${usage?.promptTokenCount ?? "?"}/${
         usage?.candidatesTokenCount ?? "?"
       }/${usage?.thoughtsTokenCount ?? "?"}/${usage?.totalTokenCount ?? "?"} ` +
+      (details ? `prompt内訳=[${details}] ` : "") +
       `累計(このプロセス起動から): calls=${s.calls} totalTokens=${s.totalTokens}`
   );
 };
