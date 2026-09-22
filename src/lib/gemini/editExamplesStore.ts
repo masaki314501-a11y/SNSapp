@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Content, GoogleGenAI, Part } from "@google/genai";
 import { waitForGeminiFileActive } from "./geminiFiles";
+import { editExampleDigestSchema } from "./editExampleDigestTypes";
+import { generateEditExampleDigest } from "./editExampleDigest";
 
 /**
  * 自動編集(バズる動画)機能のfew-shot例として使う「編集の正解データ」を保存する場所。
@@ -58,6 +60,11 @@ const editExampleSchema = z.object({
   rawMediaFilename: z.string().optional(),
   rawMimeType: z.string().optional(),
   createdAt: z.string(),
+  /**
+   * 動画を一度だけ解析した軽量な要約(editExampleDigest.ts参照)。これがあれば
+   * few-shotで動画そのものを送らずこちらを使う。未生成(古い登録・生成失敗)ならundefined。
+   */
+  digest: editExampleDigestSchema.optional(),
 });
 
 export type EditExample = z.infer<typeof editExampleSchema>;
@@ -137,6 +144,24 @@ export const deleteEditExample = async (id: string): Promise<boolean> => {
   return true;
 };
 
+/**
+ * 登録済みの編集例を(再)解析し、動画の代わりにfew-shotで使う軽量な要約(digest)を
+ * 保存する。登録直後に1回呼ぶほか、未生成のまま残っている古い登録を後から埋める
+ * 用途にも使う。解析に失敗してもdigestを消さずに終わる(呼び出し元でログ確認)。
+ */
+export const regenerateEditExampleDigest = async (id: string, apiKeyOverride?: string): Promise<boolean> => {
+  const examples = await readMetadata();
+  const target = examples.find((example) => example.id === id);
+  if (!target) return false;
+
+  const mediaPath = path.join(CORRECT_MEDIA_DIR, target.correctMediaFilename);
+  const digest = await generateEditExampleDigest(mediaPath, target.correctMimeType, apiKeyOverride);
+
+  const updated = examples.map((example) => (example.id === id ? { ...example, digest } : example));
+  await writeMetadata(updated);
+  return true;
+};
+
 export const readEditExampleMedia = async (
   id: string,
   which: "correct" | "raw"
@@ -164,12 +189,13 @@ export const readEditExampleMedia = async (
 };
 
 /**
- * 登録済みの編集例(正解動画)をfew-shotの参考としてGeminiリクエストに差し込むための
- * `Content`配列を組み立てる。styleExamplesStore.tsのfew-shotと違い、編集例は
- * 「入力→正解JSON」のラベル付きペアではなく「良い編集の実例」を見せるだけなので、
- * modelターン(正解の答え合わせ)は積まない。userターン1つに動画+説明文だけを渡す。
- * 正解動画のみを使い、対になる学習(元)動画はコスト抑制のため使わない。
- * 呼び出し元はリクエスト完了後に`uploadedFileNames`を削除すること。
+ * 登録済みの編集例をfew-shotの参考としてGeminiリクエストに差し込むための`Content`配列を
+ * 組み立てる。動画を一度だけ解析した軽量な要約(digest)があればテキストだけを渡し、
+ * 無ければ従来通り正解動画そのものを渡す(フォールバック)。styleExamplesStore.tsの
+ * few-shotと違い、編集例は「入力→正解JSON」のラベル付きペアではなく「良い編集の実例」を
+ * 見せるだけなので、modelターン(正解の答え合わせ)は積まない。userターン1つに
+ * 動画/要約+説明文だけを渡す。正解動画のみを使い、対になる学習(元)動画は使わない。
+ * 呼び出し元はリクエスト完了後に`uploadedFileNames`を削除すること(動画を送った場合のみ発生)。
  */
 export const loadEditFewShotContext = async (
   ai: GoogleGenAI
@@ -180,6 +206,19 @@ export const loadEditFewShotContext = async (
   const uploadedFileNames: string[] = [];
 
   for (const example of examples) {
+    const description = example.notes?.trim() || example.label;
+
+    // 解析済みの軽量な要約(digest)があれば、動画そのものは一切送らずテキストだけで
+    // 済ませる。実測で動画を送る方式はトークン消費の9割以上を占めていたため、これが
+    // 使える場合は大幅に安く済む。無ければ従来通り動画を送る(フォールバック)。
+    if (example.digest) {
+      contents.push({
+        role: "user",
+        parts: [{ text: `参考になる編集例: ${description}\n${JSON.stringify(example.digest)}` }],
+      });
+      continue;
+    }
+
     // Geminiの@google/genai SDKはアップロード時に元ファイル名をそのままHTTPヘッダー
     // (X-Goog-Upload-File-Name)に入れるため、日本語ラベルを含むファイル名(buildMediaFilename
     // 参照)だとByteString変換エラーで必ず失敗する。ASCIIのみの一時コピーを経由して回避する
@@ -194,7 +233,6 @@ export const loadEditFewShotContext = async (
       uploadedFileNames.push(uploaded.name);
       await waitForGeminiFileActive(ai, uploaded.name);
       const mediaPart: Part = { fileData: { fileUri: uploaded.uri, mimeType: example.correctMimeType } };
-      const description = example.notes?.trim() || example.label;
       contents.push({ role: "user", parts: [mediaPart, { text: `参考になる編集例: ${description}` }] });
     } catch (error) {
       console.warn(`[editExamplesStore] few-shot例(${example.id})の読み込みに失敗したためスキップします`, error);

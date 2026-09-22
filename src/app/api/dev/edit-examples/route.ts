@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
-import { listEditExamples, registerEditExample } from "@/lib/gemini/editExamplesStore";
+import { listEditExamples, regenerateEditExampleDigest, registerEditExample } from "@/lib/gemini/editExamplesStore";
 
 export const runtime = "nodejs";
 
@@ -34,5 +34,18 @@ export async function POST(request: Request) {
   }
 
   const example = await registerEditExample(parsed.data);
+
+  // 動画そのものを毎回few-shotに使うと高コストなため、登録直後に1回だけ解析して
+  // 軽量な要約(digest)を作り保存する。解析には時間がかかるため登録レスポンスは待たせず、
+  // バックグラウンドで行う(失敗しても登録自体は成功しており、次回以降は動画で
+  // フォールバックされる)。
+  after(async () => {
+    try {
+      await regenerateEditExampleDigest(example.id);
+    } catch (error) {
+      console.error(`[edit-examples] 編集例(${example.id})の要約生成に失敗しました`, error);
+    }
+  });
+
   return NextResponse.json({ example });
 }
