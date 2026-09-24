@@ -8,7 +8,7 @@ export default function CreatePage() {
           動画をアップロード
         </h1>
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          アップロード後、使う範囲を選ぶ(カット)→参考画像・字幕生成→編集の順に進みます。
+          アップロード後、使う範囲を選ぶ(カット)→参考スクショ→自動編集→編集の順に進みます。
         </p>
       </div>
 

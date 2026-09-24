@@ -2,6 +2,8 @@ import React from "react";
 import { AbsoluteFill } from "remotion";
 import type { ClipProps } from "./schema";
 import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "../../shared/schema";
+import { resolveFontFamilyStack } from "../../shared/schema";
+import { TextOverlays } from "../../shared/TextOverlays";
 import { MediaBackground } from "../../shared/MediaBackground";
 import { AnimatedCaption } from "../../shared/AnimatedCaption";
 
@@ -29,6 +31,10 @@ export const ClipSequence: React.FC<Props> = ({
   captionPosition,
   fontSize,
   volume,
+  emphasisWords,
+  emphasisColor,
+  zoom,
+  overlays,
 }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -38,6 +44,7 @@ export const ClipSequence: React.FC<Props> = ({
         index={index}
         placeholderLabel={`CLIP ${index + 1}(動画未設定)`}
         volume={volume}
+        zoom={zoom}
       />
       <AnimatedCaption
         text={caption}
@@ -47,7 +54,12 @@ export const ClipSequence: React.FC<Props> = ({
         fontFamily={fontFamily}
         position={captionPosition}
         fontSize={fontSize}
+        emphasisWords={emphasisWords}
+        emphasisColor={emphasisColor}
       />
+      {overlays && overlays.length > 0 ? (
+        <TextOverlays overlays={overlays} fontFamilyStack={resolveFontFamilyStack(fontFamily)} />
+      ) : null}
     </AbsoluteFill>
   );
 };

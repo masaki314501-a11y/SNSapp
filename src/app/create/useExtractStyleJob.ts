@@ -48,8 +48,11 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
     }, POLL_INTERVAL_MS);
   };
 
-  /** 参考画像からスタイルを抽出する。 */
-  const handleExtractStyle = async (file: File) => {
+  /**
+   * 参考画像からスタイルを抽出する。サーバーに保存された画像のパス(自動編集で手本として
+   * 使う)を返す。開始に失敗した場合はnull。
+   */
+  const handleExtractStyle = async (file: File): Promise<string | null> => {
     setExtractStyleState({ status: "processing" });
     try {
       const body = new FormData();
@@ -58,11 +61,13 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "スタイル抽出の開始に失敗しました");
       pollJob(data.jobId);
+      return typeof data.referencePath === "string" ? data.referencePath : null;
     } catch (error) {
       setExtractStyleState({
         status: "error",
         message: error instanceof Error ? error.message : "スタイル抽出の開始に失敗しました",
       });
+      return null;
     }
   };
 

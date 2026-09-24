@@ -32,7 +32,7 @@ import { beginPointerDrag } from "./timeline/pointerDrag";
 
 /**
  * アップロード直後の動画から、実際に使う範囲だけを粗く選ぶラフカット画面(/create/cut)。
- * ここで捨てた範囲は以降(参考画像でのスタイル抽出・音声からの字幕生成)の対象にならないため、
+ * ここで捨てた範囲は以降(自動編集・字幕の一括生成)の対象にならないため、
  * 不要な前置き・言い淀み・撮り直し部分などを先に切り捨てておくと後工程が速く・安く済む。
  * テロップ・SE/BGM・スタイルはまだ持たず、クリップの分割・トリム・並べ替え・削除のみを扱う。
  */
@@ -641,7 +641,7 @@ export const CutEditor: React.FC = () => {
         disabled={segments.length === 0}
         className="btn-primary flex h-14 items-center justify-center px-6 text-base"
       >
-        この範囲で進む(参考画像・字幕生成へ) →
+        この範囲で進む(参考スクショへ) →
       </button>
     </div>
   );

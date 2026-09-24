@@ -7,7 +7,8 @@ type Props = {
 };
 
 /**
- * CTAパート(20-25秒): 一言の行動喚起 + ゆるいパルスアニメーション。
+ * CTA(動画の最後の数秒): 一言の行動喚起 + ゆるいパルスアニメーション。
+ * フックと同じ理由で、黒背景のカードを足すのではなく最後のカットの上に重ねる。
  */
 export const CTA: React.FC<Props> = ({ text, accentColor }) => {
   const frame = useCurrentFrame();
@@ -19,9 +20,12 @@ export const CTA: React.FC<Props> = ({ text, accentColor }) => {
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: "#0B0B0F",
-        justifyContent: "center",
+        // 中央は字幕(captionPosition=middle)とぶつかりやすいため、画面下寄りに出す。
+        justifyContent: "flex-end",
         alignItems: "center",
+        paddingBottom: 380,
+        paddingLeft: 60,
+        paddingRight: 60,
       }}
     >
       <div style={{ opacity, textAlign: "center", transform: `scale(${pulse})` }}>
@@ -29,6 +33,7 @@ export const CTA: React.FC<Props> = ({ text, accentColor }) => {
           style={{
             display: "inline-block",
             border: `4px solid ${accentColor}`,
+            backgroundColor: "rgba(0,0,0,0.55)",
             borderRadius: 999,
             padding: "20px 48px",
             color: "white",

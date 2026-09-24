@@ -295,3 +295,34 @@ export const clampTrimEnd = (
   );
 };
 
+
+/**
+ * 動画全体の文字起こし結果を、今あるクリップ(元動画上の区間)に字幕として割り当てる。
+ * clipTranscribedToKeepRangesと違い、クリップの切り方は一切変えない(自動編集で付けた寄り・
+ * 強調テキスト等をクリップごとに持っているため、分割し直すと失われる)。文字起こしの1区切りは
+ * 最も長く重なるクリップ1つにだけ割り当て、同じ発話が2つのクリップに重複して出ないようにする。
+ */
+export const assignTranscriptToSegments = <T extends TimelineSegment>(
+  transcribed: (TimelineSegment & { caption: string })[],
+  segments: T[]
+): string[] => {
+  const captions = segments.map(() => [] as string[]);
+  const sorted = [...transcribed].sort((a, b) => a.startFromSeconds - b.startFromSeconds);
+  for (const piece of sorted) {
+    const pieceStart = piece.startFromSeconds;
+    const pieceEnd = piece.startFromSeconds + piece.durationInSeconds;
+    let bestIndex = -1;
+    let bestOverlap = TIME_EPSILON_SECONDS;
+    segments.forEach((segment, index) => {
+      const overlap =
+        Math.min(pieceEnd, segment.startFromSeconds + segment.durationInSeconds) -
+        Math.max(pieceStart, segment.startFromSeconds);
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestIndex = index;
+      }
+    });
+    if (bestIndex >= 0 && piece.caption.trim()) captions[bestIndex].push(piece.caption.trim());
+  }
+  return captions.map((parts) => parts.join(" "));
+};

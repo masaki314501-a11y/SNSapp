@@ -14,6 +14,26 @@ type Props = {
   fontFamily?: CaptionFontFamily;
   position?: CaptionPosition;
   fontSize?: CaptionFontSize;
+  /** テロップ中で色を変えて大きく見せる単語。 */
+  emphasisWords?: string[];
+  emphasisColor?: string;
+};
+
+/**
+ * テロップ文字列を強調単語の出現位置で区切る。長い単語から優先して当てることで、
+ * 「3倍」と「3」のように片方がもう片方を含む場合も長い方が強調される。
+ */
+const splitByEmphasis = (text: string, words: string[]): { text: string; emphasized: boolean }[] => {
+  const targets = [...new Set(words.map((w) => w.trim()).filter((w) => w.length > 0))].sort(
+    (a, b) => b.length - a.length
+  );
+  if (targets.length === 0) return [{ text, emphasized: false }];
+  const escaped = targets.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(${escaped.join("|")})`, "g");
+  return text
+    .split(pattern)
+    .filter((part) => part.length > 0)
+    .map((part) => ({ text: part, emphasized: targets.includes(part) }));
 };
 
 const OFFSET_FROM_EDGE = 160;
@@ -36,6 +56,8 @@ export const AnimatedCaption: React.FC<Props> = ({
   fontFamily = "Noto Sans JP",
   position = "bottom",
   fontSize = "medium",
+  emphasisWords,
+  emphasisColor = "#FFE600",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -88,7 +110,17 @@ export const AnimatedCaption: React.FC<Props> = ({
       }}
     >
       <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
-        <span style={{ ...textStyle, clipPath }}>{text}</span>
+        <span style={{ ...textStyle, clipPath }}>
+          {splitByEmphasis(text, emphasisWords ?? []).map((part, i) =>
+            part.emphasized ? (
+              <span key={i} style={{ color: emphasisColor, fontSize: "1.25em" }}>
+                {part.text}
+              </span>
+            ) : (
+              <React.Fragment key={i}>{part.text}</React.Fragment>
+            )
+          )}
+        </span>
       </div>
     </AbsoluteFill>
   );

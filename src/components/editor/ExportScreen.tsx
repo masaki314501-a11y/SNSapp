@@ -40,6 +40,9 @@ export const ExportScreen: React.FC = () => {
         fadeInOut: current.fadeInOut,
         sfxClips: current.sfx,
         bgm: current.bgm,
+        hook: current.hook,
+        cta: current.cta,
+        globalOverlays: current.globalOverlays,
       })
     );
   };
@@ -61,7 +64,7 @@ export const ExportScreen: React.FC = () => {
       <div className="panel flex flex-col items-center gap-3 p-10 text-center">
         <p className="text-sm font-medium">書き出す動画がありません</p>
         <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-          まずは動画をアップロードして字幕を生成してください
+          まずは動画をアップロードして使う範囲を選んでください
         </p>
         <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
           動画をアップロードする →

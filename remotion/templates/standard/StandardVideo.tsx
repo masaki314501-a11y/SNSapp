@@ -15,6 +15,7 @@ import { resolveFontFamilyStack } from "../../shared/schema";
 import { ClipSequence } from "./ClipSequence";
 import { Hook } from "../../shared/Hook";
 import { CTA } from "../../shared/CTA";
+import { TextOverlays } from "../../shared/TextOverlays";
 import {
   CTA_DURATION_IN_SECONDS,
   HOOK_DURATION_IN_SECONDS,
@@ -41,6 +42,7 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
   theme,
   sfx,
   bgm,
+  globalOverlays,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -62,18 +64,6 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
       }}
     >
       <Series>
-        {hook ? (
-          <Series.Sequence
-            durationInFrames={Math.round(HOOK_DURATION_IN_SECONDS * VIDEO_FPS)}
-          >
-            <Hook
-              headline={hook.headline}
-              subline={hook.subline}
-              accentColor={theme.primaryColor}
-            />
-          </Series.Sequence>
-        ) : null}
-
         {clips.map((clip, index) => (
           <Series.Sequence
             key={index}
@@ -90,15 +80,29 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
             />
           </Series.Sequence>
         ))}
-
-        {cta ? (
-          <Series.Sequence
-            durationInFrames={Math.round(CTA_DURATION_IN_SECONDS * VIDEO_FPS)}
-          >
-            <CTA text={cta.text} accentColor={theme.primaryColor} />
-          </Series.Sequence>
-        ) : null}
       </Series>
+
+      {globalOverlays && globalOverlays.length > 0 ? (
+        <TextOverlays overlays={globalOverlays} fontFamilyStack={resolveFontFamilyStack(theme.fontFamily)} />
+      ) : null}
+
+      {/* フック・CTAは尺を足さず、冒頭/末尾のカットの上に重ねる(Hook.tsx参照)。 */}
+      {hook ? (
+        <Sequence
+          from={0}
+          durationInFrames={Math.min(Math.round(HOOK_DURATION_IN_SECONDS * VIDEO_FPS), durationInFrames)}
+        >
+          <Hook headline={hook.headline} subline={hook.subline} accentColor={theme.primaryColor} />
+        </Sequence>
+      ) : null}
+      {cta ? (
+        <Sequence
+          from={Math.max(0, durationInFrames - Math.round(CTA_DURATION_IN_SECONDS * VIDEO_FPS))}
+          durationInFrames={Math.min(Math.round(CTA_DURATION_IN_SECONDS * VIDEO_FPS), durationInFrames)}
+        >
+          <CTA text={cta.text} accentColor={theme.primaryColor} />
+        </Sequence>
+      ) : null}
 
       {bgm ? (
         <Audio

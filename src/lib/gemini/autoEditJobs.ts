@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { ProjectSfxClip } from "@/lib/videoProject";
+import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import type { AutoEditPlan } from "./autoEditPlan";
+
+/** 画面に見せる編集案の概要(クリップ自体はsegmentsとして組み立て済みで返す)。 */
+export type AutoEditPlanSummary = Pick<AutoEditPlan, "summary" | "referenceNotes" | "theme" | "hook" | "cta" | "globalOverlays">;
 
 export type AutoEditJob =
   | { status: "processing" }
-  | { status: "done"; plan: AutoEditPlan; generatedClips: ProjectSfxClip[] }
+  | { status: "done"; plan: AutoEditPlanSummary; segments: ProjectSegment[]; generatedClips: ProjectSfxClip[] }
   | { status: "error"; message: string };
 
 /**

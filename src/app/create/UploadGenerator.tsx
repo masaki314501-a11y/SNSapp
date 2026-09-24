@@ -21,8 +21,8 @@ import { uploadVideoFile } from "./uploadVideoFile";
 /**
  * 動画をアップロードする画面(/create)。アップロードが終わると、動画全体を1つの
  * 「使う範囲」としたプロジェクトを保存し、ラフカット画面(/create/cut)へ遷移する。
- * 参考画像からのスタイル抽出・音声からの字幕生成は、カットが終わった後の
- * /create/style が担当する(カットで捨てた範囲は文字起こし対象にしないため)。
+ * 参考画像からのスタイル抽出・自動編集・字幕の一括生成は、カットが終わった後の
+ * 画面(/create/style → /create/auto-edit → /edit)が担当する(カットで捨てた範囲は対象にしないため)。
  */
 const readVideoDurationInSeconds = (file: File): Promise<number> =>
   new Promise((resolve, reject) => {

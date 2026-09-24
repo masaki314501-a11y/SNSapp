@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { Content, GoogleGenAI, Part } from "@google/genai";
+import { PartMediaResolutionLevel, type Content, type GoogleGenAI, type Part } from "@google/genai";
 import { waitForGeminiFileActive } from "./geminiFiles";
 
 /**
@@ -186,7 +186,12 @@ const uploadExampleVideo = async (
     }
     uploadedFileNames.push(uploaded.name);
     await waitForGeminiFileActive(ai, uploaded.name);
-    return { fileData: { fileUri: uploaded.uri, mimeType } };
+    // 編集例から読み取りたいのは切り方・効果音・強調のタイミングやテンポで、細部の画質ではない。
+    // 低解像度にすると動画のトークン数が約1/3になり、最大6本送ってもコストを抑えられる。
+    return {
+      fileData: { fileUri: uploaded.uri, mimeType },
+      mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW },
+    };
   } finally {
     await unlink(tempPath).catch(() => {});
   }

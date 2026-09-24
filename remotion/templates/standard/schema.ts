@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { bgmSchema, ctaSchema, hookSchema, mediaItemBaseSchema, sfxClipSchema, themeSchema } from "../../shared/schema";
+import {
+  bgmSchema,
+  ctaSchema,
+  hookSchema,
+  mediaItemBaseSchema,
+  sfxClipSchema,
+  textOverlaySchema,
+  themeSchema,
+} from "../../shared/schema";
 
 // 動画全体の音声を文字起こしして字幕化するため、発話の区切りの数だけクリップができる。
 // 上限は暴走防止のための目安であり、マーケティング用テンプレートのような固定枠ではない。
@@ -22,6 +30,9 @@ export const standardVideoSchema = z.object({
   theme: themeSchema,
   sfx: z.array(sfxClipSchema).max(MAX_SFX_CLIPS).default([]).describe("効果音(SE)"),
   bgm: bgmSchema.optional().describe("背景音楽(全体に1つ、ループ再生)"),
+  // 参考投稿によくある「動画の上部にずっと出ているタイトル」など、カットをまたいで表示する文字。
+  // startOffsetSeconds/durationInSecondsは動画全体の先頭からの秒数。
+  globalOverlays: z.array(textOverlaySchema).max(4).optional().describe("動画全体に重ねる文字(タイトル等)"),
 });
 
 export type ClipProps = z.infer<typeof clipSchema>;

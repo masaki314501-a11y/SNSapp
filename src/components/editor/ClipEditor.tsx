@@ -49,6 +49,8 @@ import {
 import { TimelineRoot, type AudioSelection } from "./timeline/TimelineRoot";
 import { ClipInspectorPanel } from "./timeline/ClipInspectorPanel";
 import { CaptionInspectorPanel } from "./timeline/CaptionInspectorPanel";
+import { useTranscribeJob } from "@/app/create/useTranscribeJob";
+import { assignTranscriptToSegments } from "./timelineUtils";
 import { SfxInspectorPanel } from "./timeline/SfxInspectorPanel";
 import { NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
 import { BgmInspectorPanel } from "./timeline/BgmInspectorPanel";
@@ -264,8 +266,25 @@ export const ClipEditor: React.FC = () => {
         fadeInOut,
         sfxClips,
         bgm,
+        hook: project?.hook,
+        cta: project?.cta,
+        globalOverlays: project?.globalOverlays,
       }),
-    [form.segments, project?.videoPath, primaryColor, captionStyle, fontFamily, captionPosition, fontSize, fadeInOut, sfxClips, bgm]
+    [
+      form.segments,
+      project?.videoPath,
+      project?.hook,
+      project?.cta,
+      project?.globalOverlays,
+      primaryColor,
+      captionStyle,
+      fontFamily,
+      captionPosition,
+      fontSize,
+      fadeInOut,
+      sfxClips,
+      bgm,
+    ]
   );
   const durationInFrames = useMemo(() => getStandardVideoDurationInFrames(props), [props]);
 
@@ -843,6 +862,43 @@ export const ClipEditor: React.FC = () => {
    * 既に同じ声で作ってあるクリップは飛ばす(無料枠のTTSは1日あたりの上限が厳しく、
    * やり直しのたびに全件を作り直すとすぐ上限に達するため)。
    */
+  /**
+   * 字幕を全クリップに一括で付ける。字幕を付けるかどうかは編集画面で決める流れにしたため、
+   * ここが字幕の入口になる。自動編集がクリップごとに書き起こした下書き(speechText)が全クリップに
+   * あればそれを流し込むだけで済ませ(APIを呼ばない)、無ければ動画全体を文字起こしして
+   * 各クリップに割り当てる。
+   */
+  const { transcribeState, handleTranscribe } = useTranscribeJob({
+    onDone: (transcribed) => {
+      setForm((prev) => {
+        const captions = assignTranscriptToSegments(transcribed, prev.segments);
+        return { ...prev, segments: prev.segments.map((segment, i) => ({ ...segment, caption: captions[i] })) };
+      });
+    },
+  });
+  const isTranscribingCaptions =
+    transcribeState.status === "uploading" ||
+    transcribeState.status === "processing" ||
+    transcribeState.status === "generating";
+
+  const handleGenerateCaptionsForAll = () => {
+    if (!project || form.segments.length === 0 || isTranscribingCaptions) return;
+    pushHistory();
+    if (form.segments.every((segment) => segment.speechText !== undefined)) {
+      setForm((prev) => ({
+        ...prev,
+        segments: prev.segments.map((segment) => ({ ...segment, caption: segment.speechText ?? segment.caption })),
+      }));
+      return;
+    }
+    void handleTranscribe(project.videoPath, project.videoDurationInSeconds);
+  };
+
+  const handleClearCaptions = () => {
+    pushHistory();
+    setForm((prev) => ({ ...prev, segments: prev.segments.map((segment) => ({ ...segment, caption: "" })) }));
+  };
+
   const handleGenerateNarrationForAll = async () => {
     const withCaption = form.segments
       .map((segment, index) => ({ segment, index }))
@@ -1091,6 +1147,11 @@ export const ClipEditor: React.FC = () => {
             onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
             onOpenBulkEdit={openBulkEdit}
             canOpenBulkEdit={form.segments.length > 0}
+            onGenerateCaptionsForAll={handleGenerateCaptionsForAll}
+            captionsGenerating={isTranscribingCaptions}
+            captionsError={transcribeState.status === "error" ? transcribeState.message : null}
+            onClearCaptions={handleClearCaptions}
+            hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
           />
         ) : activeTab === "se" ? (
           <SfxInspectorPanel
@@ -1187,6 +1248,56 @@ export const ClipEditor: React.FC = () => {
 
       {activeTab === "style" ? (
         <div className="panel flex flex-col gap-4 p-5">
+          {/* 自動編集が決めた冒頭の見出し・締めの一言を直せるようにする(空にすると表示しない)。 */}
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold">冒頭の見出し・締めの一言</h2>
+            <label className="editor-field">
+              <span>冒頭の見出し(0〜3秒に重ねる)</span>
+              <input
+                type="text"
+                value={project?.hook?.headline ?? ""}
+                placeholder="(なし)"
+                onChange={(e) =>
+                  setProject((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          hook: e.target.value ? { ...prev.hook, headline: e.target.value } : null,
+                        }
+                      : prev
+                  )
+                }
+              />
+            </label>
+            {(project?.globalOverlays ?? []).map((overlay, index) => (
+              <div key={index} className="flex items-center gap-2 text-xs">
+                <span className="truncate">📌 ずっと出す文字: {overlay.text}</span>
+                <button
+                  type="button"
+                  className="editor-toolbar-btn"
+                  onClick={() =>
+                    setProject((prev) =>
+                      prev ? { ...prev, globalOverlays: (prev.globalOverlays ?? []).filter((_, i) => i !== index) } : prev
+                    )
+                  }
+                >
+                  消す
+                </button>
+              </div>
+            ))}
+            <label className="editor-field">
+              <span>締めの一言(最後の数秒に重ねる)</span>
+              <input
+                type="text"
+                value={project?.cta?.text ?? ""}
+                placeholder="(なし)"
+                onChange={(e) =>
+                  setProject((prev) => (prev ? { ...prev, cta: e.target.value ? { text: e.target.value } : null } : prev))
+                }
+              />
+            </label>
+          </div>
+
           <div className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold">スタイルプリセット</h2>
             <span className="text-xs" style={{ color: "var(--muted-2)" }}>

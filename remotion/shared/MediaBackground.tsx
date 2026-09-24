@@ -7,6 +7,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { resolveClipSrc } from "./resolveSrc";
+import type { ClipZoom } from "./schema";
 
 const PLACEHOLDER_COLORS = ["#1F2937", "#312E81", "#7C2D12", "#134E4A"];
 
@@ -16,6 +17,7 @@ type Props = {
   index: number;
   placeholderLabel: string;
   volume?: number;
+  zoom?: ClipZoom;
 };
 
 /**
@@ -29,16 +31,26 @@ export const MediaBackground: React.FC<Props> = ({
   index,
   placeholderLabel,
   volume = 1,
+  zoom,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const zoom = interpolate(frame, [0, 10], [1.06, 1], {
-    extrapolateRight: "clamp",
-  });
+  // 寄りの指定が無いカットは従来通り、カット頭でわずかに引く小さなパンチインだけ入れる。
+  // punchはカット頭で目標倍率より少し大きい所から一瞬で落ち着かせ「ドンッ」と寄った印象に、
+  // slowはカットの長さいっぱいを使ってじわじわ寄る。
+  const scale = !zoom
+    ? interpolate(frame, [0, 10], [1.06, 1], { extrapolateRight: "clamp" })
+    : zoom.style === "slow"
+      ? interpolate(frame, [0, Math.max(1, durationInFrames - 1)], [1, zoom.scale], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })
+      : interpolate(frame, [0, 5], [zoom.scale * 1.05, zoom.scale], { extrapolateRight: "clamp" });
+  const transformOrigin = zoom ? `${zoom.focusXPercent}% ${zoom.focusYPercent}%` : "50% 50%";
 
   return (
-    <AbsoluteFill style={{ transform: `scale(${zoom})` }}>
+    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin }}>
       {src ? (
         <OffthreadVideo
           src={resolveClipSrc(src)}

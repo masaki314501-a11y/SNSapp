@@ -22,6 +22,11 @@ type Props = {
   onGenerateNarrationForSegment: (key: string) => void;
   onOpenBulkEdit: () => void;
   canOpenBulkEdit: boolean;
+  onGenerateCaptionsForAll: () => void;
+  captionsGenerating: boolean;
+  captionsError: string | null;
+  onClearCaptions: () => void;
+  hasAnyCaption: boolean;
 };
 
 /**
@@ -41,6 +46,11 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   onGenerateNarrationForSegment,
   onOpenBulkEdit,
   canOpenBulkEdit,
+  onGenerateCaptionsForAll,
+  captionsGenerating,
+  captionsError,
+  onClearCaptions,
+  hasAnyCaption,
 }) => {
   const selectedIndex = selectedSegmentKey ? segments.findIndex((s) => s.key === selectedSegmentKey) : -1;
   const selectedSegment = selectedIndex >= 0 ? segments[selectedIndex] : null;
@@ -104,10 +114,25 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
         )}
       </div>
 
-      <div className="editor-inspector-footer">
-        <button type="button" className="editor-toolbar-btn" onClick={onOpenBulkEdit} disabled={!canOpenBulkEdit}>
-          字幕を一括編集
-        </button>
+      <div className="editor-inspector-footer flex flex-col gap-2">
+        {captionsError ? <p className="badge-pill danger w-fit">{captionsError}</p> : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="editor-toolbar-btn"
+            onClick={onGenerateCaptionsForAll}
+            disabled={!canOpenBulkEdit || captionsGenerating}
+            title="全クリップに、話している内容を字幕として付けます(今ある字幕は上書きされます)"
+          >
+            {captionsGenerating ? "字幕を生成中..." : "字幕を一括生成"}
+          </button>
+          <button type="button" className="editor-toolbar-btn" onClick={onOpenBulkEdit} disabled={!canOpenBulkEdit}>
+            字幕を一括編集
+          </button>
+          <button type="button" className="editor-toolbar-btn" onClick={onClearCaptions} disabled={!hasAnyCaption}>
+            字幕を全部消す
+          </button>
+        </div>
       </div>
     </div>
   );

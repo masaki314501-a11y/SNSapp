@@ -7,6 +7,8 @@ import {
   type CaptionFontSize,
   type CaptionPosition,
   type CaptionStyle,
+  type ClipZoom,
+  type TextOverlay,
 } from "@video/shared/schema";
 import type { StandardVideoProps } from "@video/templates/standard/schema";
 
@@ -35,6 +37,24 @@ export type ProjectSegment = {
   captionAnimation: CaptionAnimation;
   /** このクリップの元動画音量。0=ミュート、1=そのまま、2=倍量。 */
   volume: number;
+  /**
+   * 自動編集(Gemini)が書き起こした、このクリップで話している内容。字幕は編集画面で
+   * 付けるかどうか決めるため、ここに下書きとして持っておき「字幕を一括生成」で使う
+   * (あれば文字起こしAPIを呼ばずに済む)。
+   */
+  speechText?: string;
+  /** 以下は自動編集(Gemini)が決める演出。手動で作ったクリップには無い。 */
+  emphasisWords?: string[];
+  emphasisColor?: string;
+  zoom?: ClipZoom;
+  overlays?: TextOverlay[];
+};
+
+/** 自動編集が手本にする参考画像/動画。スタイル抽出画面でアップロードしたものを残しておく。 */
+export type ProjectStyleReference = {
+  /** public/配下の相対パス(画像は references/、動画は videos/)。 */
+  path: string;
+  mimeType: string;
 };
 
 export type ProjectSfxClip = {
@@ -78,6 +98,18 @@ export type VideoProject = {
   /** 参考画像/動画からスタイル抽出が成功したか。自動編集(/create/auto-edit)が
    *  配色・フォント等を自分で決めてよいか(=参考が無かった場合のみ)を判断するのに使う。 */
   styleReferenceApplied?: boolean;
+  styleReference?: ProjectStyleReference | null;
+  /**
+   * カット画面で残した範囲(再生順)。自動編集はこの中から切り出す。自動編集の後はsegmentsが
+   * Geminiの切ったクリップに置き換わるため、やり直すたびに範囲が縮んでいかないよう別に持つ。
+   */
+  cutKeepRanges?: { startFromSeconds: number; durationInSeconds: number }[] | null;
+  /** 冒頭0-3秒に重ねる見出し(自動編集が決める)。 */
+  hook?: { headline: string; subline?: string } | null;
+  /** 最後の数秒に重ねる一言(自動編集が決める)。 */
+  cta?: { text: string } | null;
+  /** 動画全体に重ね続ける文字(上部のタイトル等、自動編集が決める)。 */
+  globalOverlays?: TextOverlay[] | null;
 };
 
 const PROJECT_STORAGE_KEY = "sns-app:video-project:v1";
@@ -120,6 +152,11 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
       }
     : null,
   styleReferenceApplied: raw.styleReferenceApplied ?? false,
+  styleReference: raw.styleReference ?? null,
+  cutKeepRanges: raw.cutKeepRanges ?? null,
+  hook: raw.hook ?? null,
+  cta: raw.cta ?? null,
+  globalOverlays: raw.globalOverlays ?? null,
 });
 
 /** 保存されているプロジェクトを読み込む。無ければnull(SSR/壊れたデータの場合もnull)。 */
@@ -180,7 +217,13 @@ export const buildStandardVideoProps = (params: {
   fadeInOut: boolean;
   sfxClips: ProjectSfxClip[];
   bgm: ProjectBgm | null;
+  hook?: VideoProject["hook"];
+  cta?: VideoProject["cta"];
+  globalOverlays?: VideoProject["globalOverlays"];
 }): StandardVideoProps => ({
+  globalOverlays: params.globalOverlays && params.globalOverlays.length > 0 ? params.globalOverlays : undefined,
+  hook: params.hook ?? undefined,
+  cta: params.cta ?? undefined,
   // segmentsの配列順=再生順(並べ替え機能でユーザーが変更できる)。
   // 元動画上の時刻順とは独立しているため、ここでは絶対にソートし直さない。
   clips: params.segments.map((segment) => ({
@@ -193,6 +236,10 @@ export const buildStandardVideoProps = (params: {
     startFromSeconds: segment.startFromSeconds,
     captionAnimation: segment.captionAnimation,
     volume: segment.volume,
+    emphasisWords: segment.emphasisWords,
+    emphasisColor: segment.emphasisColor,
+    zoom: segment.zoom,
+    overlays: segment.overlays,
   })),
   theme: {
     primaryColor: params.primaryColor,

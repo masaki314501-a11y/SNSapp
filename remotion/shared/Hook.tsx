@@ -14,7 +14,9 @@ type Props = {
 };
 
 /**
- * フックパート(0-3秒): 結論・数字を先出しして離脱を防ぐ導入テロップ。
+ * フック(冒頭0-3秒): 結論・数字を先出しして離脱を防ぐ導入テロップ。
+ * 以前は黒背景の独立したタイトルカードだったが、バズるショート動画は1フレーム目から本人の
+ * 映像が見えている方がスクロールを止めやすいため、動画の上に重ねる形にしている。
  */
 export const Hook: React.FC<Props> = ({ headline, subline, accentColor }) => {
   const frame = useCurrentFrame();
@@ -33,25 +35,31 @@ export const Hook: React.FC<Props> = ({ headline, subline, accentColor }) => {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  // 長い見出しが「リベン/ジ」のように1〜2文字だけ次の行へ落ちると読みにくいため、
+  // 1行(幅約900px)に収まるよう文字数に応じて縮める。
+  const longestLine = Math.max(1, ...headline.split("\n").map((line) => line.length));
+  const headlineFontSize = Math.min(84, Math.max(48, Math.floor(880 / longestLine)));
 
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: "#0B0B0F",
+        // 上部はずっと出すタイトル(globalOverlays)が使うため、見出しは画面中央に出す。
         justifyContent: "center",
         alignItems: "center",
         padding: 80,
       }}
     >
-      <AbsoluteFill style={{ backgroundColor: accentColor, opacity: flashOpacity }} />
+      <AbsoluteFill style={{ backgroundColor: accentColor, opacity: flashOpacity * 0.6 }} />
       <div style={{ transform: `scale(${scale})`, opacity, textAlign: "center" }}>
         <div
           style={{
             color: "white",
-            fontSize: 84,
+            fontSize: headlineFontSize,
             fontWeight: 900,
             lineHeight: 1.25,
             whiteSpace: "pre-wrap",
+            WebkitTextStroke: "3px #000",
+            paintOrder: "stroke fill",
             textShadow: "0 6px 24px rgba(0,0,0,0.55)",
           }}
         >
@@ -61,9 +69,12 @@ export const Hook: React.FC<Props> = ({ headline, subline, accentColor }) => {
           <div
             style={{
               marginTop: 28,
-              fontSize: 40,
-              fontWeight: 700,
+              fontSize: 44,
+              fontWeight: 800,
               color: accentColor,
+              // 本人の映像の上に重ねるため、差し色の文字が背景に埋もれないよう白縁を付ける。
+              WebkitTextStroke: "2px #fff",
+              paintOrder: "stroke fill",
             }}
           >
             {subline}

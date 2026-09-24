@@ -10,7 +10,7 @@ export default function CreateCutPage() {
         </h1>
         <p className="text-sm" style={{ color: "var(--muted)" }}>
           不要な部分を分割・削除して、実際に使う範囲だけに絞り込みましょう。
-          ここで捨てた範囲は、この後の参考画像・字幕生成の対象になりません。
+          ここで捨てた範囲は、この後の自動編集・字幕の対象になりません。
         </p>
       </div>
 

@@ -1,52 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import type { CaptionAnimation, CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
+import type { CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
+import type { ProjectSegment, ProjectSfxClip, VideoProject } from "@/lib/videoProject";
 
 const POLL_INTERVAL_MS = 1000;
 
-export type AutoEditSegmentPlan = {
-  key: string;
-  captionAnimation?: CaptionAnimation;
-  addNarration: boolean;
-  sfxPresetId: string | null;
-};
-
-export type AutoEditPlan = {
-  segments: AutoEditSegmentPlan[];
-  theme?: {
+export type AutoEditPlanSummary = {
+  summary: string;
+  /** 参考スクショ/動画から読み取った編集の癖。参考が無ければnull。 */
+  referenceNotes: string | null;
+  theme: {
     primaryColor?: string;
     fontFamily?: CaptionFontFamily;
     captionPosition?: CaptionPosition;
     captionStyle?: CaptionStyle;
   };
-  summary: string;
-};
-
-export type AutoEditGeneratedClip = {
-  key: string;
-  src: string;
-  label: string;
-  startFromSeconds: number;
-  volume: number;
-  narrationSegmentKey?: string;
+  hook: VideoProject["hook"];
+  cta: VideoProject["cta"];
+  globalOverlays: NonNullable<VideoProject["globalOverlays"]>;
 };
 
 export type AutoEditJobState =
   | { status: "idle" }
-  | { status: "processing" }
-  | { status: "done"; plan: AutoEditPlan; generatedClips: AutoEditGeneratedClip[] }
+  | { status: "processing"; usedStyleReference: boolean }
+  | { status: "done"; plan: AutoEditPlanSummary; segments: ProjectSegment[]; generatedClips: ProjectSfxClip[] }
   | { status: "error"; message: string };
 
-export type AutoEditThemeInput = {
-  primaryColor: string;
-  fontFamily: CaptionFontFamily;
-  captionPosition: CaptionPosition;
-  captionStyle: CaptionStyle;
-  captionAnimation: CaptionAnimation;
+export type AutoEditRequest = {
+  videoPath: string;
+  videoDurationInSeconds: number;
+  keepRanges: { startFromSeconds: number; durationInSeconds: number }[];
+  styleReferencePath: string | null;
 };
 
-/** 字幕生成後・手動編集前に割り込む自動編集(バズる動画)機能のジョブ開始+ポーリング。 */
+/** 自動編集(Geminiに編集をすべて任せる)ジョブの開始+ポーリング。 */
 export const useAutoEditJob = () => {
   const [autoEditState, setAutoEditState] = useState<AutoEditJobState>({ status: "idle" });
 
@@ -59,8 +47,8 @@ export const useAutoEditJob = () => {
 
         if (data.status === "done" || data.status === "error") {
           clearInterval(timer);
+          setAutoEditState(data as AutoEditJobState);
         }
-        setAutoEditState(data as AutoEditJobState);
       } catch (error) {
         clearInterval(timer);
         setAutoEditState({
@@ -71,20 +59,18 @@ export const useAutoEditJob = () => {
     }, POLL_INTERVAL_MS);
   };
 
-  const handleStart = async (
-    segments: { key: string; caption: string; durationInSeconds: number }[],
-    theme: AutoEditThemeInput,
-    hasStyleReference: boolean
-  ) => {
-    setAutoEditState({ status: "processing" });
+  const handleStart = async (request: AutoEditRequest) => {
+    setAutoEditState({ status: "processing", usedStyleReference: request.styleReferencePath !== null });
     try {
       const res = await fetch("/api/auto-edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ segments, theme, hasStyleReference }),
+        body: JSON.stringify(request),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "自動編集の開始に失敗しました");
+      // 参考スクショがサーバー側で見つからなかった(再起動で消えた等)場合は、手本無しで進んでいることを表示する。
+      setAutoEditState({ status: "processing", usedStyleReference: Boolean(data.usedStyleReference) });
       pollJob(data.jobId);
     } catch (error) {
       setAutoEditState({

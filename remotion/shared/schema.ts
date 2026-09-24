@@ -153,6 +153,40 @@ export const CAPTION_ANIMATION_OPTIONS: {
 ];
 
 /**
+ * カット中の「寄り」。自動編集(Gemini)が強調したい瞬間に使う。候補から選ばせるのではなく
+ * 倍率・寄る位置を数値で自由に決めさせ、描画側はその値をそのまま使う。
+ * punch=カット頭で一気に寄る(バズ動画定番のジャンプズーム)、slow=カットの間じわじわ寄る。
+ */
+export const clipZoomSchema = z.object({
+  scale: z.number().min(1).max(2).describe("最終的な拡大率(1=等倍)"),
+  style: z.enum(["punch", "slow"]).default("punch"),
+  focusXPercent: z.number().min(0).max(100).default(50).describe("寄る中心の横位置(左端0〜右端100)"),
+  focusYPercent: z.number().min(0).max(100).default(40).describe("寄る中心の縦位置(上端0〜下端100)"),
+});
+
+export type ClipZoom = z.infer<typeof clipZoomSchema>;
+
+/**
+ * 字幕とは別に画面へ重ねる強調テキスト(「実は3倍!」「ここ重要」など)。文言・位置・色・
+ * 大きさ・傾きはすべて自動編集(Gemini)が自由に決めた値をそのまま描く。
+ */
+export const textOverlaySchema = z.object({
+  text: z.string(),
+  startOffsetSeconds: z.number().min(0).default(0).describe("カット先頭から何秒後に出すか"),
+  durationInSeconds: z.number().min(0.2).max(30).optional().describe("表示秒数。省略時はカットの終わりまで"),
+  xPercent: z.number().min(0).max(100).default(50).describe("文字の中心の横位置(左端0〜右端100)"),
+  yPercent: z.number().min(0).max(100).default(30).describe("文字の中心の縦位置(上端0〜下端100)"),
+  fontSizePx: z.number().min(20).max(220).default(80),
+  color: zColor().default("#FFFFFF"),
+  strokeColor: zColor().optional().describe("縁取りの色。省略時は縁取り無し"),
+  backgroundColor: zColor().optional().describe("文字の後ろの帯の色。省略時は帯無し"),
+  rotationDeg: z.number().min(-30).max(30).default(0),
+  animation: captionAnimationSchema,
+});
+
+export type TextOverlay = z.infer<typeof textOverlaySchema>;
+
+/**
  * 動画/画像+テロップで構成されるカットの共通フィールド。
  * テンプレート固有のフィールド(例: ランキングのtitle)は各テンプレートのschemaでextendする。
  */
@@ -182,6 +216,11 @@ export const mediaItemBaseSchema = z.object({
     .max(2)
     .default(1)
     .describe("このカットの元動画の音量(0=ミュート、1=そのまま、2=倍量)"),
+  /** テロップ中で色を変えて大きく見せる単語(数字・キーワード)。自動編集が決める。 */
+  emphasisWords: z.array(z.string()).optional(),
+  emphasisColor: zColor().optional(),
+  zoom: clipZoomSchema.optional(),
+  overlays: z.array(textOverlaySchema).max(8).optional(),
 });
 
 export const sfxClipSchema = z.object({

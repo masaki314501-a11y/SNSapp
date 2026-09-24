@@ -10,46 +10,22 @@ import {
   type CaptionPosition,
   type CaptionStyle,
 } from "@video/shared/schema";
-import {
-  DEFAULT_CAPTION_ANIMATION,
-  DEFAULT_CLIP_VOLUME,
-  loadProject,
-  saveProject,
-  type ProjectSegment,
-  type VideoProject,
-} from "@/lib/videoProject";
-import { clipTranscribedToKeepRanges } from "@/components/editor/timelineUtils";
-import { useTranscribeJob, type TranscribedSegment } from "../useTranscribeJob";
+import { loadProject, saveProject, type ProjectStyleReference, type VideoProject } from "@/lib/videoProject";
 import { useExtractStyleJob } from "../useExtractStyleJob";
 import { uploadVideoFile } from "../uploadVideoFile";
-import { MicIcon } from "@/components/icons";
 
 /**
  * ラフカット(/create/cut)で絞り込んだ「使う範囲」に対して、参考画像/参考動画からスタイルを
- * 抽出し、音声から字幕を生成する画面(/create/style)。参考が動画の場合はテロップの出現演出も
- * 読み取れるため、captionAnimationにも反映する。文字起こし自体は動画全体を対象に行うが、
- * 結果は使う範囲だけに切り詰めてから編集画面(/edit)へ渡す(捨てた範囲の発話は字幕にしない)。
+ * 抽出する画面(/create/style)。参考が動画の場合はテロップの出現演出も読み取れるため、
+ * captionAnimationにも反映する。渡した参考はサーバーに残し、次の自動編集(/create/auto-edit)が
+ * 最優先の手本として直接見る。字幕は以前ここで生成していたが、付けるかどうかを編集画面で
+ * 決められるよう、編集画面の「字幕を一括生成」に移した。
  */
-const transcribePhaseLabel: Record<"uploading" | "processing" | "generating", string> = {
-  uploading: "動画をアップロード中",
-  processing: "動画を処理中",
-  generating: "字幕を生成中",
-};
 
 const captionStyleLabel = (value: CaptionStyle): string =>
   CAPTION_STYLE_OPTIONS.find((option) => option.value === value)?.label ?? value;
 const captionAnimationLabel = (value: CaptionAnimation): string =>
   CAPTION_ANIMATION_OPTIONS.find((option) => option.value === value)?.label ?? value;
-
-const toProjectSegments = (segments: TranscribedSegment[], captionAnimation: CaptionAnimation): ProjectSegment[] =>
-  segments.map((segment) => ({
-    key: crypto.randomUUID(),
-    caption: segment.caption,
-    startFromSeconds: segment.startFromSeconds,
-    durationInSeconds: segment.durationInSeconds,
-    captionAnimation,
-    volume: DEFAULT_CLIP_VOLUME,
-  }));
 
 const EmptyState: React.FC = () => (
   <div className="panel flex flex-col items-center gap-3 p-10 text-center">
@@ -67,11 +43,10 @@ export const StyleAndTranscribe: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const [transcribeStartedAt, setTranscribeStartedAt] = useState<number | null>(null);
-  const [transcribeElapsedSeconds, setTranscribeElapsedSeconds] = useState(0);
 
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referenceUploading, setReferenceUploading] = useState(false);
+  const [styleReference, setStyleReference] = useState<ProjectStyleReference | null>(null);
   const [primaryColor, setPrimaryColor] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState<CaptionFontFamily | null>(null);
   const [captionPosition, setCaptionPosition] = useState<CaptionPosition | null>(null);
@@ -111,6 +86,7 @@ export const StyleAndTranscribe: React.FC = () => {
       setReferenceUploading(true);
       try {
         const videoPath = await uploadVideoFile(file);
+        setStyleReference({ path: videoPath, mimeType: file.type });
         void handleExtractStyleFromVideo(videoPath);
       } catch (error) {
         alert(error instanceof Error ? error.message : "参考動画のアップロードに失敗しました");
@@ -119,13 +95,14 @@ export const StyleAndTranscribe: React.FC = () => {
       }
       return;
     }
-    void handleExtractStyle(file);
+    const referencePath = await handleExtractStyle(file);
+    setStyleReference(referencePath ? { path: referencePath, mimeType: file.type } : null);
   };
 
   /** カット画面で選んだ「使う範囲」(=カット結果の再生順)。まだテロップは持たない。 */
   const keepRanges = project?.segments ?? [];
 
-  const goToEditor = (segments: ProjectSegment[]) => {
+  const goToAutoEdit = () => {
     if (!project) return;
     saveProject({
       ...project,
@@ -133,52 +110,17 @@ export const StyleAndTranscribe: React.FC = () => {
       fontFamily: fontFamily ?? project.fontFamily,
       captionPosition: captionPosition ?? project.captionPosition,
       captionStyle: captionStyle ?? project.captionStyle,
-      segments,
-      // 自動編集(/create/auto-edit)が「参考画像/動画から既にスタイルが決まっているか」を
-      // 判断するのに使う。ここで決まらなければ自動編集自身が配色等を提案する。
-      styleReferenceApplied: primaryColor !== null,
+      // 字幕はまだ付けない(編集画面で決める)。演出だけは参考から抽出できていれば反映する。
+      segments: captionAnimation ? keepRanges.map((segment) => ({ ...segment, captionAnimation })) : keepRanges,
+      cutKeepRanges: keepRanges.map((segment) => ({
+        startFromSeconds: segment.startFromSeconds,
+        durationInSeconds: segment.durationInSeconds,
+      })),
+      // 新しい参考を渡さずに進んだ場合は、前回渡した参考をそのまま手本として使い続ける。
+      styleReference: styleReference ?? project.styleReference ?? null,
+      styleReferenceApplied: primaryColor !== null || Boolean(project.styleReferenceApplied),
     });
     router.push("/create/auto-edit");
-  };
-
-  const { transcribeState, handleTranscribe: startTranscribe } = useTranscribeJob({
-    onDone: (segments) => {
-      const clipped = clipTranscribedToKeepRanges(segments, keepRanges);
-      goToEditor(
-        toProjectSegments(clipped.length > 0 ? clipped : segments, captionAnimation ?? DEFAULT_CAPTION_ANIMATION)
-      );
-    },
-  });
-
-  const isTranscribing =
-    transcribeState.status === "uploading" ||
-    transcribeState.status === "processing" ||
-    transcribeState.status === "generating";
-
-  useEffect(() => {
-    if (!isTranscribing || transcribeStartedAt === null) return;
-    const timer = setInterval(() => {
-      setTranscribeElapsedSeconds(Math.floor((Date.now() - transcribeStartedAt) / 1000));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isTranscribing, transcribeStartedAt]);
-
-  const canTranscribe = Boolean(project?.videoPath) && !isTranscribing;
-
-  const handleTranscribe = () => {
-    if (!project || !canTranscribe) return;
-    setTranscribeElapsedSeconds(0);
-    setTranscribeStartedAt(Date.now());
-    startTranscribe(project.videoPath, project.videoDurationInSeconds);
-  };
-
-  const handleSkip = () => {
-    // 字幕生成をスキップする場合は、カットで選んだ範囲をテロップなしのままクリップとして使う
-    // (演出だけは参考から抽出できていれば反映する)。
-    const segments = captionAnimation
-      ? keepRanges.map((segment) => ({ ...segment, captionAnimation }))
-      : keepRanges;
-    goToEditor(segments);
   };
 
   if (!hasCheckedProject) return null;
@@ -251,59 +193,24 @@ export const StyleAndTranscribe: React.FC = () => {
       <div className="flex flex-col gap-3 p-5">
         <div className="flex items-baseline gap-2.5">
           <span className="step-badge">3</span>
-          <h2 className="text-sm font-semibold">音声から字幕を生成</h2>
+          <h2 className="text-sm font-semibold">自動編集へ</h2>
           <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-            発話の区切りごとに漏れなく字幕化・完了すると編集画面に移動します
+            参考スクショを最優先の手本に、Geminiが編集をまとめて行います。字幕は編集画面で付けられます
           </span>
         </div>
         <button
           type="button"
-          onClick={handleTranscribe}
-          disabled={!canTranscribe}
+          onClick={goToAutoEdit}
+          disabled={referenceUploading || extractStyleState.status === "processing"}
           className="btn-primary self-start px-4 py-2 text-sm"
         >
-          {isTranscribing ? (
-            "字幕を生成中..."
-          ) : (
-            <>
-              <MicIcon size={15} className="mr-1.5 inline-block align-[-2px]" />
-              音声から字幕を生成
-            </>
-          )}
+          自動編集へ進む →
         </button>
-        {isTranscribing ? (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs" style={{ color: "var(--muted)" }}>
-              {(["uploading", "processing", "generating"] as const).map((phase, i) => {
-                const phaseOrder = ["uploading", "processing", "generating"] as const;
-                const currentIndex = phaseOrder.indexOf(transcribeState.status as (typeof phaseOrder)[number]);
-                const state = i < currentIndex ? "done" : i === currentIndex ? "active" : "pending";
-                return (
-                  <span key={phase} className="flex items-center gap-2">
-                    {i > 0 ? <span style={{ opacity: 0.5 }}>→</span> : null}
-                    <span
-                      className={state === "active" ? "badge-pill warning" : "badge-pill neutral"}
-                      style={state === "pending" ? { opacity: 0.5 } : undefined}
-                    >
-                      {state === "done" ? "✓ " : ""}
-                      {transcribePhaseLabel[phase]}
-                    </span>
-                  </span>
-                );
-              })}
-            </div>
-            <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              {transcribeElapsedSeconds}秒経過(動画の長さによっては2分ほどかかることがあります)
-            </span>
-          </div>
+        {!styleReference && project.styleReference ? (
+          <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+            新しい参考を渡さなければ、前回の参考をそのまま手本にします
+          </span>
         ) : null}
-        {transcribeState.status === "error" ? <p className="badge-pill danger w-fit">{transcribeState.message}</p> : null}
-
-        <div className="mt-2 flex items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-          <button type="button" onClick={handleSkip} className="btn-outline px-4 py-1.5 text-sm">
-            字幕生成をスキップして編集へ進む →
-          </button>
-        </div>
       </div>
     </div>
   );

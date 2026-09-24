@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { extractStyle } from "@/lib/gemini/extractStyle";
 import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extractStyleJobs";
+import { saveReferenceImage } from "@/lib/styleReference";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,8 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const imageBase64 = buffer.toString("base64");
   const mimeType = file.type;
+  // 自動編集が同じスクショを最優先の手本として見られるよう、抽出とは別に保存しておく。
+  const referencePath = await saveReferenceImage(buffer, mimeType);
 
   const jobId = createExtractStyleJob();
 
@@ -54,5 +57,5 @@ export async function POST(request: Request) {
     }
   });
 
-  return NextResponse.json({ jobId });
+  return NextResponse.json({ jobId, referencePath });
 }

@@ -40,6 +40,7 @@ yarn-error.log*
 # remotion
 /public/videos/*
 !/public/videos/.gitkeep
+/public/references/
 /public/renders/
 # 生成済みAIナレーションのキャッシュ(内容から決まるファイル名で溜まり続ける)
 /public/audio/generated/
