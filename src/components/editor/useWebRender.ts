@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { canRenderMediaOnWeb, renderMediaOnWeb } from "@remotion/web-renderer";
 import { StandardVideo } from "@video/templates/standard/StandardVideo";
 import { getStandardVideoDurationInFrames } from "@video/templates/standard/duration";
 import type { StandardVideoProps } from "@video/templates/standard/schema";
@@ -78,6 +77,9 @@ export const useWebRender = () => {
     }
 
     try {
+      // 書き出し用ライブラリ(WebCodecs・音声エンコーダー一式)は大きいため、画面を開いた時点では
+      // 読み込まず、実際に書き出す時にだけ読み込む(書き出し画面の表示を軽くするため)。
+      const { canRenderMediaOnWeb, renderMediaOnWeb } = await import("@remotion/web-renderer");
       const check = await canRenderMediaOnWeb({
         container: "mp4",
         videoCodec: "h264",
