@@ -9,4 +9,5 @@ public/renders
 public/videos/*
 !public/videos/.gitkeep
 public/references
+.remotion-bundle
 *.log

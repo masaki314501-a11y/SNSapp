@@ -27,6 +27,14 @@ RUN npx remotion browser ensure
 
 RUN npm run build
 
+# 書き出し用のRemotionバンドルもビルド時に作っておき、実行時にはwebpackを動かさない
+# (メモリ512MBの本番でサーバーごと落ちていたため。src/lib/remotion/bundle.ts参照)。
+# 含める静的ファイルはフォントだけ(動画・音声はレンダー時に/api/media経由で読む)。
+RUN mkdir -p /tmp/remotion-public \
+    && cp -r public/fonts /tmp/remotion-public/fonts \
+    && npx remotion bundle remotion/index.ts --out-dir .remotion-bundle --public-dir /tmp/remotion-public \
+    && rm -rf /tmp/remotion-public
+
 ENV NODE_ENV=production
 EXPOSE 3000
 

@@ -19,6 +19,16 @@ export const runtime = "nodejs";
 const DELAY_RENDER_TIMEOUT_IN_MILLISECONDS = 90000;
 
 /**
+ * <OffthreadVideo>のフレームキャッシュは既定だと空きメモリの半分まで膨らむ。Render無料プラン
+ * (512MB)ではヘッドレスChromeと合わせてメモリを使い切り、サーバーごと落ちる原因になるため
+ * 上限を小さく固定し、フレーム取り出しのスレッドも1本に抑える(速度より落ちないことを優先)。
+ */
+const MEMORY_SAVING_OPTIONS = {
+  offthreadVideoCacheSizeInBytes: 128 * 1024 * 1024,
+  offthreadVideoThreads: 1,
+} as const;
+
+/**
  * @remotion/bundler の bundle() はプロセス内で1度だけ public/ をコピーして
  * 静的配信するため(bundle.ts参照)、サーバー起動後にアップロードされた動画は
  * そのスナップショットに存在せず404になる。レンダー時だけは絶対URLに差し替え、
@@ -100,6 +110,7 @@ export async function POST(request: Request) {
       inputProps,
       puppeteerInstance,
       timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
+      ...MEMORY_SAVING_OPTIONS,
     });
 
     const outDir = path.join(process.cwd(), "public", "renders");
@@ -120,6 +131,7 @@ export async function POST(request: Request) {
       // 並列タブによる競合を避けるため並列度も1に抑える。
       concurrency: 1,
       timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
+      ...MEMORY_SAVING_OPTIONS,
       onProgress: ({ progress }) => {
         updateRenderJob(jobId, { status: "rendering", progress, message: "フレームを描画中..." });
       },

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { stat } from "node:fs/promises";
-import { createReadStream } from "node:fs";
+import { open, stat } from "node:fs/promises";
 import path from "node:path";
-import { Readable } from "node:stream";
 
 export const runtime = "nodejs";
 
@@ -32,6 +30,53 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   m4a: "audio/mp4",
   ogg: "audio/ogg",
   aac: "audio/aac",
+};
+
+const CHUNK_SIZE = 256 * 1024;
+
+/**
+ * ファイルの[start, end]の範囲を、ブラウザが読みに来た分だけ読み出すWebストリームにする。
+ * 以前は Readable.toWeb(createReadStream()) を使っていたが、ブラウザが途中で受信を打ち切る
+ * (<video>のシーク、iOSの「ビデオを保存」が範囲を変えて何度も取り直す等)と、Node側の
+ * ストリームが閉じたコントローラへデータを押し込み続けて "Controller is already closed"
+ * (ERR_INVALID_STATE)のuncaughtExceptionになり、サーバーごと落ちて保存に失敗していた。
+ * 読み取りをpull(要求された時だけ読む)にし、打ち切られたらファイルを閉じて以後は何もしない。
+ */
+const createFileRangeStream = async (filePath: string, start: number, end: number): Promise<ReadableStream<Uint8Array>> => {
+  const handle = await open(filePath, "r");
+  let position = start;
+  let finished = false;
+  const finish = async () => {
+    if (finished) return;
+    finished = true;
+    await handle.close().catch(() => {});
+  };
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (finished) return;
+      const remaining = end - position + 1;
+      if (remaining <= 0) {
+        await finish();
+        controller.close();
+        return;
+      }
+      const buffer = new Uint8Array(Math.min(CHUNK_SIZE, remaining));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+      // 読み込み待ちの間に受信が打ち切られていたら、閉じたコントローラには触らない。
+      if (finished) return;
+      if (bytesRead === 0) {
+        await finish();
+        controller.close();
+        return;
+      }
+      position += bytesRead;
+      controller.enqueue(buffer.subarray(0, bytesRead));
+    },
+    async cancel() {
+      await finish();
+    },
+  });
 };
 
 export async function GET(
@@ -77,9 +122,7 @@ export async function GET(
       });
     }
 
-    const stream = Readable.toWeb(
-      createReadStream(filePath, { start, end })
-    ) as ReadableStream;
+    const stream = await createFileRangeStream(filePath, start, end);
     return new NextResponse(stream, {
       status: 206,
       headers: {
@@ -92,7 +135,7 @@ export async function GET(
     });
   }
 
-  const stream = Readable.toWeb(createReadStream(filePath)) as ReadableStream;
+  const stream = await createFileRangeStream(filePath, 0, size - 1);
 
   return new NextResponse(stream, {
     headers: {
