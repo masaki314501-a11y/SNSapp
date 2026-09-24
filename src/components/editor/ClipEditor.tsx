@@ -49,6 +49,11 @@ import {
 import { TimelineRoot, type AudioSelection } from "./timeline/TimelineRoot";
 import { ClipInspectorPanel } from "./timeline/ClipInspectorPanel";
 import { CaptionInspectorPanel } from "./timeline/CaptionInspectorPanel";
+import {
+  EffectsInspectorPanel,
+  type ProjectEffectsPatch,
+  type SegmentEffectsPatch,
+} from "./timeline/EffectsInspectorPanel";
 import { useTranscribeJob } from "@/app/create/useTranscribeJob";
 import { assignTranscriptToSegments } from "./timelineUtils";
 import { SfxInspectorPanel } from "./timeline/SfxInspectorPanel";
@@ -171,7 +176,7 @@ export const ClipEditor: React.FC = () => {
    * プレビュー・書き出しは常時表示。タイムラインは残すが、タブごとに
    * 今やりたいことに関係あるトラックだけを表示する(TimelineRootのtracks props)。
    */
-  const [activeTab, setActiveTab] = useState<"cut" | "caption" | "se" | "narration" | "bgm" | "style">("cut");
+  const [activeTab, setActiveTab] = useState<"cut" | "caption" | "effects" | "se" | "narration" | "bgm" | "style">("cut");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditText, setBulkEditText] = useState("");
 
@@ -389,6 +394,19 @@ export const ClipEditor: React.FC = () => {
       ...prev,
       segments: applySegmentPatch(prev.segments, videoDurationInSeconds, key, patch),
     }));
+  };
+
+  /** 自動編集が決めた演出(寄り・強調テキスト・強調単語)をクリップ単位で直す。 */
+  const updateSegmentEffects = (key: string, patch: SegmentEffectsPatch) => {
+    setForm((prev) => ({
+      ...prev,
+      segments: prev.segments.map((segment) => (segment.key === key ? { ...segment, ...patch } : segment)),
+    }));
+  };
+
+  /** 動画全体の演出(冒頭の見出し・締めの一言・ずっと出す文字)を直す。projectの変更は自動保存に乗る。 */
+  const updateProjectEffects = (patch: ProjectEffectsPatch) => {
+    setProject((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
   /** 構造的な操作の直前に呼び、その時点の並びを履歴に積む(Redo履歴は破棄)。 */
@@ -1153,6 +1171,17 @@ export const ClipEditor: React.FC = () => {
             onClearCaptions={handleClearCaptions}
             hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
           />
+        ) : activeTab === "effects" ? (
+          <EffectsInspectorPanel
+            segments={form.segments}
+            selectedSegmentKey={selectedSegmentKey}
+            selectedCount={selectedKeys.size}
+            hook={project?.hook ?? null}
+            cta={project?.cta ?? null}
+            globalOverlays={project?.globalOverlays ?? null}
+            onUpdateSegmentEffects={updateSegmentEffects}
+            onUpdateProjectEffects={updateProjectEffects}
+          />
         ) : activeTab === "se" ? (
           <SfxInspectorPanel
             audioSelection={audioSelection}
@@ -1200,7 +1229,7 @@ export const ClipEditor: React.FC = () => {
         ) : null}
       </div>
 
-      {/* タブ切り替え(動画カット/字幕/SE/AI音声/BGM/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
+      {/* タブ切り替え(動画カット/字幕/演出/SE/AI音声/BGM/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
       <div className="tab-bar">
         <button
           type="button"
@@ -1215,6 +1244,13 @@ export const ClipEditor: React.FC = () => {
           className={`tab-button${activeTab === "caption" ? " active" : ""}`}
         >
           字幕
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("effects")}
+          className={`tab-button${activeTab === "effects" ? " active" : ""}`}
+        >
+          演出
         </button>
         <button
           type="button"
@@ -1248,56 +1284,6 @@ export const ClipEditor: React.FC = () => {
 
       {activeTab === "style" ? (
         <div className="panel flex flex-col gap-4 p-5">
-          {/* 自動編集が決めた冒頭の見出し・締めの一言を直せるようにする(空にすると表示しない)。 */}
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold">冒頭の見出し・締めの一言</h2>
-            <label className="editor-field">
-              <span>冒頭の見出し(0〜3秒に重ねる)</span>
-              <input
-                type="text"
-                value={project?.hook?.headline ?? ""}
-                placeholder="(なし)"
-                onChange={(e) =>
-                  setProject((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          hook: e.target.value ? { ...prev.hook, headline: e.target.value } : null,
-                        }
-                      : prev
-                  )
-                }
-              />
-            </label>
-            {(project?.globalOverlays ?? []).map((overlay, index) => (
-              <div key={index} className="flex items-center gap-2 text-xs">
-                <span className="truncate">📌 ずっと出す文字: {overlay.text}</span>
-                <button
-                  type="button"
-                  className="editor-toolbar-btn"
-                  onClick={() =>
-                    setProject((prev) =>
-                      prev ? { ...prev, globalOverlays: (prev.globalOverlays ?? []).filter((_, i) => i !== index) } : prev
-                    )
-                  }
-                >
-                  消す
-                </button>
-              </div>
-            ))}
-            <label className="editor-field">
-              <span>締めの一言(最後の数秒に重ねる)</span>
-              <input
-                type="text"
-                value={project?.cta?.text ?? ""}
-                placeholder="(なし)"
-                onChange={(e) =>
-                  setProject((prev) => (prev ? { ...prev, cta: e.target.value ? { text: e.target.value } : null } : prev))
-                }
-              />
-            </label>
-          </div>
-
           <div className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold">スタイルプリセット</h2>
             <span className="text-xs" style={{ color: "var(--muted-2)" }}>

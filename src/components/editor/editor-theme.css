@@ -466,6 +466,13 @@
 }
 .editor-field-row .editor-field {
   flex: 1;
+  /* 入力欄の既定幅で横並びが押し出され、狭い右パネル(演出タブ等)からはみ出すのを防ぐ */
+  min-width: 0;
+}
+.editor-field-row .editor-field input,
+.editor-field-row .editor-field select {
+  width: 100%;
+  min-width: 0;
 }
 .editor-inspector-actions {
   display: flex;
