@@ -127,9 +127,20 @@ JSONエクスポート/インポートにも対応する。
 
 ### 6. `/edit/export` — 書き出し
 
-「動画を書き出す」を実行すると `/api/render` がジョブを開始し、`/api/render/[jobId]` を
-ポーリングして進捗・残り時間の目安・完成した動画のURLを取得する(Remotionのヘッドレス
-レンダリング)。
+画面を開くと、**利用者のブラウザの中で**動画を書き出す(`@remotion/web-renderer`、`useWebRender.ts`)。
+サーバー(Render無料プラン、512MB)でヘッドレスChromeを使って書き出すと実メモリが最大約1.5GBになり、
+サーバーごと落ちて保存できなかったため(解像度を下げてもほぼ減らなかった。下記「デプロイ」参照)。
+書き出し中はこの画面を開いたままにする必要があり、画面が暗くならないよう対応ブラウザでは
+Wake Lockを取る。書き出し前に `canRenderMediaOnWeb` でブラウザが対応しているか確かめ、非対応なら
+理由を日本語で出す(Safari・Chromeの新しめのバージョンが必要)。
+
+完成したら「ダウンロード」に加え、iPhone/iPadなど共有シート(Web Share API)にファイルを渡せる
+環境では「写真に保存・共有」を出す(Safariの`<a download>`は「ファイル」アプリに保存され、
+写真アプリには入らないため)。ヘッドレスChromeで約11秒・4クリップの書き出しを確認済み
+(約60秒、H.264+AAC、1080×1920)。Safari/iPhone実機での速度・安定性は未確認。
+
+サーバーで書き出すAPI(`/api/render`、`useRenderJob.ts`)も残してあり、メモリに余裕のある環境
+(ローカル等)では使える。画面からは使っていない。
 
 ## ディレクトリ構成
 
@@ -150,7 +161,8 @@ JSONエクスポート/インポートにも対応する。
   - `ExportScreen.tsx` — 書き出し専用画面の本体(`/edit/export`)
   - `CutEditor.tsx` — ラフカット専用の簡易版(`/create/cut`、キャプション/SE/BGM無し)
   - `RenderPanel.tsx` — 書き出しボタンと進捗表示(不確定プログレス・残り時間の目安)
-  - `useRenderJob.ts` — 書き出しジョブの開始とポーリング
+  - `useWebRender.ts` — ブラウザ内での書き出し(画面から使っているのはこちら)
+  - `useRenderJob.ts` — サーバーでの書き出しジョブの開始とポーリング(画面からは未使用)
   - `uploadAudioFile.ts` — SE/BGMアップロードの progress 付きfetch
   - `requestVoiceover.ts` — AIナレーション生成APIの薄いfetchラッパー
   - `stylePresets.ts` / `audioPresets.ts` — スタイル/SE・BGMのプリセット一覧
@@ -218,7 +230,8 @@ JSONエクスポート/インポートにも対応する。
 - `remotion/shared/` — テンプレート間で共有するコンポーネント・スキーマ
   - `AnimatedCaption.tsx` — テロップのアニメーション表示(発話が無い区間は非表示)
   - `captionAnimations.ts` — テロップ出現アニメーション(9種)のtransform/opacity/filter算出
-  - `MediaBackground.tsx` — クリップの動画/画像背景描画と寄り(`zoom`: punch=一気に寄る / slow=じわじわ寄る)
+  - `MediaBackground.tsx` — クリップの動画/画像背景描画と寄り(`zoom`: punch=一気に寄る / slow=じわじわ寄る)。
+    動画・音声は `@remotion/media` の `Video`/`Audio` を使う(`OffthreadVideo`はブラウザ内書き出しに非対応のため)
   - `TextOverlays.tsx` — 字幕とは別に重ねる強調テキスト(位置・色・大きさ等は指定値をそのまま描く)
   - `Hook.tsx` / `CTA.tsx` — 冒頭の見出し(画面中央、文字数に応じて縮む)・締めの一言(画面下寄り)
   - `schema.ts` / `constants.ts` — 共通スキーマ(フォント15書体・テロップ見た目・位置・
@@ -329,6 +342,9 @@ Render無料プラン(512MB)で大きい動画をアップロードするとメ�
   課金していないキーで動かす場合は6500程度に上げる)
 - `GEMINI_TTS_MIN_INTERVAL_MS` — 任意。AIナレーション(TTS)リクエスト間の最小間隔(既定6500ms)
 - `GOOGLE_MAPS_API_KEY` — 任意。`/insights`で使うGoogle Maps Platform(Places API)のAPIキー
+- `NEXT_PUBLIC_REMOTION_LICENSE_KEY` — 任意。ブラウザ内書き出しに渡すRemotionのライセンスキー。
+  Remotionの無料ライセンス(個人・少人数の会社)の対象なら `free-license`。未設定でも書き出せるが、
+  ブラウザのコンソールに警告が出る
 
 ### Gemini APIの課金について
 
@@ -372,7 +388,7 @@ Freeプランはメモリが少なく(512MB)、ヘッドレスChromeでの動画
 動画キャッシュを128MBに抑える等の対策はしているが、512MBには収まらない見込みが高く、
 書き出し中にサーバーが落ちると画面には「サーバーから正しい応答がありませんでした」と出る
 (Safariでは以前 "The string did not match the expected pattern." と出ていたもの)。
-安定して書き出すには2GB以上のプランが必要。また無操作が続くとスリープし、次のアクセス時に
+プランは上げない方針のため、画面からの書き出しはブラウザ内で行う(手順6参照)。また無操作が続くとスリープし、次のアクセス時に
 再起動で数十秒かかる。
 
 ---

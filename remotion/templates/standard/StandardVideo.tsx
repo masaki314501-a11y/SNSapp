@@ -1,7 +1,7 @@
 import React from "react";
+import { Audio } from "@remotion/media";
 import {
   AbsoluteFill,
-  Audio,
   Sequence,
   Series,
   interpolate,
@@ -92,7 +92,12 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
           from={0}
           durationInFrames={Math.min(Math.round(HOOK_DURATION_IN_SECONDS * VIDEO_FPS), durationInFrames)}
         >
-          <Hook headline={hook.headline} subline={hook.subline} accentColor={theme.primaryColor} />
+          <Hook
+            headline={hook.headline}
+            subline={hook.subline}
+            accentColor={theme.primaryColor}
+            captionPosition={theme.captionPosition}
+          />
         </Sequence>
       ) : null}
       {cta ? (

@@ -11,6 +11,8 @@ type Props = {
   headline: string;
   subline?: string;
   accentColor: string;
+  /** 字幕の位置。字幕が画面中央にあるときは見出しと重ならないよう上寄りに出す。 */
+  captionPosition?: "top" | "middle" | "bottom";
 };
 
 /**
@@ -18,7 +20,7 @@ type Props = {
  * 以前は黒背景の独立したタイトルカードだったが、バズるショート動画は1フレーム目から本人の
  * 映像が見えている方がスクロールを止めやすいため、動画の上に重ねる形にしている。
  */
-export const Hook: React.FC<Props> = ({ headline, subline, accentColor }) => {
+export const Hook: React.FC<Props> = ({ headline, subline, accentColor, captionPosition = "bottom" }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -44,9 +46,11 @@ export const Hook: React.FC<Props> = ({ headline, subline, accentColor }) => {
     <AbsoluteFill
       style={{
         // 上部はずっと出すタイトル(globalOverlays)が使うため、見出しは画面中央に出す。
-        justifyContent: "center",
+        // ただし字幕が中央にある場合は重なって両方読めなくなるため、タイトルと字幕の間(上寄り)に出す。
+        justifyContent: captionPosition === "middle" ? "flex-start" : "center",
         alignItems: "center",
         padding: 80,
+        paddingTop: captionPosition === "middle" ? 560 : 80,
       }}
     >
       <AbsoluteFill style={{ backgroundColor: accentColor, opacity: flashOpacity * 0.6 }} />

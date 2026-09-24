@@ -1,11 +1,9 @@
 import React from "react";
-import {
-  AbsoluteFill,
-  OffthreadVideo,
-  interpolate,
-  useCurrentFrame,
-  useVideoConfig,
-} from "remotion";
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+// <OffthreadVideo>はサーバー側のフレーム抽出(compositor)が前提で、ブラウザ内での書き出し
+// (@remotion/web-renderer)に対応していない。書き出しを利用者のブラウザで行うようにしたため
+// (サーバーのメモリ512MBでは落ちていた。useWebRender.ts参照)、どちらでも動く<Video>を使う。
+import { Video } from "@remotion/media";
 import { resolveClipSrc } from "./resolveSrc";
 import type { ClipZoom } from "./schema";
 
@@ -52,11 +50,12 @@ export const MediaBackground: React.FC<Props> = ({
   return (
     <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin }}>
       {src ? (
-        <OffthreadVideo
+        <Video
           src={resolveClipSrc(src)}
-          startFrom={Math.round(startFromSeconds * fps)}
+          trimBefore={Math.round(startFromSeconds * fps)}
           volume={volume}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          objectFit="cover"
+          style={{ width: "100%", height: "100%" }}
         />
       ) : (
         <AbsoluteFill

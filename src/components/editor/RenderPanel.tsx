@@ -1,6 +1,7 @@
 "use client";
 
 import type { RenderState } from "./useRenderJob";
+import type { WebRenderResult } from "./useWebRender";
 
 type Props = {
   canRender: boolean;
@@ -8,6 +9,29 @@ type Props = {
   logs: string[];
   elapsedSeconds: number;
   onRender: () => void;
+  /** ブラウザ内で書き出した場合の動画本体。iPhoneの共有シートに渡して写真に保存できるようにする。 */
+  result?: WebRenderResult | null;
+};
+
+/**
+ * iPhone/iPadのSafariは<a download>だと「ファイル」アプリに保存され、写真アプリに入らない。
+ * 共有シート(Web Share API)にファイルとして渡すと「ビデオを保存」が選べるため、使える環境ではそちらも出す。
+ */
+const shareVideo = async (result: WebRenderResult) => {
+  const file = new File([result.blob], result.fileName, { type: "video/mp4" });
+  try {
+    await navigator.share({ files: [file] });
+  } catch (error) {
+    // 共有シートを閉じただけ(AbortError)なら何もしない
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      alert("共有できませんでした。「ダウンロード」から保存してください");
+    }
+  }
+};
+
+const canShareVideo = (result: WebRenderResult | null | undefined): boolean => {
+  if (!result || typeof navigator === "undefined" || typeof navigator.canShare !== "function") return false;
+  return navigator.canShare({ files: [new File([result.blob], result.fileName, { type: "video/mp4" })] });
 };
 
 export const RenderPanel: React.FC<Props> = ({
@@ -16,6 +40,7 @@ export const RenderPanel: React.FC<Props> = ({
   logs,
   elapsedSeconds,
   onRender,
+  result,
 }) => {
   const isRunning = renderState.status === "starting" || renderState.status === "rendering";
   const progress = renderState.status === "rendering" ? renderState.progress : 0;
@@ -99,10 +124,19 @@ export const RenderPanel: React.FC<Props> = ({
             style={{ border: "1.5px solid var(--foreground)" }}
           />
           <div className="flex flex-wrap gap-2">
+            {result && canShareVideo(result) ? (
+              <button
+                type="button"
+                onClick={() => void shareVideo(result)}
+                className="btn-primary flex h-11 flex-1 items-center justify-center text-sm"
+              >
+                写真に保存・共有
+              </button>
+            ) : null}
             <a
               href={renderState.url}
-              download
-              className="btn-primary flex h-11 flex-1 items-center justify-center text-sm"
+              download={result?.fileName ?? true}
+              className={`${result && canShareVideo(result) ? "btn-outline" : "btn-primary"} flex h-11 flex-1 items-center justify-center text-sm`}
             >
               ダウンロード
             </a>

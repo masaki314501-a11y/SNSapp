@@ -3,18 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { MIN_CLIPS, MAX_CLIPS } from "@video/templates/standard/schema";
 import { buildStandardVideoProps, loadProject, type VideoProject } from "@/lib/videoProject";
-import { useRenderJob } from "./useRenderJob";
+import { useWebRender } from "./useWebRender";
 import { RenderPanel } from "./RenderPanel";
+
+/** 書き出したファイルの名前(元の動画名を元にする)。 */
+const exportFileName = (project: VideoProject): string =>
+  `${(project.videoFileName ?? "video").replace(/\.[^.]+$/, "")}-edited.mp4`;
 
 /**
  * /edit の「動画を書き出す」から遷移してくる、書き出し専用画面。
  * /edit 側で直前にlocalStorageへ同期保存された編集内容(videoProject.ts)を読み込み、
- * この画面に来た時点で自動的にレンダーを開始する。
+ * この画面に来た時点で自動的に書き出しを開始する。書き出しは利用者のブラウザ内で行う
+ * (サーバーでの書き出しはメモリ不足で落ちるため。useWebRender.ts参照)。
  */
 export const ExportScreen: React.FC = () => {
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const { renderState, logs, elapsedSeconds, handleRender } = useRenderJob();
+  const { renderState, result, logs, elapsedSeconds, handleRender } = useWebRender();
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -27,8 +32,7 @@ export const ExportScreen: React.FC = () => {
     !!project && project.segments.length >= MIN_CLIPS && project.segments.length <= MAX_CLIPS;
 
   const startRender = (current: VideoProject) => {
-    handleRender(
-      "standard",
+    void handleRender(
       buildStandardVideoProps({
         videoPath: current.videoPath,
         segments: current.segments,
@@ -43,7 +47,8 @@ export const ExportScreen: React.FC = () => {
         hook: current.hook,
         cta: current.cta,
         globalOverlays: current.globalOverlays,
-      })
+      }),
+      exportFileName(current)
     );
   };
 
@@ -95,7 +100,7 @@ export const ExportScreen: React.FC = () => {
       <div className="panel flex flex-col gap-1 p-4">
         <p className="text-sm font-medium">{project.videoFileName ?? "動画"}を書き出しています</p>
         <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-          クリップ {project.segments.length}個
+          クリップ {project.segments.length}個・このブラウザの中で書き出します。終わるまでこの画面を開いたままにしてください
         </p>
       </div>
       <RenderPanel
@@ -104,6 +109,7 @@ export const ExportScreen: React.FC = () => {
         logs={logs}
         elapsedSeconds={elapsedSeconds}
         onRender={() => startRender(project)}
+        result={result}
       />
     </div>
   );
