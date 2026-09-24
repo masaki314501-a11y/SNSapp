@@ -92,7 +92,9 @@ Remotion Playerでのプレビューを見ながら、以下を編集できる�
   表示)。個別生成は作り直しとして既存のナレーションを差し替える(同じ台詞が重ならない)
 - **上限に達したときの扱い**: 1日あたりの上限(`PerDay`)は待っても翌日まで回復しないため
   再試行せず即座にその旨を表示する。1分あたりの制限は従来通り再試行し、Geminiが返す
-  `retryDelay` を「約N秒後に再度お試しください」として見せる。一括生成は途中で失敗しても
+  `retryDelay` を「約N秒後に再度お試しください」として見せる。Gemini APIはプリペイド
+  (上限800円)で運用しているため、チャージ残高切れのエラーも再試行せず「AI Studioでチャージして
+  ください」と表示する。一括生成は途中で失敗しても
   そこまでの分がタイムラインに残るので、翌日押し直せば残りだけが生成される(中断ボタンもあり)
 
 編集内容は操作のたびに自動保存され、リロード/再訪問時に復元される。プロジェクトの
@@ -170,7 +172,7 @@ JSONエクスポート/インポートにも対応する。
   - `voiceOptions.ts` — AIナレーションの声のプリセット一覧(クライアント/サーバー共用)
   - `geminiFiles.ts` — Gemini File APIアップロード後のACTIVE待ちポーリング(共通処理)
   - `geminiErrors.ts` — 429/503などリトライ可能なエラーの判定と日本語エラーメッセージ変換
-  - `rateLimiter.ts` / `textUtils.ts` — レート制御・テキスト整形の共通処理
+  - `rateLimiter.ts` / `textUtils.ts` — レート制御(テキスト系とTTSで別々の列に直列化)・テキスト整形の共通処理
 - `src/lib/remotion/` — レンダーAPI用のRemotionラッパー(`bundle.ts` / `browser.ts` / `renderJobs.ts`)
 
 ### Remotion側 (`remotion/`)
@@ -287,7 +289,9 @@ Render無料プラン(512MB)で大きい動画をアップロードするとメ�
 - `GEMINI_API_KEY` — 必須。Gemini APIキー(`.env.local`)
 - `GEMINI_MODEL` — 任意。既定値は `gemini-2.5-flash`
 - `GEMINI_TTS_MODEL` — 任意。AIナレーション生成に使うモデル。既定値は `gemini-2.5-flash-preview-tts`
-- `GEMINI_MIN_INTERVAL_MS` — 任意。Gemini APIリクエスト間の最小間隔(レート制御用)
+- `GEMINI_MIN_INTERVAL_MS` — 任意。テキスト系Gemini APIリクエスト間の最小間隔(既定1000ms。
+  課金なしの無料枠で動かす場合は6500程度に上げる)
+- `GEMINI_TTS_MIN_INTERVAL_MS` — 任意。AIナレーション(TTS)リクエスト間の最小間隔(既定6500ms)
 - `GOOGLE_MAPS_API_KEY` — 任意。`/insights`で使うGoogle Maps Platform(Places API)のAPIキー
 
 ## デプロイ(Render.com)

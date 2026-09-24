@@ -4,7 +4,19 @@ import { ApiError } from "@google/genai";
 export const RETRYABLE_STATUS_CODES = new Set([429, 503]);
 
 export const isRetryableApiError = (error: unknown): boolean =>
-  error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status);
+  error instanceof ApiError && RETRYABLE_STATUS_CODES.has(error.status) && !isCreditExhaustedError(error);
+
+/**
+ * プリペイド(チャージ)残高を使い切ったときのエラー。上限800円+オートチャージ無しに近い
+ * 設定で運用しているため、これは待っても日付が変わっても回復せず、AI Studioでチャージする
+ * しかない。429で返ってきても再試行はせず、利用者にチャージを促す。
+ * 通常の429本文にも "check your plan and billing details" が含まれるため、"billing" では判定しない。
+ */
+export const isCreditExhaustedError = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  /prepay|credits?\b.*(depleted|exhausted|insufficient|run out)|insufficient.*(balance|funds)/i.test(
+    typeof error.message === "string" ? error.message : ""
+  );
 
 /**
  * 429には「1分あたりの上限(すぐ回復する)」と「1日あたりの上限(翌日まで回復しない)」の
@@ -27,6 +39,11 @@ export const parseRetryDelaySeconds = (error: unknown): number | null => {
  *  分かるような日本語メッセージに変換する。 */
 export const toFriendlyGeminiError = (error: unknown): Error => {
   if (error instanceof ApiError) {
+    if (isCreditExhaustedError(error)) {
+      return new Error(
+        "Gemini APIのチャージ残高がなくなりました。Google AI Studio(https://aistudio.google.com)でチャージしてください"
+      );
+    }
     if (error.status === 503) {
       return new Error(
         "Geminiが混雑しています(サーバー過負荷)。しばらく時間を置いてから再度お試しください"
@@ -36,7 +53,7 @@ export const toFriendlyGeminiError = (error: unknown): Error => {
       if (isDailyQuotaError(error)) {
         return new Error(
           "Gemini APIの1日あたりの利用上限に達しました。上限は日付が変わる頃(太平洋時間の午前0時)にリセットされます。" +
-            "それまで待つか、Google AI Studioで課金を有効にして上限を引き上げてください"
+            "それまでお待ちください"
         );
       }
       const retryAfterSeconds = parseRetryDelaySeconds(error);

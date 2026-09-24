@@ -1,6 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
 import { runWithGeminiRateLimit } from "./rateLimiter";
-import { isDailyQuotaError, isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import {
+  isCreditExhaustedError,
+  isDailyQuotaError,
+  isRetryableApiError,
+  toFriendlyGeminiError,
+} from "./geminiErrors";
 
 const DEFAULT_MODEL = "gemini-2.5-flash-preview-tts";
 const GEMINI_TIMEOUT_MS = 60_000;
@@ -87,7 +92,7 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
           setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
         });
         return Promise.race([generatePromise, timeoutPromise]);
-      });
+      }, "tts");
 
       const candidate = response.candidates?.[0];
       const part = candidate?.content?.parts?.[0];
@@ -113,9 +118,9 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
       return pcmToWav(pcmData, sampleRate);
     } catch (error) {
       lastError = error;
-      // 1日あたりの上限は待っても翌日まで回復しないため、再試行はトークンを無駄に
+      // 1日あたりの上限・チャージ残高切れは待っても回復しないため、再試行はトークンを無駄に
       // 消費するだけでなく利用者を数十秒待たせるだけになる。すぐに諦めて伝える。
-      if (isDailyQuotaError(error)) {
+      if (isDailyQuotaError(error) || isCreditExhaustedError(error)) {
         throw toFriendlyGeminiError(error);
       }
       // ここまでに確認できた失敗(429/503、音声データ空、原因不明の一過性エラー)は
