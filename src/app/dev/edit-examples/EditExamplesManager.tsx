@@ -177,7 +177,7 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
           <span className="step-badge">{examples.length}</span>
           <h2 className="text-sm font-semibold">登録済みの編集例</h2>
           <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-            自動編集では新しいものから最大2件をfew-shot例として使用します
+            自動編集では新しいものから最大3件を、学習動画と正解動画のペアでfew-shot例として使用します
           </span>
           {examples.length > 0 ? (
             <a

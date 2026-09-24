@@ -5,7 +5,9 @@ import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+/** 文字起こしは動画1本まるごとを読むためトークン量が多く、Proだとコストがかさむ。
+ * 精度とコストの釣り合いが良い最新のFlashを既定にする(エイリアスなので新版に自動で追従する)。 */
+const DEFAULT_MODEL = "gemini-flash-latest";
 /** 動画が長い/大きいと生成に時間がかかるため余裕を持たせる(autoEditPlan.tsと同じ理由)。 */
 const GEMINI_TIMEOUT_MS = 180_000;
 const MAX_GENERATE_ATTEMPTS = 3;

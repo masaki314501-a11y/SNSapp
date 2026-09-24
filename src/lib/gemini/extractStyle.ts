@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, type Content } from "@google/genai";
+import { GoogleGenAI, MediaResolution, Type, type Content } from "@google/genai";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
@@ -14,8 +14,15 @@ import { extractedStyleSchema, type ExtractedStyle } from "./styleTypes";
 export type { ExtractedStyle } from "./styleTypes";
 export { extractedStyleSchema } from "./styleTypes";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
-const GEMINI_TIMEOUT_MS = 60_000;
+/**
+ * スクショや参考動画から「編集の感じ」を読み取るのは、細い縁取りと影の違い・ゴシックと丸ゴの
+ * 違いといった細部の見極めが肝なので、自動編集と同じくProモデルを既定にする。
+ * 課金移行前はflash-liteで動かしており、フォントや背景の付き方の判定が外れやすかった。
+ * GEMINI_MODELと分けている理由はautoEditPlan.tsと同じ。
+ */
+const DEFAULT_MODEL = "gemini-pro-latest";
+/** Proモデルは考えてから答えるぶん応答が遅く、参考動画だと60秒では足りないことがあるため延ばす。 */
+const GEMINI_TIMEOUT_MS = 120_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 
@@ -48,7 +55,14 @@ const buildPrompt = (kind: "image" | "video"): string => {
       : "静止画のためテロップの動きそのものは分からないので、テロップの見た目・縁取り・影の付き方などから最も自然に合いそうなものを推測してください。";
 
   return `
-添付した${subject}を見て、テロップ(字幕)のスタイルを5つ提案してください。
+あなたはショート動画の編集者です。添付した${subject}を見て、この投稿者の「編集の感じ」
+(テロップのデザインの癖)をできるだけ忠実に再現できるよう、テロップ(字幕)のスタイルを5つ判定してください。
+
+判定の前に、次の点をよく観察してください(観察内容は出力に含めない)。
+- テロップの文字そのもの: 太さ(極太/太/普通)、角ばっているか丸みがあるか、手書き・ポップ体・明朝のような癖があるか
+- 文字の装飾: 縁取りの有無と太さ・色、影の有無、文字の後ろに帯や座布団(背景の図形)があるか
+- 色の使い方: 文字色・縁取り色・帯の色のうち、どれが一番その投稿者らしい「差し色」か
+- 配置: 顔や被写体を避けてどこに置いているか、画面の安全領域(上下のUIに隠れない範囲)の中のどこか
 
 1. primaryColor: テロップに重ねて使うのに適したアクセントカラーを1色。${subject}内で印象的に
    使われている色、またはテロップの背景色として視認性が高くなりそうな色を選んでください。
@@ -123,7 +137,7 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const model = process.env.GEMINI_STYLE_MODEL || DEFAULT_MODEL;
   const prompt = buildPrompt(input.kind);
 
   let uploadedFileName: string | undefined;
@@ -165,6 +179,10 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
             config: {
               responseMimeType: "application/json",
               responseSchema,
+              // スクショは縁取りの太さやフォントの系統など細部の見極めが判定の決め手になるため、
+              // 画像のときだけ高解像度で読ませる(画像1枚ぶんのトークン増は小さい)。動画は
+              // 本数×尺でトークンが膨らむため既定の解像度のままにする。
+              ...(input.kind === "image" ? { mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH } : {}),
             },
           });
           const timeoutPromise = new Promise<never>((_, reject) => {

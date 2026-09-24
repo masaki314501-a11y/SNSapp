@@ -7,7 +7,12 @@ import {
   toFriendlyGeminiError,
 } from "./geminiErrors";
 
-const DEFAULT_MODEL = "gemini-2.5-flash-preview-tts";
+/**
+ * 旧来の gemini-2.5-flash-preview-tts より抑揚が自然で、ショート動画向きの明るい読み方になる。
+ * 「明るくテンポよく」のような読み方の指示を本文の前に付けると、指示文ごと読み上げてしまう
+ * (2026-09に文字起こしで確認済み)ため、テロップ本文だけを渡している。
+ */
+const DEFAULT_MODEL = "gemini-3.8-flash-tts";
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_GENERATE_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
@@ -113,9 +118,14 @@ export const generateVoiceover = async (input: GenerateVoiceoverInput): Promise<
             : "Gemini APIから音声データが返されませんでした"
         );
       }
-      const pcmData = Buffer.from(base64Data, "base64");
+      const audioData = Buffer.from(base64Data, "base64");
+      // gemini-3.x系のTTSはヘッダー付きのWAV(audio/wav)を返し、2.5系はヘッダー無しの生PCM
+      // (audio/L16)を返す。WAVにさらにヘッダーを足すと壊れたファイルになるため、そのまま使う。
+      if (audioData.subarray(0, 4).toString("ascii") === "RIFF") {
+        return audioData;
+      }
       const sampleRate = parseSampleRate(part?.inlineData?.mimeType);
-      return pcmToWav(pcmData, sampleRate);
+      return pcmToWav(audioData, sampleRate);
     } catch (error) {
       lastError = error;
       // 1日あたりの上限・チャージ残高切れは待っても回復しないため、再試行はトークンを無駄に

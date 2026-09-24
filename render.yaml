@@ -10,6 +10,10 @@ services:
         sync: false
       - key: GEMINI_MODEL
         sync: false
+      - key: GEMINI_STYLE_MODEL
+        sync: false
+      - key: GEMINI_AUTO_EDIT_MODEL
+        sync: false
       - key: GEMINI_TTS_MODEL
         sync: false
       - key: GOOGLE_MAPS_API_KEY

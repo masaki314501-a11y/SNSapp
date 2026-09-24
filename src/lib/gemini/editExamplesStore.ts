@@ -17,9 +17,9 @@ const CORRECT_MEDIA_DIR = path.join(DATA_DIR, "media", "correct");
 const RAW_MEDIA_DIR = path.join(DATA_DIR, "media", "raw");
 const METADATA_PATH = path.join(DATA_DIR, "examples.json");
 
-/** few-shotとして一度に渡す件数の上限。画像のスタイル抽出(6件)よりも大幅に絞る。
- * 動画のアップロード・解析はコスト/時間が重く、無料枠の1日あたりの上限も厳しいため。 */
-const MAX_EDIT_FEW_SHOT_EXAMPLES = 2;
+/** few-shotとして一度に渡す件数の上限。1件あたり学習動画+正解動画の2本を送るため、
+ * 画像のスタイル抽出(6件)よりは絞る。課金移行前は無料枠の上限のため2件・正解動画のみだった。 */
+const MAX_EDIT_FEW_SHOT_EXAMPLES = 3;
 
 const VIDEO_MIME_EXTENSIONS: Record<string, string> = {
   "video/mp4": "mp4",
@@ -164,11 +164,42 @@ export const readEditExampleMedia = async (
 };
 
 /**
- * 登録済みの編集例(正解動画)をfew-shotの参考としてGeminiリクエストに差し込むための
- * `Content`配列を組み立てる。styleExamplesStore.tsのfew-shotと違い、編集例は
- * 「入力→正解JSON」のラベル付きペアではなく「良い編集の実例」を見せるだけなので、
- * modelターン(正解の答え合わせ)は積まない。userターン1つに動画+説明文だけを渡す。
- * 正解動画のみを使い、対になる学習(元)動画はコスト抑制のため使わない。
+ * Gemini File APIへ動画を1本アップロードし、ACTIVEになるまで待ってPartとして返す。
+ * @google/genai SDKはアップロード時に元ファイル名をそのままHTTPヘッダー
+ * (X-Goog-Upload-File-Name)に入れるため、日本語ラベルを含むファイル名(buildMediaFilename
+ * 参照)だとByteString変換エラーで必ず失敗する。ASCIIのみの一時コピーを経由して回避する
+ * (ai.files.uploadにBlobを渡す手もあるが、動画全体をメモリに載せてしまいメモリ不足の
+ * 原因になるため、コピーで済ませてメモリには載せない)。
+ */
+const uploadExampleVideo = async (
+  ai: GoogleGenAI,
+  mediaPath: string,
+  mimeType: string,
+  uploadedFileNames: string[]
+): Promise<Part> => {
+  const tempPath = path.join(os.tmpdir(), `edit-example-${randomUUID()}${path.extname(mediaPath)}`);
+  try {
+    await copyFile(mediaPath, tempPath);
+    const uploaded = await ai.files.upload({ file: tempPath, config: { mimeType } });
+    if (!uploaded.name || !uploaded.uri) {
+      throw new Error("編集例動画のアップロードに失敗しました");
+    }
+    uploadedFileNames.push(uploaded.name);
+    await waitForGeminiFileActive(ai, uploaded.name);
+    return { fileData: { fileUri: uploaded.uri, mimeType } };
+  } finally {
+    await unlink(tempPath).catch(() => {});
+  }
+};
+
+/**
+ * 登録済みの編集例をfew-shotの参考としてGeminiリクエストに差し込むための`Content`配列を
+ * 組み立てる。styleExamplesStore.tsのfew-shotと違い、編集例は「入力→正解JSON」の
+ * ラベル付きペアではなく「良い編集の実例」を見せるだけなので、modelターン(正解の答え合わせ)
+ * は積まない。userターン1つに動画+説明文だけを渡す。
+ * 学習動画(編集前の元素材)が登録されていれば正解動画と並べて渡し、「素材に対して編集者が
+ * 何を足したか(どこに効果音・強調・声を入れたか)」の差分から学ばせる。完成版だけだと
+ * 元々の話し方と後から足した演出の区別がつかないため。
  * 呼び出し元はリクエスト完了後に`uploadedFileNames`を削除すること。
  */
 export const loadEditFewShotContext = async (
@@ -180,26 +211,37 @@ export const loadEditFewShotContext = async (
   const uploadedFileNames: string[] = [];
 
   for (const example of examples) {
-    // Geminiの@google/genai SDKはアップロード時に元ファイル名をそのままHTTPヘッダー
-    // (X-Goog-Upload-File-Name)に入れるため、日本語ラベルを含むファイル名(buildMediaFilename
-    // 参照)だとByteString変換エラーで必ず失敗する。ASCIIのみの一時コピーを経由して回避する
-    // (ai.files.uploadにBlobを渡す手もあるが、動画全体をメモリに載せてしまいメモリ不足の
-    // 原因になるため、コピーで済ませてメモリには載せない)。
-    const tempPath = path.join(os.tmpdir(), `edit-example-${randomUUID()}${path.extname(example.correctMediaFilename)}`);
     try {
-      const mediaPath = path.join(CORRECT_MEDIA_DIR, example.correctMediaFilename);
-      await copyFile(mediaPath, tempPath);
-      const uploaded = await ai.files.upload({ file: tempPath, config: { mimeType: example.correctMimeType } });
-      if (!uploaded.name || !uploaded.uri) continue;
-      uploadedFileNames.push(uploaded.name);
-      await waitForGeminiFileActive(ai, uploaded.name);
-      const mediaPart: Part = { fileData: { fileUri: uploaded.uri, mimeType: example.correctMimeType } };
       const description = example.notes?.trim() || example.label;
-      contents.push({ role: "user", parts: [mediaPart, { text: `参考になる編集例: ${description}` }] });
+      const parts: Part[] = [];
+      if (example.rawMediaFilename && example.rawMimeType) {
+        parts.push({ text: `【編集例「${description}」の学習動画(編集前の元素材)】` });
+        parts.push(
+          await uploadExampleVideo(
+            ai,
+            path.join(RAW_MEDIA_DIR, example.rawMediaFilename),
+            example.rawMimeType,
+            uploadedFileNames
+          )
+        );
+      }
+      parts.push({ text: `【編集例「${description}」の正解動画(プロが編集した完成版)】` });
+      parts.push(
+        await uploadExampleVideo(
+          ai,
+          path.join(CORRECT_MEDIA_DIR, example.correctMediaFilename),
+          example.correctMimeType,
+          uploadedFileNames
+        )
+      );
+      parts.push({
+        text: example.rawMediaFilename
+          ? "上の2本を見比べ、編集前の素材に対して何が足されたか(フックの作り方、効果音を入れた瞬間と種類、テロップの強調・演出、声で押している箇所、テンポ)を読み取って、これから依頼する編集の手本にしてください。"
+          : "この完成版の編集(フックの作り方、効果音を入れた瞬間と種類、テロップの強調・演出、声で押している箇所、テンポ)を読み取って、これから依頼する編集の手本にしてください。",
+      });
+      contents.push({ role: "user", parts });
     } catch (error) {
       console.warn(`[editExamplesStore] few-shot例(${example.id})の読み込みに失敗したためスキップします`, error);
-    } finally {
-      await unlink(tempPath).catch(() => {});
     }
   }
   return { contents, uploadedFileNames };
