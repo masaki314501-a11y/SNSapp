@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Html5Video, interpolate, useCurrentFrame, useRemotionEnvironment, useVideoConfig } from "remotion";
 // <OffthreadVideo>はサーバー側のフレーム抽出(compositor)が前提で、ブラウザ内での書き出し
 // (@remotion/web-renderer)に対応していない。書き出しを利用者のブラウザで行うようにしたため
 // (サーバーのメモリ512MBでは落ちていた。useWebRender.ts参照)、どちらでも動く<Video>を使う。
@@ -33,6 +33,7 @@ export const MediaBackground: React.FC<Props> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+  const { isPlayer } = useRemotionEnvironment();
 
   // 寄りの指定が無いカットは従来通り、カット頭でわずかに引く小さなパンチインだけ入れる。
   // punchはカット頭で目標倍率より少し大きい所から一瞬で落ち着かせ「ドンッ」と寄った印象に、
@@ -49,7 +50,18 @@ export const MediaBackground: React.FC<Props> = ({
 
   return (
     <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin }}>
-      {src ? (
+      {src && isPlayer ? (
+        // 編集画面のプレビューでは、ブラウザ標準の<video>で再生する。@remotion/mediaの<Video>は1コマずつ
+        // 解読してcanvasに描くため重く、iPhone/iPadでは読み込み待ちのたびにプレビュー全体が止まっていた。
+        // 標準の<video>は端末のハードウェアで再生され、読み込みが遅れても全体は止めずに進む
+        // (その間だけ絵が少し止まる)。書き出しはコマ単位で正確に描く必要があるので、下の<Video>のまま。
+        <Html5Video
+          src={resolveClipSrc(src)}
+          trimBefore={Math.round(startFromSeconds * fps)}
+          volume={volume}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : src ? (
         <Video
           src={resolveClipSrc(src)}
           trimBefore={Math.round(startFromSeconds * fps)}

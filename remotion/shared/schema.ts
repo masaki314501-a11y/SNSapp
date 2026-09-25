@@ -187,6 +187,24 @@ export const textOverlaySchema = z.object({
 export type TextOverlay = z.infer<typeof textOverlaySchema>;
 
 /**
+ * 画面に重ねる画像(ロゴ・商品写真・図など)。利用者がアップロードした画像を、位置・大きさ・
+ * 表示タイミング・出現演出を指定して重ねる。src は public/ 配下の相対パス("images/xxx.png")かURL。
+ */
+export const imageOverlaySchema = z.object({
+  src: z.string(),
+  startOffsetSeconds: z.number().min(0).default(0).describe("カット先頭(動画全体の場合は動画先頭)から何秒後に出すか"),
+  durationInSeconds: z.number().min(0.2).max(600).optional().describe("表示秒数。省略時は最後まで"),
+  xPercent: z.number().min(0).max(100).default(50).describe("画像の中心の横位置(左端0〜右端100)"),
+  yPercent: z.number().min(0).max(100).default(50).describe("画像の中心の縦位置(上端0〜下端100)"),
+  widthPercent: z.number().min(5).max(100).default(50).describe("画像の幅(画面幅に対する割合)"),
+  rotationDeg: z.number().min(-45).max(45).default(0),
+  cornerRadiusPx: z.number().min(0).max(200).default(0),
+  animation: captionAnimationSchema,
+});
+
+export type ImageOverlay = z.infer<typeof imageOverlaySchema>;
+
+/**
  * 動画/画像+テロップで構成されるカットの共通フィールド。
  * テンプレート固有のフィールド(例: ランキングのtitle)は各テンプレートのschemaでextendする。
  */
@@ -221,6 +239,7 @@ export const mediaItemBaseSchema = z.object({
   emphasisColor: zColor().optional(),
   zoom: clipZoomSchema.optional(),
   overlays: z.array(textOverlaySchema).max(8).optional(),
+  images: z.array(imageOverlaySchema).max(8).optional(),
 });
 
 export const sfxClipSchema = z.object({

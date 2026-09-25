@@ -35,10 +35,13 @@ export const canMergeWithNext = <T extends TimelineSegment>(
 };
 
 /** 分割・結合時に引き継ぎ方を調整する、自動編集由来の任意フィールド。 */
+type TimedItem = { startOffsetSeconds: number; durationInSeconds?: number };
 type SplittableExtras = {
-  overlays?: { startOffsetSeconds: number; durationInSeconds?: number }[];
+  overlays?: TimedItem[];
+  images?: TimedItem[];
   speechText?: string;
 };
+const TIMED_ITEM_FIELDS = ["overlays", "images"] as const;
 
 /**
  * segments[index]とsegments[index + 1]を1つに結合した新しい配列を返す(再生順の位置は
@@ -56,16 +59,17 @@ export const mergeWithNext = <T extends TimelineSegment & { caption: string }>(
     durationInSeconds: current.durationInSeconds + next.durationInSeconds,
     caption: [current.caption, next.caption].filter((text) => text.trim().length > 0).join(" "),
   };
-  // 後ろのクリップの強調テキストも、前のクリップの尺だけ時刻をずらして引き継ぐ(捨てると
+  // 後ろのクリップの強調テキスト・画像も、前のクリップの尺だけ時刻をずらして引き継ぐ(捨てると
   // 結合しただけで演出が消えてしまう)。書き起こしの下書きはつなげる。
   const currentExtras = current as T & SplittableExtras;
   const nextExtras = next as T & SplittableExtras;
-  if (currentExtras.overlays || nextExtras.overlays) {
-    const shifted = (nextExtras.overlays ?? []).map((o) => ({
+  for (const field of TIMED_ITEM_FIELDS) {
+    if (!currentExtras[field] && !nextExtras[field]) continue;
+    const shifted = (nextExtras[field] ?? []).map((o) => ({
       ...o,
       startOffsetSeconds: o.startOffsetSeconds + current.durationInSeconds,
     }));
-    (merged as T & SplittableExtras).overlays = [...(currentExtras.overlays ?? []), ...shifted].slice(0, 8);
+    (merged as T & SplittableExtras)[field] = [...(currentExtras[field] ?? []), ...shifted].slice(0, 8);
   }
   if (currentExtras.speechText !== undefined && nextExtras.speechText !== undefined) {
     (merged as T & SplittableExtras).speechText = [currentExtras.speechText, nextExtras.speechText]
@@ -114,10 +118,12 @@ export const splitSegment = <T extends TimelineSegment & { caption: string; key:
     caption: "",
   };
   const extras = seg as T & SplittableExtras;
-  if (extras.overlays) {
-    // 強調テキストは出す時刻(クリップ先頭からの秒)で前後に振り分ける。そのままコピーすると、
-    // 後半に出るはずの文字が前半の終わりに一瞬出たり、後半で時刻がずれたりする。
-    const before = extras.overlays
+  for (const field of TIMED_ITEM_FIELDS) {
+    const items = extras[field];
+    if (!items) continue;
+    // 強調テキスト・画像は出す時刻(クリップ先頭からの秒)で前後に振り分ける。そのままコピーすると、
+    // 後半に出るはずのものが前半の終わりに一瞬出たり、後半で時刻がずれたりする。
+    const before = items
       .filter((o) => o.startOffsetSeconds < offsetInSegmentSeconds)
       .map((o) => ({
         ...o,
@@ -126,11 +132,11 @@ export const splitSegment = <T extends TimelineSegment & { caption: string; key:
           offsetInSegmentSeconds - o.startOffsetSeconds
         ),
       }));
-    const after = extras.overlays
+    const after = items
       .filter((o) => o.startOffsetSeconds >= offsetInSegmentSeconds)
       .map((o) => ({ ...o, startOffsetSeconds: o.startOffsetSeconds - offsetInSegmentSeconds }));
-    (first as T & SplittableExtras).overlays = before.length > 0 ? before : undefined;
-    (second as T & SplittableExtras).overlays = after.length > 0 ? after : undefined;
+    (first as T & SplittableExtras)[field] = before.length > 0 ? before : undefined;
+    (second as T & SplittableExtras)[field] = after.length > 0 ? after : undefined;
   }
   if (extras.speechText !== undefined) {
     // 自動編集の書き起こしはクリップ全体に対するものなので、分割すると前後どちらとも合わなくなる。

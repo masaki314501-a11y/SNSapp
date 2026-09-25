@@ -131,7 +131,12 @@ export const useWebRender = () => {
     } catch (error) {
       if (controller.signal.aborted) return;
       console.error("[useWebRender] 書き出しに失敗しました", error);
-      const message = error instanceof Error ? error.message : "書き出しに失敗しました";
+      const rawMessage = error instanceof Error ? error.message : "書き出しに失敗しました";
+      // 変換処理(prepareVideoFile.ts)を入れる前にアップロードされたHEVC等の動画だと、ここで止まる。
+      // 英語のままだと何をすればいいか分からないため、やり直し方を案内する。
+      const message = rawMessage.includes("could not be decoded")
+        ? "元の動画をこのブラウザで読み込めませんでした。お手数ですが、最初の画面から動画をアップロードし直してください(どの端末でも使える形式に自動で変換されます)。"
+        : rawMessage;
       pushLog(`エラー: ${message}`);
       setRenderState({ status: "error", message });
     } finally {

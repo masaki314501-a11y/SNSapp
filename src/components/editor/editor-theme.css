@@ -108,6 +108,14 @@
   flex-wrap: wrap;
 }
 
+.editor-toolbar-hint {
+  order: 99;
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
 .editor-toolbar-btn {
   display: inline-flex;
   align-items: center;
@@ -488,4 +496,45 @@
 }
 .editor-inspector-footer input[type="file"] {
   display: none;
+}
+
+/* --- プレビュー上で強調テキスト・画像をドラッグで動かす層(PreviewDragLayer.tsx) --- */
+.preview-drag-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* 層そのものはクリックを素通しし(プレビューの再生/一時停止のため)、枠だけがつかめる */
+  pointer-events: none;
+}
+.preview-drag-handle {
+  position: absolute;
+  pointer-events: auto;
+  cursor: grab;
+  /* 指でつかんだときにページがスクロールしないように */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  text-align: center;
+  outline: calc(3px * var(--drag-inverse-scale, 1)) dashed rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 calc(6px * var(--drag-inverse-scale, 1)) rgba(0, 0, 0, 0.25);
+  border-radius: calc(6px * var(--drag-inverse-scale, 1));
+}
+.preview-drag-handle.dragging {
+  cursor: grabbing;
+  outline-color: var(--accent);
+  outline-style: solid;
+}
+.preview-drag-handle span {
+  display: inline-block;
+  /* 文字自体は動画側に描かれているので、ここでは大きさを合わせるためだけに置いて見せない */
+  color: transparent;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: pre-wrap;
+}
+.preview-drag-handle img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
 }

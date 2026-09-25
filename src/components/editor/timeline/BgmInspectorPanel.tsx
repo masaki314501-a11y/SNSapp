@@ -75,7 +75,7 @@ export const BgmInspectorPanel: React.FC<Props> = ({
           </div>
         ) : (
           <div className="editor-inspector-empty">
-            <p>{bgm ? "下のBGMブロックを選択すると、ここでプロパティを編集できます" : "BGMを追加すると、ここで音量やフェードを編集できます"}</p>
+            <p>{bgm ? "下のBGMブロックを選択すると、ここで細かく設定できます" : "BGMを追加すると、ここで音量やフェードを編集できます"}</p>
           </div>
         )}
       </div>

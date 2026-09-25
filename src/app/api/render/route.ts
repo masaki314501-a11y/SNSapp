@@ -87,6 +87,11 @@ export async function POST(request: Request) {
     clips: parsed.data.clips.map((clip) => ({
       ...clip,
       src: resolveUploadedSrc(clip.src),
+      images: clip.images?.map((image) => ({ ...image, src: resolveUploadedSrc(image.src) ?? image.src })),
+    })),
+    globalImages: parsed.data.globalImages?.map((image) => ({
+      ...image,
+      src: resolveUploadedSrc(image.src) ?? image.src,
     })),
     sfx: parsed.data.sfx.map((clip) => ({
       ...clip,

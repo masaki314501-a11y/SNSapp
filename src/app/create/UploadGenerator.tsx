@@ -16,6 +16,7 @@ import {
   saveProject,
   type VideoProject,
 } from "@/lib/videoProject";
+import { prepareVideoFile } from "./prepareVideoFile";
 import { uploadVideoFile } from "./uploadVideoFile";
 
 /**
@@ -68,6 +69,8 @@ export const UploadGenerator: React.FC = () => {
   const [videoFileName, setVideoFileName] = useState<string | null>(null);
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoUploadPercent, setVideoUploadPercent] = useState(0);
+  /** アップロード前の形式変換中の進捗(0〜100)。変換しない/終わったらnull。 */
+  const [videoConvertPercent, setVideoConvertPercent] = useState<number | null>(null);
   const [videoDurationInSeconds, setVideoDurationInSeconds] = useState<number | null>(null);
   const [durationError, setDurationError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -91,16 +94,21 @@ export const UploadGenerator: React.FC = () => {
     setVideoFileName(file.name);
     setVideoDurationInSeconds(null);
     setVideoPath("");
-    setPendingFile(file);
-
-    detectDuration(file);
 
     try {
-      const path = await uploadVideoFile(file, setVideoUploadPercent);
+      // どの端末でも書き出せる形式にそろえてから送る(理由はprepareVideoFile.ts参照)。
+      // 長さの検出も変換後のファイルで行う(元がHEVCだと、ブラウザによっては長さすら読めないため)。
+      const prepared = await prepareVideoFile(file, setVideoConvertPercent);
+      setVideoConvertPercent(null);
+      setPendingFile(prepared);
+      detectDuration(prepared);
+      const path = await uploadVideoFile(prepared, setVideoUploadPercent);
       setVideoPath(path);
     } catch (error) {
+      setVideoFileName(null);
       alert(error instanceof Error ? error.message : "アップロードに失敗しました");
     } finally {
+      setVideoConvertPercent(null);
       setVideoUploading(false);
     }
   };
@@ -179,10 +187,17 @@ export const UploadGenerator: React.FC = () => {
           {videoUploading ? (
             <div className="flex flex-col gap-1.5">
               <span className="badge-pill warning w-fit">
-                {videoUploadPercent < 100 ? `アップロード中... ${videoUploadPercent}%` : "保存中..."}
+                {videoConvertPercent !== null
+                  ? `どの端末でも使える形式に変換中... ${videoConvertPercent}%`
+                  : videoUploadPercent < 100
+                    ? `アップロード中... ${videoUploadPercent}%`
+                    : "保存中..."}
               </span>
               <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${videoUploadPercent}%` }} />
+                <div
+                  className="progress-fill"
+                  style={{ width: `${videoConvertPercent ?? videoUploadPercent}%` }}
+                />
               </div>
             </div>
           ) : videoFileName ? (

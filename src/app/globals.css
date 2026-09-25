@@ -80,6 +80,31 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), "Hiragino Sans", "Noto Sans JP", sans-serif;
   min-height: 100%;
+  /* 英数字だけの長いファイル名(IMG_1234_xxxx.MOV等)は途中で折り返せず、スマホで画面の外へはみ出していた */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * スマホ幅で画面からはみ出さないための全体の安全策。ページごとに幅を指定し忘れても崩れないよう、
+ * ここでまとめて「親の幅より大きくならない」ようにする。
+ * きっかけは、ファイル選択欄(input[type=file])の既定の最小幅(約300px)で/createと/create/styleが
+ * iPhone幅で横にはみ出していたこと。
+ */
+img,
+video,
+canvas,
+svg,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+/* キーボード操作の説明は、スマホ・タブレット(マウスのない端末)では使えないので出さない */
+@media not all and (hover: hover) and (pointer: fine) {
+  .keyboard-hint {
+    display: none;
+  }
 }
 
 ::selection {

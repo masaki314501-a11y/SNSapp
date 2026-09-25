@@ -5,9 +5,10 @@ few-shot例(「良い編集とはこういうもの」の実例)を保存する�
 `data/style-examples/`(スタイル抽出の正解データ)とは別物で、こちらは色などの構造化値
 ではなく動画そのものが正解データになる。
 
-登録した内容は自動編集リクエストのたびに新しいものから最大2件が「参考になる編集例」
+登録した内容は自動編集リクエストのたびに最大3件が「参考になる編集例」
 としてGeminiへのリクエストに差し込まれる(`src/lib/gemini/editExamplesStore.ts` の
-`loadEditFewShotContext`)。画像のスタイル抽出(6件)より件数を絞っているのは、動画の
+`loadEditFewShotContext`)。3件より多い場合は、今回の動画に近いものを選ぶ
+(`src/lib/gemini/editExampleSelection.ts`、各手本の`profile`=AIが書いた「どんな動画か」の説明で判断)。画像のスタイル抽出(6件)より件数を絞っているのは、動画の
 アップロード・解析がコスト/時間ともに重いため。
 
 Render等へのデプロイはコンテナが実行時に書いたファイルを永続化しないため、ここに
@@ -16,7 +17,7 @@ Render等へのデプロイはコンテナが実行時に書いたファイル�
 ## 中身
 
 - `examples.json` — 登録済み編集例のメタデータ(1件ごとに
-  `{ id, label, notes?, correctMediaFilename, correctMimeType, rawMediaFilename?, rawMimeType?, createdAt }`)。
+  `{ id, label, notes?, correctMediaFilename, correctMimeType, rawMediaFilename?, rawMimeType?, profile?, createdAt }`)。
   自動生成されるので手で編集しない。
 - `media/correct/` — 正解動画(完成度の高い参考動画)の実体。
   ファイル名は `{ラベルから作ったスラッグ}-{短いランダムID}.{拡張子}`

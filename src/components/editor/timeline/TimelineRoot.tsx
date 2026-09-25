@@ -136,7 +136,13 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
       <div className="editor-timeline-toolbar">
         {showCutTools ? (
           <>
-            <button type="button" className="editor-toolbar-btn" onClick={onAddSegment} disabled={!canAddSegment}>
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              onClick={onAddSegment}
+              disabled={!canAddSegment}
+              title="元の動画のうち、まだ使っていない部分をクリップとして足します"
+            >
               + クリップ
             </button>
             <button
@@ -144,7 +150,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
               className="editor-toolbar-btn"
               onClick={onSplitAtPlayhead}
               disabled={!canSplitAtPlayhead}
-              title="再生ヘッドの位置でクリップを分割します (S)"
+              title="赤い線の位置で、クリップを2つに分けます (S)"
             >
               ✂ 分割
             </button>
@@ -153,19 +159,23 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
               className="editor-toolbar-btn"
               onClick={onTrimStartToPlayhead}
               disabled={!canTrimAtPlayhead}
-              title="再生ヘッドの位置をクリップの開始点にします (I)"
+              title="赤い線より前をカットして、クリップをここから始めます (I)"
             >
-              [ イン点
+              ⇤ ここから使う
             </button>
             <button
               type="button"
               className="editor-toolbar-btn"
               onClick={onTrimEndToPlayhead}
               disabled={!canTrimAtPlayhead}
-              title="再生ヘッドの位置をクリップの終了点にします (O)"
+              title="赤い線より後ろをカットして、クリップをここで終わらせます (O)"
             >
-              アウト点 ]
+              ここまで使う ⇥
             </button>
+            {/* ボタンの説明(title)はスマホでは出ないため、使い方を常に見える形で書いておく */}
+            <p className="editor-toolbar-hint">
+              赤い線(再生位置)を動かしてからボタンを押すと、その位置でクリップを分けたり、前後をカットしたりできます
+            </p>
           </>
         ) : null}
         <button type="button" className="editor-toolbar-btn" onClick={onUndo} disabled={!canUndo} title="元に戻す (Ctrl/Cmd+Z)">

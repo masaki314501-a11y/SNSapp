@@ -12,6 +12,7 @@ import {
   CAPTION_FONT_SIZE_OPTIONS,
   CAPTION_POSITION_OPTIONS,
   CAPTION_STYLE_OPTIONS,
+  resolveFontFamilyStack,
   type CaptionAnimation,
   type CaptionFontFamily,
   type CaptionFontSize,
@@ -59,6 +60,9 @@ import { assignTranscriptToSegments } from "./timelineUtils";
 import { SfxInspectorPanel } from "./timeline/SfxInspectorPanel";
 import { NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
 import { BgmInspectorPanel } from "./timeline/BgmInspectorPanel";
+import { PreviewDragLayer, type DragTarget } from "./PreviewDragLayer";
+import { AiRevisePanel } from "./AiRevisePanel";
+import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
 
 /**
  * /create でアップロード・字幕生成された動画を、再生しながらトリム・並べ替え・
@@ -126,6 +130,9 @@ const EmptyState: React.FC = () => (
     </a>
   </div>
 );
+
+/** 再生中に編集画面の「今の再生位置」を更新する最短間隔(理由はhandleFrameUpdateのコメント参照)。 */
+const PLAYING_FRAME_UPDATE_INTERVAL_MS = 150;
 
 export const ClipEditor: React.FC = () => {
   const router = useRouter();
@@ -274,6 +281,7 @@ export const ClipEditor: React.FC = () => {
         hook: project?.hook,
         cta: project?.cta,
         globalOverlays: project?.globalOverlays,
+        globalImages: project?.globalImages,
       }),
     [
       form.segments,
@@ -281,6 +289,7 @@ export const ClipEditor: React.FC = () => {
       project?.hook,
       project?.cta,
       project?.globalOverlays,
+      project?.globalImages,
       primaryColor,
       captionStyle,
       fontFamily,
@@ -321,16 +330,38 @@ export const ClipEditor: React.FC = () => {
    * クリップの有無が切り替わるタイミングで購読し直す。
    */
   const [previewFrame, setPreviewFrame] = useState(0);
+  /** 再生中はドラッグ用の枠を出さない(動いている文字はつかめず、見るのに邪魔なため)。 */
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const hasClips = form.segments.length > 0;
   useEffect(() => {
     if (!hasClips) return;
     const player = playerRef.current;
     if (!player) return;
+    // 再生中に毎コマ(1秒30回)この大きな画面全体を描き直すと、iPhone/iPadでは処理が追いつかず
+    // プレビューの再生が途中で止まっていた。再生中は間引いて更新し(再生位置の線が少しカクつく程度)、
+    // 止めた時・位置を動かした時は正確な位置をすぐ反映する。
+    let lastUpdateAt = 0;
     const handleFrameUpdate = ({ detail }: { detail: { frame: number } }) => {
+      if (player.isPlaying()) {
+        const now = performance.now();
+        if (now - lastUpdateAt < PLAYING_FRAME_UPDATE_INTERVAL_MS) return;
+        lastUpdateAt = now;
+      }
       setPreviewFrame(detail.frame);
     };
+    const handlePause = () => {
+      setIsPreviewPlaying(false);
+      setPreviewFrame(player.getCurrentFrame());
+    };
+    const handlePlay = () => setIsPreviewPlaying(true);
     player.addEventListener("frameupdate", handleFrameUpdate);
-    return () => player.removeEventListener("frameupdate", handleFrameUpdate);
+    player.addEventListener("pause", handlePause);
+    player.addEventListener("play", handlePlay);
+    return () => {
+      player.removeEventListener("frameupdate", handleFrameUpdate);
+      player.removeEventListener("pause", handlePause);
+      player.removeEventListener("play", handlePlay);
+    };
   }, [hasClips]);
 
   /** 今プレビューが再生しているクリップ(再生順)と、そのクリップ内での経過秒数。 */
@@ -407,6 +438,141 @@ export const ClipEditor: React.FC = () => {
   /** 動画全体の演出(冒頭の見出し・締めの一言・ずっと出す文字)を直す。projectの変更は自動保存に乗る。 */
   const updateProjectEffects = (patch: ProjectEffectsPatch) => {
     setProject((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  /** プレビュー上でドラッグした強調テキスト・画像の位置を反映する(PreviewDragLayer.tsx)。 */
+  const moveOverlayOnPreview = (target: DragTarget, xPercent: number, yPercent: number) => {
+    const move = <T extends { xPercent: number; yPercent: number }, L extends T[] | null | undefined>(items: L): L =>
+      (items?.map((item, index) => (index === target.index ? { ...item, xPercent, yPercent } : item)) ?? items) as L;
+    if (target.clipKey === null) {
+      setProject((prev) =>
+        prev
+          ? target.kind === "text"
+            ? { ...prev, globalOverlays: move(prev.globalOverlays) }
+            : { ...prev, globalImages: move(prev.globalImages) }
+          : prev
+      );
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      segments: prev.segments.map((segment) =>
+        segment.key !== target.clipKey
+          ? segment
+          : target.kind === "text"
+            ? { ...segment, overlays: move(segment.overlays) }
+            : { ...segment, images: move(segment.images) }
+      ),
+    }));
+  };
+
+  /**
+   * 「AIに頼む」に渡す今の編集内容。クリップと効果音は今の並び順の番号をidにし、AIの返事を
+   * 元の要素に対応づける(keyや音声ファイルのパスはAIに触らせない)。
+   */
+  const buildAiEditableState = (): EditableState => ({
+    theme: { primaryColor, fontFamily, captionPosition, captionStyle, fontSize },
+    hook: project?.hook ?? null,
+    cta: project?.cta ?? null,
+    globalOverlays: project?.globalOverlays ?? [],
+    globalImages: project?.globalImages ?? [],
+    clips: form.segments.map((segment, index) => ({
+      id: index,
+      startFromSeconds: segment.startFromSeconds,
+      durationInSeconds: segment.durationInSeconds,
+      caption: segment.caption,
+      captionAnimation: segment.captionAnimation,
+      emphasisWords: segment.emphasisWords,
+      emphasisColor: segment.emphasisColor,
+      zoom: segment.zoom,
+      overlays: segment.overlays,
+      images: segment.images,
+    })),
+    sfx: sfxClips.map((clip, index) => ({
+      id: index,
+      label: clip.label,
+      presetId: SFX_PRESETS.find((preset) => preset.src === clip.src)?.id ?? null,
+      startFromSeconds: clip.startFromSeconds,
+      volume: clip.volume,
+      isNarration: isNarrationClip(clip),
+    })),
+  });
+
+  /** AIの修正を反映する直前の状態。反映後に1回だけ元に戻せるようにする。 */
+  const [aiUndoSnapshot, setAiUndoSnapshot] = useState<{
+    segments: SegmentFormState[];
+    sfxClips: ProjectSfxClip[];
+    project: VideoProject;
+    theme: { primaryColor: string; fontFamily: CaptionFontFamily; captionPosition: CaptionPosition; captionStyle: CaptionStyle; fontSize: CaptionFontSize };
+  } | null>(null);
+
+  const applyAiRevision = (result: ReviseEditResult) => {
+    if (!project) return;
+    setAiUndoSnapshot({
+      segments: form.segments,
+      sfxClips,
+      project,
+      theme: { primaryColor, fontFamily, captionPosition, captionStyle, fontSize },
+    });
+    pushHistory();
+    const { state } = result;
+    setForm((prev) => ({
+      ...prev,
+      segments: state.clips.flatMap((clip) => {
+        const original = prev.segments[clip.id];
+        if (!original) return [];
+        return [
+          {
+            ...original,
+            startFromSeconds: clip.startFromSeconds,
+            durationInSeconds: clip.durationInSeconds,
+            caption: clip.caption,
+            captionAnimation: clip.captionAnimation as CaptionAnimation,
+            emphasisWords: clip.emphasisWords,
+            emphasisColor: clip.emphasisColor,
+            zoom: clip.zoom,
+            overlays: clip.overlays,
+            images: clip.images,
+          },
+        ];
+      }),
+    }));
+    setSfxClips((prev) =>
+      state.sfx.flatMap((clip) => {
+        if (clip.id !== null) {
+          const original = prev[clip.id];
+          return original ? [{ ...original, startFromSeconds: clip.startFromSeconds, volume: clip.volume }] : [];
+        }
+        // AIが新しく足した効果音。プリセットの音声ファイルを使う(ファイルの中身はAIに作らせない)
+        const preset = SFX_PRESETS.find((p) => p.id === clip.presetId);
+        return preset
+          ? [{ key: crypto.randomUUID(), src: preset.src, label: preset.label, startFromSeconds: clip.startFromSeconds, volume: clip.volume }]
+          : [];
+      })
+    );
+    setProject((prev) =>
+      prev
+        ? { ...prev, hook: state.hook ?? undefined, cta: state.cta ?? undefined, globalOverlays: state.globalOverlays, globalImages: state.globalImages }
+        : prev
+    );
+    setPrimaryColor(state.theme.primaryColor);
+    setFontFamily(state.theme.fontFamily as CaptionFontFamily);
+    setCaptionPosition(state.theme.captionPosition as CaptionPosition);
+    setCaptionStyle(state.theme.captionStyle as CaptionStyle);
+    setFontSize(state.theme.fontSize as CaptionFontSize);
+  };
+
+  const undoAiRevision = () => {
+    if (!aiUndoSnapshot) return;
+    setForm((prev) => ({ ...prev, segments: aiUndoSnapshot.segments }));
+    setSfxClips(aiUndoSnapshot.sfxClips);
+    setProject(aiUndoSnapshot.project);
+    setPrimaryColor(aiUndoSnapshot.theme.primaryColor);
+    setFontFamily(aiUndoSnapshot.theme.fontFamily);
+    setCaptionPosition(aiUndoSnapshot.theme.captionPosition);
+    setCaptionStyle(aiUndoSnapshot.theme.captionStyle);
+    setFontSize(aiUndoSnapshot.theme.fontSize);
+    setAiUndoSnapshot(null);
   };
 
   /** 構造的な操作の直前に呼び、その時点の並びを履歴に積む(Redo履歴は破棄)。 */
@@ -1026,10 +1192,10 @@ export const ClipEditor: React.FC = () => {
     const text = await file.text();
     const imported = parseProjectJson(text);
     if (!imported) {
-      alert("有効なプロジェクトファイルではありません");
+      alert("このファイルは編集データではないようです。「編集データを保存」で保存した、名前が .editor-project.json で終わるファイルを選んでください。");
       return;
     }
-    if (!window.confirm("現在の編集内容を上書きしてインポートしますか?")) return;
+    if (!window.confirm("今の編集内容は消えて、選んだ編集データの状態に置き換わります。よろしいですか?")) return;
     setProject(imported);
     setForm({ segments: imported.segments });
     setPrimaryColor(imported.primaryColor);
@@ -1056,19 +1222,20 @@ export const ClipEditor: React.FC = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      {/* スマホ幅でボタンの文字が縦に潰れないよう、ボタンは折り返さず、並び全体を折り返す */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" onClick={handleStartOver} className="btn-ghost text-xs">
+        <button type="button" onClick={handleStartOver} className="btn-ghost whitespace-nowrap text-xs">
           ← 別の動画からやり直す
         </button>
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={handleGoToAutoEdit} className="btn-ghost text-xs">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <button type="button" onClick={handleGoToAutoEdit} className="btn-ghost whitespace-nowrap text-xs">
             ✨ 自動編集を試す
           </button>
-          <button type="button" onClick={handleExportProject} className="btn-ghost text-xs">
-            ⬇ プロジェクトを書き出す
+          <button type="button" onClick={handleExportProject} className="btn-ghost whitespace-nowrap text-xs">
+            💾 編集データを保存
           </button>
-          <label className="btn-ghost cursor-pointer text-xs">
-            ⬆ プロジェクトを読み込む
+          <label className="btn-ghost cursor-pointer whitespace-nowrap text-xs">
+            📂 保存した編集データを開く
             <input
               type="file"
               accept="application/json"
@@ -1081,6 +1248,15 @@ export const ClipEditor: React.FC = () => {
           </label>
         </div>
       </div>
+      {/*
+        「プロジェクトを書き出す/読み込む」は「動画を書き出す」と紛らわしく、何が保存されるのかも
+        分からないと言われたため、名前を変えたうえで常に見える説明を付けている(マウスを乗せて出る説明は
+        スマホでは見えない)。
+      */}
+      <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+        「編集データを保存」は、今の編集の状態(カット・字幕・演出など)をファイルに残します。動画そのものは入りません。
+        あとで「保存した編集データを開く」でそのファイルを選ぶと、保存した時の状態に戻せます。
+      </p>
 
       {/* プログラムモニター(再生しながら編集できる中心のプレビュー)+ 選択中クリップのインスペクター */}
       <div className="editor-top-row">
@@ -1090,6 +1266,7 @@ export const ClipEditor: React.FC = () => {
               style={{
                 height: "min(58vh, 620px)",
                 aspectRatio: `${VIDEO_WIDTH} / ${VIDEO_HEIGHT}`,
+                position: "relative",
                 borderRadius: 8,
                 overflow: "hidden",
                 border: "1px solid var(--border-strong)",
@@ -1107,6 +1284,16 @@ export const ClipEditor: React.FC = () => {
                 controls
                 loop
               />
+              {!isPreviewPlaying ? (
+                <PreviewDragLayer
+                  segments={form.segments}
+                  globalOverlays={project?.globalOverlays}
+                  globalImages={project?.globalImages}
+                  frame={previewFrame}
+                  fontFamilyStack={resolveFontFamilyStack(fontFamily)}
+                  onMove={moveOverlayOnPreview}
+                />
+              ) : null}
             </div>
           ) : (
             <div
@@ -1136,8 +1323,8 @@ export const ClipEditor: React.FC = () => {
               {copyStatus === "done" ? "✓ コピーしました" : "字幕をコピー"}
             </button>
           </div>
-          <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-            Space=再生/一時停止・←→=1フレーム送り・S=分割・I/O=再生位置をイン/アウト点に
+          <p className="keyboard-hint text-xs" style={{ color: "var(--muted-2)" }}>
+            キーボード操作: Space=再生/一時停止・←→=1コマ送り・S=分割・I=ここから使う・O=ここまで使う
           </p>
         </div>
 
@@ -1179,6 +1366,7 @@ export const ClipEditor: React.FC = () => {
             hook={project?.hook ?? null}
             cta={project?.cta ?? null}
             globalOverlays={project?.globalOverlays ?? null}
+            globalImages={project?.globalImages ?? null}
             onUpdateSegmentEffects={updateSegmentEffects}
             onUpdateProjectEffects={updateProjectEffects}
           />
@@ -1229,6 +1417,28 @@ export const ClipEditor: React.FC = () => {
         ) : null}
       </div>
 
+      {/*
+        「こういう演出を足して」「この文字を大きく」のような文章の依頼でAIに編集を直してもらう欄。
+        自動編集の後に、手で1つずつ直す以外の方法でも演出を足せるようにするため(AiRevisePanel.tsx)。
+      */}
+      <AiRevisePanel
+        buildState={buildAiEditableState}
+        videoDurationInSeconds={videoDurationInSeconds}
+        selectedClip={
+          selectedSegmentKey
+            ? (() => {
+                const index = form.segments.findIndex((segment) => segment.key === selectedSegmentKey);
+                if (index < 0) return null;
+                const caption = form.segments[index].caption.trim();
+                return { id: index, label: caption ? caption.slice(0, 12) : "字幕なし" };
+              })()
+            : null
+        }
+        onApply={applyAiRevision}
+        canUndo={aiUndoSnapshot !== null}
+        onUndo={undoAiRevision}
+      />
+
       {/* タブ切り替え(動画カット/字幕/演出/SE/AI音声/BGM/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
       <div className="tab-bar">
         <button
@@ -1257,7 +1467,7 @@ export const ClipEditor: React.FC = () => {
           onClick={() => setActiveTab("se")}
           className={`tab-button${activeTab === "se" ? " active" : ""}`}
         >
-          SE
+          効果音
         </button>
         <button
           type="button"

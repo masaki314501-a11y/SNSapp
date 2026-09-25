@@ -114,7 +114,7 @@ export const ClipInspectorPanel: React.FC<Props> = ({
           </div>
         ) : (
           <div className="editor-inspector-empty">
-            <p>クリップを選択すると、ここでプロパティを編集できます</p>
+            <p>クリップを選択すると、ここで細かく設定できます</p>
           </div>
         )}
       </div>

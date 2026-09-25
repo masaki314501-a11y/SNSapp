@@ -17,9 +17,9 @@ const CORRECT_MEDIA_DIR = path.join(DATA_DIR, "media", "correct");
 const RAW_MEDIA_DIR = path.join(DATA_DIR, "media", "raw");
 const METADATA_PATH = path.join(DATA_DIR, "examples.json");
 
-/** few-shotとして一度に渡す件数の上限。1件あたり学習動画+正解動画の2本を送るため、
+/** few-shotとして一度に渡す件数の上限(選び方はeditExampleSelection.ts)。1件あたり学習動画+正解動画の2本を送るため、
  * 画像のスタイル抽出(6件)よりは絞る。課金移行前は無料枠の上限のため2件・正解動画のみだった。 */
-const MAX_EDIT_FEW_SHOT_EXAMPLES = 3;
+export const MAX_EDIT_FEW_SHOT_EXAMPLES = 3;
 
 const VIDEO_MIME_EXTENSIONS: Record<string, string> = {
   "video/mp4": "mp4",
@@ -57,6 +57,12 @@ const editExampleSchema = z.object({
   correctMimeType: z.string(),
   rawMediaFilename: z.string().optional(),
   rawMimeType: z.string().optional(),
+  /**
+   * 「どんな動画か」の短い説明(題材・動画の型・話し手の映り方・テンポ・編集の特徴)。
+   * 登録時にGeminiが正解動画を見て書く(editExampleSelection.ts)。自動編集のたびに全件の動画を
+   * 見せ直すと重いので、今回の動画に近い手本を選ぶときはこの文章だけを見比べさせる。
+   */
+  profile: z.string().optional(),
   createdAt: z.string(),
 });
 
@@ -124,6 +130,23 @@ export const registerEditExample = async (input: {
   return example;
 };
 
+/** 登録済みの手本に「どんな動画か」の説明を書き込む(登録直後と、未作成分の後追い作成で使う)。 */
+export const updateEditExampleProfile = async (id: string, profile: string): Promise<EditExample | null> => {
+  const examples = await readMetadata();
+  const target = examples.find((example) => example.id === id);
+  if (!target) return null;
+  target.profile = profile;
+  await writeMetadata(examples);
+  return target;
+};
+
+export const editExampleMediaPath = (example: EditExample, which: "correct" | "raw"): string | null => {
+  if (which === "raw") {
+    return example.rawMediaFilename ? path.join(RAW_MEDIA_DIR, example.rawMediaFilename) : null;
+  }
+  return path.join(CORRECT_MEDIA_DIR, example.correctMediaFilename);
+};
+
 export const deleteEditExample = async (id: string): Promise<boolean> => {
   const examples = await readMetadata();
   const target = examples.find((example) => example.id === id);
@@ -171,7 +194,7 @@ export const readEditExampleMedia = async (
  * (ai.files.uploadにBlobを渡す手もあるが、動画全体をメモリに載せてしまいメモリ不足の
  * 原因になるため、コピーで済ませてメモリには載せない)。
  */
-const uploadExampleVideo = async (
+export const uploadExampleVideo = async (
   ai: GoogleGenAI,
   mediaPath: string,
   mimeType: string,
@@ -198,7 +221,7 @@ const uploadExampleVideo = async (
 };
 
 /**
- * 登録済みの編集例をfew-shotの参考としてGeminiリクエストに差し込むための`Content`配列を
+ * 選んだ編集例(selectEditExamplesの結果)をfew-shotの参考としてGeminiリクエストに差し込むための`Content`配列を
  * 組み立てる。styleExamplesStore.tsのfew-shotと違い、編集例は「入力→正解JSON」の
  * ラベル付きペアではなく「良い編集の実例」を見せるだけなので、modelターン(正解の答え合わせ)
  * は積まない。userターン1つに動画+説明文だけを渡す。
@@ -208,9 +231,9 @@ const uploadExampleVideo = async (
  * 呼び出し元はリクエスト完了後に`uploadedFileNames`を削除すること。
  */
 export const loadEditFewShotContext = async (
-  ai: GoogleGenAI
+  ai: GoogleGenAI,
+  examples: EditExample[]
 ): Promise<{ contents: Content[]; uploadedFileNames: string[] }> => {
-  const examples = (await readMetadata()).slice(-MAX_EDIT_FEW_SHOT_EXAMPLES);
 
   const contents: Content[] = [];
   const uploadedFileNames: string[] = [];

@@ -67,7 +67,7 @@ export const SfxInspectorPanel: React.FC<Props> = ({
           </div>
         ) : (
           <div className="editor-inspector-empty">
-            <p>下の効果音ブロックを選択すると、ここでプロパティを編集できます</p>
+            <p>下の効果音ブロックを選択すると、ここで細かく設定できます</p>
           </div>
         )}
       </div>

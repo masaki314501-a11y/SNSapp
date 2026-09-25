@@ -20,6 +20,7 @@ import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
 import { loadEditFewShotContext } from "./editExamplesStore";
+import { selectEditExamples } from "./editExampleSelection";
 import { rawAutoEditPlanSchema, type RawAutoEditClip } from "./autoEditTypes";
 
 /**
@@ -408,13 +409,15 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
       });
     }
 
-    // 2. 編集例(学習動画+正解動画のペア)。
-    const fewShot = await loadEditFewShotContext(ai);
+    // 本人の動画は、手本選び(2)と編集の依頼(3)の両方で使うので先に1回だけアップロードする。
+    const videoPart = await uploadFileAsPart(ai, input.video.absolutePath, input.video.mimeType, uploadedFileNames);
+
+    // 2. 編集例(学習動画+正解動画のペア)。今回の動画に近いものを選んで見せる(editExampleSelection.ts)。
+    const fewShot = await loadEditFewShotContext(ai, await selectEditExamples(ai, videoPart));
     uploadedFileNames.push(...fewShot.uploadedFileNames);
     contents.push(...fewShot.contents);
 
     // 3. 本人の動画+依頼文。
-    const videoPart = await uploadFileAsPart(ai, input.video.absolutePath, input.video.mimeType, uploadedFileNames);
     const prompt = buildPrompt(input, input.styleReference !== null, fewShot.contents.length > 0);
     contents.push({
       role: "user",

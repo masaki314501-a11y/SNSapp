@@ -9,6 +9,8 @@ type EditExampleListItem = {
   notes?: string;
   correctMediaFilename: string;
   rawMediaFilename?: string;
+  /** AIが書いた「どんな動画か」の説明。自動編集で近い手本を選ぶときに使う。 */
+  profile?: string;
   createdAt: string;
 };
 
@@ -27,6 +29,8 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
   const [submitting, setSubmitting] = useState(false);
   const [submitStage, setSubmitStage] = useState<"correct" | "raw" | "registering" | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [describing, setDescribing] = useState(false);
+  const missingProfileCount = examples.filter((example) => !example.profile).length;
 
   const correctPreviewUrl = useMemo(() => (correctFile ? URL.createObjectURL(correctFile) : null), [correctFile]);
   const rawPreviewUrl = useMemo(() => (rawFile ? URL.createObjectURL(rawFile) : null), [rawFile]);
@@ -92,8 +96,23 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
       : submitStage === "raw"
         ? "学習動画をアップロード中..."
         : submitStage === "registering"
-          ? "登録中..."
+          ? "登録中(AIが動画の特徴を読み取っています)..."
           : "登録";
+
+  const handleDescribeMissing = async () => {
+    setDescribing(true);
+    try {
+      const res = await fetch("/api/dev/edit-examples/describe", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "説明の作成に失敗しました");
+      setExamples(data.examples as EditExampleListItem[]);
+      if (data.failed > 0) alert(`${data.failed}件は説明を作れませんでした。時間をおいてもう一度お試しください`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "説明の作成に失敗しました");
+    } finally {
+      setDescribing(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("この編集例を削除しますか?")) return;
@@ -177,7 +196,8 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
           <span className="step-badge">{examples.length}</span>
           <h2 className="text-sm font-semibold">登録済みの編集例</h2>
           <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-            自動編集では新しいものから最大3件を、学習動画と正解動画のペアでfew-shot例として使用します
+            自動編集では、今回の動画に近いもの最大3件を、学習動画と正解動画のペアで手本として見せます
+            (近さはAIが書いた「どんな動画か」の説明で判断します)
           </span>
           {examples.length > 0 ? (
             <a
@@ -189,6 +209,18 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
             </a>
           ) : null}
         </div>
+        {missingProfileCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => void handleDescribeMissing()}
+            disabled={describing}
+            className="btn-outline w-fit px-3 py-1 text-xs"
+          >
+            {describing
+              ? "AIが動画の特徴を読み取っています..."
+              : `説明が無い${missingProfileCount}件の説明を作る(近い手本を選ぶのに使います)`}
+          </button>
+        ) : null}
         <p className="text-xs" style={{ color: "var(--muted-2)" }}>
           本番(Render)で登録した場合、ここでの保存はデプロイのたびに消えます。残したい場合は
           「examples.jsonをダウンロード」と各動画の「ダウンロード」を取得し、ローカルの
@@ -242,6 +274,9 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
                 {example.notes ? (
                   <p className="text-xs" style={{ color: "var(--muted)" }}>{example.notes}</p>
                 ) : null}
+                <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+                  {example.profile ? `AIが読み取った特徴: ${example.profile}` : "特徴の説明: まだありません"}
+                </p>
                 <button
                   type="button"
                   onClick={() => void handleDelete(example.id)}

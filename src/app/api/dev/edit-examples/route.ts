@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listEditExamples, registerEditExample } from "@/lib/gemini/editExamplesStore";
+import { describeEditExample } from "@/lib/gemini/editExampleSelection";
 
 export const runtime = "nodejs";
 
@@ -34,5 +35,11 @@ export async function POST(request: Request) {
   }
 
   const example = await registerEditExample(parsed.data);
-  return NextResponse.json({ example });
+  // 自動編集で「近い手本」を選ぶための説明文を、登録と同時に作っておく(editExampleSelection.ts)。
+  // 失敗しても登録自体は成功扱いにし、あとで一覧の「説明を作る」から作り直せるようにする。
+  const described = await describeEditExample(example).catch((error) => {
+    console.warn("[edit-examples] 手本の説明の作成に失敗しました", error);
+    return null;
+  });
+  return NextResponse.json({ example: described ?? example });
 }

@@ -1,11 +1,16 @@
 "use client";
 
-import type { TextOverlay } from "@video/shared/schema";
+import { useState } from "react";
+import type { ImageOverlay, TextOverlay } from "@video/shared/schema";
 import type { ProjectSegment, VideoProject } from "@/lib/videoProject";
+import { uploadImageFile } from "../uploadImageFile";
 import { TextOverlayFields, createDefaultTextOverlay } from "./TextOverlayFields";
+import { ImageOverlayFields, createDefaultImageOverlay } from "./ImageOverlayFields";
 
-export type SegmentEffectsPatch = Partial<Pick<ProjectSegment, "zoom" | "overlays" | "emphasisWords" | "emphasisColor">>;
-export type ProjectEffectsPatch = Partial<Pick<VideoProject, "hook" | "cta" | "globalOverlays">>;
+export type SegmentEffectsPatch = Partial<
+  Pick<ProjectSegment, "zoom" | "overlays" | "images" | "emphasisWords" | "emphasisColor">
+>;
+export type ProjectEffectsPatch = Partial<Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages">>;
 
 type Props = {
   segments: ProjectSegment[];
@@ -14,6 +19,7 @@ type Props = {
   hook: VideoProject["hook"];
   cta: VideoProject["cta"];
   globalOverlays: VideoProject["globalOverlays"];
+  globalImages: VideoProject["globalImages"];
   onUpdateSegmentEffects: (key: string, patch: SegmentEffectsPatch) => void;
   onUpdateProjectEffects: (patch: ProjectEffectsPatch) => void;
 };
@@ -32,9 +38,11 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
   hook,
   cta,
   globalOverlays,
+  globalImages,
   onUpdateSegmentEffects,
   onUpdateProjectEffects,
 }) => {
+  const [uploading, setUploading] = useState(false);
   const selectedIndex = selectedSegmentKey ? segments.findIndex((s) => s.key === selectedSegmentKey) : -1;
   const selected = selectedIndex >= 0 ? segments[selectedIndex] : null;
   const overlays = selected?.overlays ?? [];
@@ -45,6 +53,28 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
     onUpdateSegmentEffects(selected.key, { overlays: next.length > 0 ? next : undefined });
   };
   const setGlobals = (next: TextOverlay[]) => onUpdateProjectEffects({ globalOverlays: next.length > 0 ? next : null });
+  const images = selected?.images ?? [];
+  const globalImageList = globalImages ?? [];
+  const setImages = (next: ImageOverlay[]) => {
+    if (!selected) return;
+    onUpdateSegmentEffects(selected.key, { images: next.length > 0 ? next : undefined });
+  };
+  const setGlobalImages = (next: ImageOverlay[]) =>
+    onUpdateProjectEffects({ globalImages: next.length > 0 ? next : null });
+
+  /** 画像を選んだらアップロードし、その画像を初期位置(画面中央)で追加する。 */
+  const addImage = async (file: File | undefined, onAdded: (image: ImageOverlay) => void) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { path } = await uploadImageFile(file);
+      onAdded(createDefaultImageOverlay(path));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "画像のアップロードに失敗しました");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="editor-inspector">
@@ -179,6 +209,31 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
             >
               ＋ 強調テキストを追加
             </button>
+
+            <h3>画像({images.length}枚)</h3>
+            {images.map((image, i) => (
+              <ImageOverlayFields
+                key={i}
+                image={image}
+                timeBaseLabel="クリップ先頭から"
+                onChange={(patch) => setImages(images.map((o, j) => (j === i ? { ...o, ...patch } : o)))}
+                onRemove={() => setImages(images.filter((_, j) => j !== i))}
+              />
+            ))}
+            <label className="editor-toolbar-btn self-start" style={{ cursor: uploading ? "wait" : "pointer" }}>
+              {uploading ? "アップロード中..." : "＋ 画像を差し込む"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                disabled={uploading || images.length >= 8}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  void addImage(file, (image) => setImages([...images, image]));
+                }}
+              />
+            </label>
           </div>
         ) : (
           <div className="editor-inspector-empty">
@@ -239,6 +294,31 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
           >
             ＋ ずっと出す文字を追加
           </button>
+
+          <h3>ずっと出す画像({globalImageList.length}枚・ロゴ等)</h3>
+          {globalImageList.map((image, i) => (
+            <ImageOverlayFields
+              key={i}
+              image={image}
+              timeBaseLabel="動画の先頭から"
+              onChange={(patch) => setGlobalImages(globalImageList.map((o, j) => (j === i ? { ...o, ...patch } : o)))}
+              onRemove={() => setGlobalImages(globalImageList.filter((_, j) => j !== i))}
+            />
+          ))}
+          <label className="editor-toolbar-btn self-start" style={{ cursor: uploading ? "wait" : "pointer" }}>
+            {uploading ? "アップロード中..." : "＋ ずっと出す画像を差し込む"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              disabled={uploading || globalImageList.length >= 4}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                void addImage(file, (image) => setGlobalImages([...globalImageList, { ...image, widthPercent: 25, yPercent: 10 }]));
+              }}
+            />
+          </label>
         </div>
       </div>
     </div>

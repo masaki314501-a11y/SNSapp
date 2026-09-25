@@ -9,7 +9,7 @@ export default function EditPage() {
           クリップを編集する
         </h1>
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          タイムラインでトリミング・分割・並べ替えをして、動画を書き出しましょう。
+          いらない部分をカットしたり、順番を並べ替えたりして、動画を書き出しましょう。
         </p>
       </div>
 

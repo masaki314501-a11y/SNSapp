@@ -4,6 +4,7 @@ import type { ClipProps } from "./schema";
 import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "../../shared/schema";
 import { resolveFontFamilyStack } from "../../shared/schema";
 import { TextOverlays } from "../../shared/TextOverlays";
+import { ImageOverlays } from "../../shared/ImageOverlays";
 import { MediaBackground } from "../../shared/MediaBackground";
 import { AnimatedCaption } from "../../shared/AnimatedCaption";
 
@@ -35,6 +36,7 @@ export const ClipSequence: React.FC<Props> = ({
   emphasisColor,
   zoom,
   overlays,
+  images,
 }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -57,6 +59,8 @@ export const ClipSequence: React.FC<Props> = ({
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}
       />
+      {/* 画像は強調テキストより下に重ねる(文字が画像に隠れないように)。 */}
+      {images && images.length > 0 ? <ImageOverlays images={images} /> : null}
       {overlays && overlays.length > 0 ? (
         <TextOverlays overlays={overlays} fontFamilyStack={resolveFontFamilyStack(fontFamily)} />
       ) : null}

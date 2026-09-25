@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     label: "編集して書き出し",
-    detail: "タイムラインでトリム・並べ替え・SE/BGM/AIナレーション追加して書き出し",
+    detail: "いらない部分のカット・並べ替え・効果音/BGM/AIナレーションの追加をして書き出し",
     color: "var(--accent-soft)",
   },
 ];

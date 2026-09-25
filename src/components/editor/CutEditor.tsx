@@ -529,8 +529,8 @@ export const CutEditor: React.FC = () => {
           loop
         />
       </div>
-      <p className="text-center text-xs" style={{ color: "var(--muted-2)" }}>
-        Space=再生/一時停止・←→=1フレーム送り(Shift+←→=1秒)・S=分割・I/O=再生位置をイン/アウト点に・Delete=選択を削除
+      <p className="keyboard-hint text-center text-xs" style={{ color: "var(--muted-2)" }}>
+        キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=分割・I=ここから使う・O=ここまで使う・Delete=選んだ範囲を捨てる
       </p>
 
       {videoDurationInSeconds > 0 ? (

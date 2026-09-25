@@ -47,6 +47,7 @@ export const ExportScreen: React.FC = () => {
         hook: current.hook,
         cta: current.cta,
         globalOverlays: current.globalOverlays,
+        globalImages: current.globalImages,
       }),
       exportFileName(current)
     );

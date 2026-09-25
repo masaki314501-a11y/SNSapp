@@ -41,6 +41,7 @@ yarn-error.log*
 /public/videos/*
 !/public/videos/.gitkeep
 /public/references/
+/public/images/
 /.remotion-bundle/
 /public/renders/
 # 生成済みAIナレーションのキャッシュ(内容から決まるファイル名で溜まり続ける)

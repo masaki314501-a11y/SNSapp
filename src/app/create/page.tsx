@@ -2,7 +2,7 @@ import { UploadGenerator } from "./UploadGenerator";
 
 export default function CreatePage() {
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-2xl tracking-tight sm:text-3xl">
           動画をアップロード

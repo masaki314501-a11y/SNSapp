@@ -8,6 +8,7 @@ import {
   type CaptionPosition,
   type CaptionStyle,
   type ClipZoom,
+  type ImageOverlay,
   type TextOverlay,
 } from "@video/shared/schema";
 import type { StandardVideoProps } from "@video/templates/standard/schema";
@@ -48,6 +49,8 @@ export type ProjectSegment = {
   emphasisColor?: string;
   zoom?: ClipZoom;
   overlays?: TextOverlay[];
+  /** 利用者が差し込んだ画像(ロゴ・商品写真等)。 */
+  images?: ImageOverlay[];
 };
 
 /** 自動編集が手本にする参考画像/動画。スタイル抽出画面でアップロードしたものを残しておく。 */
@@ -110,6 +113,8 @@ export type VideoProject = {
   cta?: { text: string } | null;
   /** 動画全体に重ね続ける文字(上部のタイトル等、自動編集が決める)。 */
   globalOverlays?: TextOverlay[] | null;
+  /** 動画全体に重ね続ける画像(ロゴ等)。 */
+  globalImages?: ImageOverlay[] | null;
 };
 
 const PROJECT_STORAGE_KEY = "sns-app:video-project:v1";
@@ -157,6 +162,7 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
   hook: raw.hook ?? null,
   cta: raw.cta ?? null,
   globalOverlays: raw.globalOverlays ?? null,
+  globalImages: raw.globalImages ?? null,
 });
 
 /** 保存されているプロジェクトを読み込む。無ければnull(SSR/壊れたデータの場合もnull)。 */
@@ -220,7 +226,9 @@ export const buildStandardVideoProps = (params: {
   hook?: VideoProject["hook"];
   cta?: VideoProject["cta"];
   globalOverlays?: VideoProject["globalOverlays"];
+  globalImages?: VideoProject["globalImages"];
 }): StandardVideoProps => ({
+  globalImages: params.globalImages && params.globalImages.length > 0 ? params.globalImages : undefined,
   globalOverlays: params.globalOverlays && params.globalOverlays.length > 0 ? params.globalOverlays : undefined,
   hook: params.hook ?? undefined,
   cta: params.cta ?? undefined,
@@ -240,6 +248,7 @@ export const buildStandardVideoProps = (params: {
     emphasisColor: segment.emphasisColor,
     zoom: segment.zoom,
     overlays: segment.overlays,
+    images: segment.images,
   })),
   theme: {
     primaryColor: params.primaryColor,

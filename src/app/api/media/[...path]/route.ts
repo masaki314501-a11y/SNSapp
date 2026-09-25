@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * 起動後に増えたファイルは本番ビルドで404になる(next dev では気づけない)ため、
  * これらのディレクトリだけはリクエスト都度ファイルシステムを見て直接配信する。
  */
-const ALLOWED_DIRS = new Set(["videos", "audio", "renders"]);
+const ALLOWED_DIRS = new Set(["videos", "audio", "renders", "images"]);
 const SAFE_SEGMENT = /^[0-9a-zA-Z_.-]+$/;
 /**
  * audio/generated/<file> (2階層)だけでなく audio/presets/sfx/<file> (3階層、
@@ -30,6 +30,11 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   m4a: "audio/mp4",
   ogg: "audio/ogg",
   aac: "audio/aac",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
 };
 
 const CHUNK_SIZE = 256 * 1024;

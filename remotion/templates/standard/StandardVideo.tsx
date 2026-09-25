@@ -16,6 +16,7 @@ import { ClipSequence } from "./ClipSequence";
 import { Hook } from "../../shared/Hook";
 import { CTA } from "../../shared/CTA";
 import { TextOverlays } from "../../shared/TextOverlays";
+import { ImageOverlays } from "../../shared/ImageOverlays";
 import {
   CTA_DURATION_IN_SECONDS,
   HOOK_DURATION_IN_SECONDS,
@@ -32,6 +33,9 @@ export const calculateStandardVideoMetadata: CalculateMetadataFunction<
   };
 };
 
+/** 次のクリップを何フレーム前から準備しておくか(理由はSeries.Sequenceのコメント参照)。 */
+const PREMOUNT_FRAMES = VIDEO_FPS * 2;
+
 // 全体フェードイン/アウトの長さ(フレーム数)。
 const FADE_FRAMES = 15;
 
@@ -43,6 +47,7 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
   sfx,
   bgm,
   globalOverlays,
+  globalImages,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -68,6 +73,10 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
           <Series.Sequence
             key={index}
             durationInFrames={Math.round(clip.durationInSeconds * VIDEO_FPS)}
+            // 次のクリップの動画を、切り替わる少し前から裏で読み込み・頭出ししておく。
+            // これが無いとクリップが切り替わった瞬間に読み込みが始まり、終わるまで再生が止まって待つため、
+            // 処理の遅いiPhone/iPadのプレビューで「スペースや再生ボタンで再生すると途中で止まる」状態になっていた。
+            premountFor={PREMOUNT_FRAMES}
           >
             <ClipSequence
               {...clip}
@@ -82,6 +91,7 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
         ))}
       </Series>
 
+      {globalImages && globalImages.length > 0 ? <ImageOverlays images={globalImages} /> : null}
       {globalOverlays && globalOverlays.length > 0 ? (
         <TextOverlays overlays={globalOverlays} fontFamilyStack={resolveFontFamilyStack(theme.fontFamily)} />
       ) : null}
