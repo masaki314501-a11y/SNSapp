@@ -8,6 +8,7 @@ import {
   createRenderJob,
   updateRenderJob,
 } from "@/lib/remotion/renderJobs";
+import { isRenderMediaDownloadError, toFriendlyRenderError } from "@/lib/remotion/renderErrors";
 import {
   isTemplateId,
   templateRegistry,
@@ -159,6 +160,19 @@ export async function POST(request: Request) {
     try {
       await runRender();
     } catch (firstError) {
+      // 素材ファイルが見つからない等の決定的な失敗は、同じプロジェクトのまま
+      // 再試行しても直らないため、即座に諦めて分かりやすいメッセージを出す
+      // (isRenderMediaDownloadError参照)。
+      if (isRenderMediaDownloadError(firstError)) {
+        console.error(firstError);
+        updateRenderJob(jobId, {
+          status: "error",
+          progress: 0,
+          message: toFriendlyRenderError(firstError),
+        });
+        return;
+      }
+
       // ヘッドレスChromeの起動・DevTools接続には@remotion/renderer内部で25秒の
       // 固定タイムアウトがあり、CPUコアが少ない環境ではdevサーバーの再コンパイル等と
       // 資源を取り合って初回だけ間に合わないことがある(getBrowserInstance()は
@@ -177,10 +191,7 @@ export async function POST(request: Request) {
         updateRenderJob(jobId, {
           status: "error",
           progress: 0,
-          message:
-            secondError instanceof Error
-              ? secondError.message
-              : "レンダーに失敗しました",
+          message: toFriendlyRenderError(secondError),
         });
       }
     }
