@@ -35,6 +35,17 @@ export const parseRetryDelaySeconds = (error: unknown): number | null => {
   return match ? Math.ceil(Number(match[1])) : null;
 };
 
+/**
+ * Gemini TTSは、読み上げ用のテキストしか渡していないにもかかわらず、まれに「音声ではなく
+ * テキストで応答しようとした」として400 INVALID_ARGUMENTを返すことがある
+ * (「Model tried to generate text, but it should only be used for TTS.」)。
+ * 生のエラーメッセージのままでは利用者に意味が伝わらないため、専用に判定して言い換える。
+ */
+export const isTtsRefusedAudioError = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 400 &&
+  /should only be used for TTS/i.test(typeof error.message === "string" ? error.message : "");
+
 /** Gemini SDKが返す生のエラー(JSON文字列そのまま)を、画面にそのまま出しても
  *  分かるような日本語メッセージに変換する。 */
 export const toFriendlyGeminiError = (error: unknown): Error => {
@@ -42,6 +53,11 @@ export const toFriendlyGeminiError = (error: unknown): Error => {
     if (isCreditExhaustedError(error)) {
       return new Error(
         "Gemini APIのチャージ残高がなくなりました。Google AI Studio(https://aistudio.google.com)でチャージしてください"
+      );
+    }
+    if (isTtsRefusedAudioError(error)) {
+      return new Error(
+        "この文章はうまく音声に変換できませんでした。少し文章を変えるか、時間を置いてから、もう一度お試しください"
       );
     }
     if (error.status === 503) {
