@@ -429,13 +429,16 @@ Gemini APIはプリペイド(上限800円)の有料プラン(Tier 1)で運用し
 `next.config.ts` を見ると分かる通り `output: "standalone"` は使わず、`node_modules`
 全体を含めるシンプルな構成にしている(`@remotion/bundler`/`@remotion/renderer`が
 プラットフォーム別ネイティブバイナリを動的requireで解決しており、standaloneのファイル
-トレースだと正しく検出できずランタイムでENOENTになる恐れがあるため)。ビルド時に
-`npx remotion browser ensure` でヘッドレスChromeをイメージに焼き込み、実行時の初回
-レンダーでのダウンロードを防いでいる。書き出し用のRemotionバンドルもビルド時に
-`npx remotion bundle` で `.remotion-bundle/` に作っておき、本番の実行時にはwebpackを動かさない
-(`src/lib/remotion/bundle.ts`)。バンドルに含める静的ファイルはフォントだけで、動画・音声は
-レンダー時に `/api/media` 経由で読む(以前は実行時に `public/` を丸ごとコピーしており、
-アップロード動画や過去の書き出しまで含めて手元で942MBあった)。
+トレースだと正しく検出できずランタイムでENOENTになる恐れがあるため)。
+
+`Dockerfile` は組み立て用と実行用の2段に分けている。以前は1段で、開発用の道具・ビルドキャッシュ・
+サーバー書き出し用のChromium(約700MB)・ヘッドレスChrome・Remotionバンドルまで本番に入っており、
+イメージが約4.8GBあった。これにアップロード動画が加わってRenderの無料枠(5GB)を使い切り、
+サービスが止められたため、実行用には `npm prune --omit=dev` 後の `node_modules`・`.next`(キャッシュ除く)・
+`public`・`data` だけを入れるようにした(約2.4GB、手元の `docker images` 表示)。書き出しはブラウザ内で
+行うので、本番ではサーバー書き出し(`/api/render`)は使えない(ローカルの `npm run dev` では使える)。
+起動は `npx` を通さず `node node_modules/next/dist/bin/next start` で行い、npm自体のプロセス分
+(約75MB)のメモリを節約している(起動直後で約140MB)。
 
 Freeプランはメモリが少なく(512MB)、ヘッドレスChromeでの動画レンダリングが重い。
 38秒・12クリップ(寄り・強調テキスト入り)の書き出しを本番と同じ構成で手元実行したところ、
