@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UploadIcon } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import {
   DEFAULT_CAPTION_ANIMATION,
@@ -148,92 +149,99 @@ export const UploadGenerator: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {existingProject ? (
-        <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium">前回の編集内容が残っています</span>
-            <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              {existingProject.videoFileName ?? "動画"}・クリップ{existingProject.segments.length}
-              個・{existingProject.videoDurationInSeconds.toFixed(1)}秒
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <a href="/edit" className="btn-primary px-4 py-1.5 text-sm">
-              編集を再開する →
-            </a>
-            <button type="button" onClick={handleDiscardExisting} className="btn-ghost text-sm">
-              破棄して新しくはじめる
-            </button>
-          </div>
-        </div>
-      ) : null}
+    <>
+      <main className="flow-main">
+        <p className="flow-lead">編集したい縦長の動画を1本選んでください。長さは自動で読み取ります。</p>
 
-      <div className="panel flex flex-col gap-3 p-5">
-        <div className="flex items-baseline gap-2.5">
-          <span className="step-badge">1</span>
-          <h2 className="text-sm font-semibold">動画をアップロード</h2>
-          <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-            1本のみ
-          </span>
-        </div>
-        <label className="upload-drop flex flex-col gap-2 p-4">
-          <span className="field-label">編集する動画ファイル(実際の長さを自動検出)</span>
-          <input
-            type="file"
-            accept="video/*"
-            onChange={(e) => handleVideoFileChange(e.target.files?.[0] ?? null)}
-          />
-          {videoUploading ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="badge-pill warning w-fit">
-                {videoConvertPercent !== null
-                  ? `どの端末でも使える形式に変換中... ${videoConvertPercent}%`
-                  : videoUploadPercent < 100
-                    ? `アップロード中... ${videoUploadPercent}%`
-                    : "保存中..."}
+        {existingProject ? (
+          <div className="panel flex flex-col gap-3 p-4">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-bold">前回の編集内容が残っています</span>
+              <span className="break-anywhere text-xs" style={{ color: "var(--muted)" }}>
+                {existingProject.videoFileName ?? "動画"}・クリップ{existingProject.segments.length}個・
+                {existingProject.videoDurationInSeconds.toFixed(1)}秒
               </span>
-              <div className="progress-track">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${videoConvertPercent ?? videoUploadPercent}%` }}
-                />
-              </div>
             </div>
-          ) : videoFileName ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="badge-pill success w-fit">
-                {videoFileName}
-                {videoDurationInSeconds ? `(${videoDurationInSeconds.toFixed(1)}秒)` : ""}
-              </span>
-              {durationError ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="badge-pill danger w-fit">{durationError}(長さが取得できず、次へ進めません)</span>
-                  <button
-                    type="button"
-                    className="btn-outline px-3 py-1 text-xs"
-                    onClick={() => pendingFile && detectDuration(pendingFile)}
-                  >
-                    長さの取得を再試行
-                  </button>
+            <div className="flex flex-wrap gap-2">
+              <a href="/edit" className="btn-primary px-4 py-2 text-sm">
+                編集を再開する
+              </a>
+              <button type="button" onClick={handleDiscardExisting} className="btn-outline px-4 py-2 text-sm">
+                破棄して新しくはじめる
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <input
+          id="video-file"
+          type="file"
+          accept="video/*"
+          className="sr-only"
+          onChange={(e) => {
+            void handleVideoFileChange(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+
+        {videoFileName ? (
+          <div className="panel flex flex-col gap-3 p-4">
+            <span className="break-anywhere line-clamp-2 text-sm font-bold">{videoFileName}</span>
+            {videoUploading ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  {videoConvertPercent !== null
+                    ? `どの端末でも使える形式に変換中... ${videoConvertPercent}%`
+                    : videoUploadPercent < 100
+                      ? `アップロード中... ${videoUploadPercent}%`
+                      : "保存中..."}
+                </span>
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${videoConvertPercent ?? videoUploadPercent}%` }} />
                 </div>
-              ) : null}
-            </div>
-          ) : (
-            <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              未アップロード
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {videoDurationInSeconds ? (
+                  <span className="badge-pill success">長さ {videoDurationInSeconds.toFixed(1)}秒</span>
+                ) : null}
+                <label htmlFor="video-file" className="btn-outline cursor-pointer px-4 py-1.5 text-sm">
+                  別の動画にする
+                </label>
+              </div>
+            )}
+            {durationError ? (
+              <div className="flex flex-col gap-2">
+                <span className="badge-pill danger w-fit">{durationError}(長さが取得できず、次へ進めません)</span>
+                <button
+                  type="button"
+                  className="btn-outline w-fit px-3 py-1.5 text-xs"
+                  onClick={() => pendingFile && detectDuration(pendingFile)}
+                >
+                  長さの取得を再試行
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <label
+            htmlFor="video-file"
+            className="upload-drop flex cursor-pointer flex-col items-center justify-center gap-2 p-8 text-center"
+          >
+            <UploadIcon size={28} />
+            <span className="text-base font-bold">動画を選ぶ</span>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              縦長の動画を1本
             </span>
-          )}
-        </label>
-        <button
-          type="button"
-          onClick={handleGoToCut}
-          disabled={!canProceed}
-          className="btn-primary self-start px-4 py-2 text-sm"
-        >
-          使う範囲を選ぶ(カット)へ進む →
+          </label>
+        )}
+      </main>
+
+      <div className="bottom-action-bar">
+        <button type="button" onClick={handleGoToCut} disabled={!canProceed} className="btn-primary">
+          使う範囲を選ぶへ進む
         </button>
       </div>
-    </div>
+    </>
   );
 };
