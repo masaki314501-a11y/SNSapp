@@ -152,28 +152,32 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   const rulerStepSeconds = pickRulerStepSeconds(pixelsPerSecond);
   const ticks = useMemo(() => {
     const arr: number[] = [];
-    for (let t = 0; t <= totalDurationSeconds + rulerStepSeconds; t += rulerStepSeconds) arr.push(t);
+    for (let t = 0; t <= totalDurationSeconds; t += rulerStepSeconds) arr.push(t);
     return arr;
   }, [totalDurationSeconds, rulerStepSeconds]);
 
+  // ルーラーと再生位置の線は、各トラックの左端にあるトラック名の列(.editor-track-label)の分だけ
+  // 右にずらして、クリップと同じ位置に揃える(以前は列の幅だけクリップより左にずれていた)。
   const playheadLeftPx = secondsToPixels(currentSeconds, pixelsPerSecond);
+  const rulerRef = useRef<HTMLDivElement>(null);
 
   // 再生ヘッドが表示範囲外に出たら、スクロール位置を追従させる(CapCut/iMovie的な「常に見える」挙動)。
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    const visibleLeft = el.scrollLeft;
-    const visibleRight = visibleLeft + el.clientWidth;
-    if (playheadLeftPx < visibleLeft || playheadLeftPx > visibleRight - 40) {
-      el.scrollLeft = Math.max(0, playheadLeftPx - el.clientWidth / 2);
+    const ruler = rulerRef.current;
+    if (!el || !ruler) return;
+    const playheadInScrollPx = ruler.offsetLeft + playheadLeftPx;
+    const visibleLeft = el.scrollLeft + ruler.offsetLeft;
+    const visibleRight = el.scrollLeft + el.clientWidth;
+    if (playheadInScrollPx < visibleLeft || playheadInScrollPx > visibleRight - 40) {
+      el.scrollLeft = Math.max(0, playheadInScrollPx - el.clientWidth / 2);
     }
   }, [playheadLeftPx]);
 
   const scrubAtClientX = (clientX: number) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = clientX - rect.left + el.scrollLeft;
+    const ruler = rulerRef.current;
+    if (!ruler) return;
+    const x = clientX - ruler.getBoundingClientRect().left;
     onScrub(Math.max(0, pixelsToSeconds(x, pixelsPerSecond)));
   };
 
@@ -187,8 +191,12 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
         onPointerUpCapture={handleTouchPointerEnd}
         onPointerCancelCapture={handleTouchPointerEnd}
       >
-        <div className="editor-timeline-content" style={{ width: contentWidthPx }}>
+        <div
+          className="editor-timeline-content"
+          style={{ width: `calc(var(--track-label-width) + ${contentWidthPx}px)` }}
+        >
           <div
+            ref={rulerRef}
             className="editor-ruler"
             style={{ height: RULER_HEIGHT }}
             onPointerDown={(e) => {
@@ -240,7 +248,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
             ) : null}
           </div>
 
-          <div className="editor-playhead" style={{ left: playheadLeftPx }} />
+          <div className="editor-playhead" style={{ left: `calc(var(--track-label-width) + ${playheadLeftPx}px)` }} />
         </div>
       </div>
 
