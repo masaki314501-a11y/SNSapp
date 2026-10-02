@@ -509,6 +509,12 @@ export const CutEditor: React.FC = () => {
     router.push("/create");
   };
 
+  /** 上部バーの戻る。自動保存は少し待ってから書き込むため、離れる前に同期的に書き戻す。 */
+  const handleBackToUpload = () => {
+    if (project) saveProject({ ...project, segments });
+    router.push("/create");
+  };
+
   const handleGoToStyle = () => {
     if (!project || segments.length === 0) return;
     saveProject({ ...project, segments });
@@ -550,6 +556,7 @@ export const CutEditor: React.FC = () => {
       <AppTopBar
         className="editor-area-topbar"
         backHref="/create"
+        onBack={handleBackToUpload}
         title="使う範囲を選ぶ"
         step={{ current: 2, total: 4 }}
         actions={

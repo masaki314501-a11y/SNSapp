@@ -134,7 +134,19 @@ export const StyleAndTranscribe: React.FC = () => {
 
   return (
     <>
-      <main className="flow-main">
+      {/*
+        以前は見えているファイル選択欄に動画を落として選べたため、画面のどこに落としても選べるようにする
+        (受け止めないと、ブラウザがその動画ファイルを開いて画面から離れてしまう)。
+      */}
+      <main
+        className="flow-main"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const file = e.dataTransfer.files?.[0] ?? null;
+          if (file) void handleReferenceFileChange(file);
+        }}
+      >
         <span className="badge-pill neutral w-fit">なくてもOK</span>
         <p className="flow-lead">
           まねしたい投稿のスクショや動画を選ぶと、AIが配色・文字・演出をその雰囲気に寄せて編集します。

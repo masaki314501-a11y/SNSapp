@@ -9,6 +9,11 @@ type AppTopBarProps = {
   step?: { current: number; total: number };
   /** 右側に並べるボタン類。 */
   actions?: React.ReactNode;
+  /**
+   * 戻る前に処理が要る画面(編集中の内容を保存してから離れる等)で渡す。
+   * 渡した場合はリンクではなくボタンになり、移動はこの関数の中で行う。
+   */
+  onBack?: () => void;
   className?: string;
 };
 
@@ -16,12 +21,26 @@ type AppTopBarProps = {
  * 全画面共通の上部バー。以前は画面ごとに大きな見出し+説明文を置いていたが、スマホでは
  * それだけで画面の上1/4を使っていたため、戻る・画面名・操作を1行にまとめる。
  */
-export const AppTopBar: React.FC<AppTopBarProps> = ({ backHref, backLabel = "戻る", title, step, actions, className }) => (
+export const AppTopBar: React.FC<AppTopBarProps> = ({
+  backHref,
+  backLabel = "戻る",
+  title,
+  step,
+  actions,
+  onBack,
+  className,
+}) => (
   <header className={`app-topbar${className ? ` ${className}` : ""}`}>
     <div className="app-topbar-row">
-      <Link href={backHref} aria-label={backLabel} className="app-topbar-back">
-        <BackIcon size={22} />
-      </Link>
+      {onBack ? (
+        <button type="button" onClick={onBack} aria-label={backLabel} className="app-topbar-back">
+          <BackIcon size={22} />
+        </button>
+      ) : (
+        <Link href={backHref} aria-label={backLabel} className="app-topbar-back">
+          <BackIcon size={22} />
+        </Link>
+      )}
       <div className="app-topbar-title">
         {step ? (
           <span className="app-topbar-step">

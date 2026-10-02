@@ -663,8 +663,9 @@ export const ClipEditor: React.FC = () => {
    * 遷移直前の編集内容を確実に引き継げるよう、ここで同期的にlocalStorageへ書き戻してから
    * 遷移する。
    */
-  const handleGoToExport = () => {
-    if (!project || !canRender) return;
+  /** 自動保存は少し待ってから書き込むため、画面を離れる直前は同期的にlocalStorageへ書き戻す。 */
+  const saveCurrentProjectNow = () => {
+    if (!project) return;
     saveProject({
       ...project,
       primaryColor,
@@ -677,7 +678,18 @@ export const ClipEditor: React.FC = () => {
       sfx: sfxClips,
       bgm,
     });
+  };
+
+  const handleGoToExport = () => {
+    if (!project || !canRender) return;
+    saveCurrentProjectNow();
     router.push("/edit/export");
+  };
+
+  /** 上部バーの戻る。handleGoToExportと同じ理由で、離れる前に書き戻す。 */
+  const handleBackToTop = () => {
+    saveCurrentProjectNow();
+    router.push("/");
   };
 
   /**
@@ -1514,6 +1526,7 @@ export const ClipEditor: React.FC = () => {
         className="editor-area-topbar"
         backHref="/"
         backLabel="トップへ戻る"
+        onBack={handleBackToTop}
         title="編集"
         actions={
           <>
@@ -1683,25 +1696,25 @@ export const ClipEditor: React.FC = () => {
           「こういう演出を足して」「この文字を大きく」のような文章の依頼でAIに編集を直してもらう欄。
           自動編集の後に、手で1つずつ直す以外の方法でも演出を足せるようにするため(AiRevisePanel.tsx)。
         */}
-        {settingsView === "ai" ? (
-          <AiRevisePanel
-            buildState={buildAiEditableState}
-            videoDurationInSeconds={videoDurationInSeconds}
-            selectedClip={
-              selectedSegmentIndex >= 0
-                ? {
-                    id: selectedSegmentIndex,
-                    label: form.segments[selectedSegmentIndex].caption.trim().slice(0, 12) || "字幕なし",
-                  }
-                : null
-            }
-            onApply={applyAiRevision}
-            canUndo={aiUndoSnapshot !== null}
-            onUndo={undoAiRevision}
-          />
-        ) : (
-          tabSettings
-        )}
+        {/* 依頼文や処理中・完了した修正案を失わないよう、閉じても外さずに隠すだけにする */}
+        <div hidden={settingsView !== "ai"}>
+            <AiRevisePanel
+              buildState={buildAiEditableState}
+              videoDurationInSeconds={videoDurationInSeconds}
+              selectedClip={
+                selectedSegmentIndex >= 0
+                  ? {
+                      id: selectedSegmentIndex,
+                      label: form.segments[selectedSegmentIndex].caption.trim().slice(0, 12) || "字幕なし",
+                    }
+                  : null
+              }
+              onApply={applyAiRevision}
+              canUndo={aiUndoSnapshot !== null}
+              onUndo={undoAiRevision}
+            />
+        </div>
+        {settingsView === "tab" ? tabSettings : null}
       </SettingsPanel>
 
       {bulkEditOpen ? (

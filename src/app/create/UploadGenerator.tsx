@@ -150,7 +150,19 @@ export const UploadGenerator: React.FC = () => {
 
   return (
     <>
-      <main className="flow-main">
+      {/*
+        以前は見えているファイル選択欄に動画を落として選べたため、画面のどこに落としても選べるようにする
+        (受け止めないと、ブラウザがその動画ファイルを開いて画面から離れてしまう)。
+      */}
+      <main
+        className="flow-main"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const file = e.dataTransfer.files?.[0] ?? null;
+          if (file) void handleVideoFileChange(file);
+        }}
+      >
         <p className="flow-lead">編集したい縦長の動画を1本選んでください。長さは自動で読み取ります。</p>
 
         {existingProject ? (

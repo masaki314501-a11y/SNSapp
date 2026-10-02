@@ -55,6 +55,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = memo(function VideoClipBlo
     beginPointerDrag(e, {
       onStart: () => setDragDeltaPx(0),
       onMove: (dx) => setDragDeltaPx(dx),
+      onCancel: () => setDragDeltaPx(null),
       onEnd: (dx) => {
         setDragDeltaPx(null);
         onReorderDrop(segment.key, leftPx + dx + widthPx / 2);

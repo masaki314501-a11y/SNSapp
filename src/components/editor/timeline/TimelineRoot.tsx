@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectBgm, ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
-import { beginPointerDrag } from "./pointerDrag";
+import { beginPointerDrag, cancelActivePointerDrags } from "./pointerDrag";
 import {
   DEFAULT_PIXELS_PER_SECOND,
   MAX_PIXELS_PER_SECOND,
@@ -82,13 +82,12 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 最初は動画全体が見える幅に収める。利用者が拡大縮小した後は、その倍率を尊重して勝手に戻さない。
-  // 長さが変わるたびに合わせ直すと、トリムのドラッグ中にクリップが指から逃げるため、
-  // 合わせ直すのは表示した時と画面幅が変わった時だけにする。
+  // クリップの追加・削除等で長さが変わった時も合わせ直すが、指やマウスで操作している最中は
+  // 合わせ直さない(トリムのドラッグ中に倍率が変わると、クリップが指から逃げるため)。離した時にまとめて行う。
   const userZoomedRef = useRef(false);
   const durationRef = useRef(totalDurationSeconds);
-  useEffect(() => {
-    durationRef.current = totalDurationSeconds;
-  }, [totalDurationSeconds]);
+  const activePointersRef = useRef(new Set<number>());
+  const refitPendingRef = useRef(false);
 
   const fitToWidth = () => {
     const el = scrollRef.current;
@@ -96,6 +95,17 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
     const labelWidth = el.querySelector<HTMLElement>(".editor-track-label")?.offsetWidth ?? 0;
     setPixelsPerSecond(fitPixelsPerSecond(el.clientWidth - labelWidth, durationRef.current));
   };
+
+  useEffect(() => {
+    durationRef.current = totalDurationSeconds;
+    if (userZoomedRef.current) return;
+    if (activePointersRef.current.size > 0) {
+      refitPendingRef.current = true;
+      return;
+    }
+    fitToWidth();
+    // 長さが変わった時だけ合わせ直す
+  }, [totalDurationSeconds]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -129,10 +139,17 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   };
   const handleTouchPointerDown = (e: React.PointerEvent) => {
+    activePointersRef.current.add(e.pointerId);
     if (e.pointerType !== "touch") return;
     touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (touchPointsRef.current.size === 2) {
-      pinchRef.current = { startDistance: pointDistance(), startPixelsPerSecond: pixelsPerSecond };
+    if (touchPointsRef.current.size >= 2) {
+      // 2本目以降の指ではクリップ等のドラッグを始めさせず、1本目で始まっていたドラッグ
+      // (並べ替え・トリム・再生位置の移動)は確定させずに元へ戻す。ピンチは拡大縮小だけにする。
+      e.stopPropagation();
+      cancelActivePointerDrags();
+      if (!pinchRef.current) {
+        pinchRef.current = { startDistance: pointDistance(), startPixelsPerSecond: pixelsPerSecond };
+      }
     }
   };
   const handleTouchPointerMove = (e: React.PointerEvent) => {
@@ -144,8 +161,13 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
     }
   };
   const handleTouchPointerEnd = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
     touchPointsRef.current.delete(e.pointerId);
     if (touchPointsRef.current.size < 2) pinchRef.current = null;
+    if (activePointersRef.current.size === 0 && refitPendingRef.current) {
+      refitPendingRef.current = false;
+      if (!userZoomedRef.current) fitToWidth();
+    }
   };
 
   const contentWidthPx = Math.max(1, secondsToPixels(Math.max(totalDurationSeconds, 1), pixelsPerSecond));
