@@ -15,39 +15,43 @@
 }
 
 :root {
-  /* 暖色寄りのニュートラル(生成AIツールにありがちな青紫グラデーションと距離を置く) */
-  --background: #fffcf7;
-  --background-elevated: #fff4e6;
-  --background-elevated-2: #ffe9cf;
-  --foreground: #241c15;
-  --muted: #6e6156;
-  --muted-2: #988a7c;
-  --border: rgba(36, 28, 21, 0.14);
-  --border-strong: rgba(36, 28, 21, 0.55);
+  /* すっきりしたアプリ風。面は白、地は少しだけ暖かい灰色 */
+  --background: #faf8f5;
+  --background-elevated: #ffffff;
+  --background-elevated-2: #f4f1ed;
+  --foreground: #1f1b17;
+  --muted: #6b635b;
+  --muted-2: #7d746b;
+  --border: #e8e4de;
+  --border-strong: #d9d3cb;
 
-  /* ブランドアクセント(4色サイクル)。紫系は使わず、コーラル/ティール/ゴールド/ブルーで構成する */
-  --accent: #ff5a36;
-  --accent-contrast: #fffaf5;
-  --accent-soft: #ffe4d6;
+  /* アクセントは白文字が読める濃さのコーラル。ほか3色は区別用の補助色 */
+  --accent: #d63f20;
+  --accent-hover: #bf3519;
+  --accent-contrast: #ffffff;
+  --accent-soft: #fdebe5;
   --accent-2: #0e9384;
-  --accent-2-soft: #d8f1ec;
+  --accent-2-soft: #dcefea;
   --accent-3: #f2a900;
-  --accent-3-soft: #fdecc0;
+  --accent-3-soft: #fdf3d7;
   --accent-4: #2f6fed;
-  --accent-4-soft: #dbe6fd;
+  --accent-4-soft: #e1e8fb;
 
   --success: #12b76a;
   --success-soft: #d7f5e6;
-  --warning: #f2a900;
-  --warning-soft: #fdecc0;
-  --danger: #e23b6b;
+  --warning: #b98200;
+  --warning-soft: #fdf3d7;
+  --danger: #d1345b;
   --danger-soft: #fbdde7;
 
-  /* ネオブルータリズム寄りの「ポップ」な太縁+ハードシャドウ */
-  --shadow-pop: 3px 3px 0 var(--foreground);
-  --shadow-pop-sm: 2px 2px 0 var(--foreground);
-  --shadow-pop-hover: 5px 5px 0 var(--foreground);
-  --shadow-pop-active: 1px 1px 0 var(--foreground);
+  /* 太枠+ハードシャドウはやめ、浮かせたい要素だけ柔らかい影にする(変数名は既存の参照箇所のため残す) */
+  --shadow-pop: 0 1px 2px rgba(31, 27, 23, 0.06);
+  --shadow-pop-sm: none;
+  --shadow-pop-hover: 0 2px 8px rgba(31, 27, 23, 0.1);
+  --shadow-pop-active: none;
+  --shadow-sheet: 0 -6px 20px rgba(31, 27, 23, 0.12);
+
+  --stage-background: #1f1b17;
 }
 
 @theme inline {
@@ -80,7 +84,25 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), "Hiragino Sans", "Noto Sans JP", sans-serif;
   min-height: 100%;
-  /* 英数字だけの長いファイル名(IMG_1234_xxxx.MOV等)は途中で折り返せず、スマホで画面の外へはみ出していた */
+  /*
+   * 以前は overflow-wrap: anywhere で長い英数字のはみ出しを防いでいたが、要素の最小幅が1文字まで
+   * 縮むため、横並びの見出しが細い列に押し込まれて1〜2文字ずつ折り返していた。全体は break-word に
+   * 戻し、ファイル名など区切りの無い文字列を出す箇所だけ .break-anywhere を付ける。
+   * auto-phrase は日本語を文節で折り返す指定(未対応のブラウザでは従来どおりの折り返しになる)。
+   */
+  overflow-wrap: break-word;
+  word-break: auto-phrase;
+}
+
+h1,
+h2,
+h3,
+p,
+li {
+  text-wrap: pretty;
+}
+
+.break-anywhere {
   overflow-wrap: anywhere;
 }
 
@@ -138,9 +160,8 @@ textarea {
 
 .panel {
   background: var(--background-elevated);
-  border: 1.5px solid var(--foreground);
-  border-radius: 16px;
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--border);
+  border-radius: 14px;
 }
 
 .panel-flat {
@@ -164,13 +185,13 @@ textarea {
 }
 
 .field-input {
-  background: var(--background-elevated-2);
-  border: 1.5px solid var(--border-strong);
+  background: var(--background);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 14px;
   color: var(--foreground);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  transition: border-color 0.15s ease;
   width: 100%;
 }
 .field-input::placeholder {
@@ -179,7 +200,6 @@ textarea {
 .field-input:focus {
   outline: none;
   border-color: var(--foreground);
-  box-shadow: var(--shadow-pop-sm);
 }
 .field-input:disabled {
   opacity: 0.5;
@@ -190,48 +210,32 @@ textarea {
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 700;
-  border-radius: 12px;
-  border: 2px solid var(--foreground);
-  box-shadow: var(--shadow-pop);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  border-radius: 999px;
+  border: none;
+  transition: background-color 0.15s ease;
 }
 .btn-primary:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-pop-hover);
-}
-.btn-primary:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: var(--shadow-pop-active);
+  background: var(--accent-hover);
 }
 .btn-primary:disabled {
-  opacity: 0.4;
+  background: var(--border);
+  color: var(--muted-2);
   cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
 }
 
 .btn-outline {
-  border: 2px solid var(--foreground);
+  border: 1px solid var(--border-strong);
   color: var(--foreground);
-  border-radius: 12px;
-  background: var(--background);
-  box-shadow: var(--shadow-pop-sm);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  border-radius: 999px;
+  background: var(--background-elevated);
+  transition: background-color 0.15s ease;
 }
 .btn-outline:hover:not(:disabled) {
   background: var(--background-elevated-2);
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-pop-hover);
-}
-.btn-outline:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: none;
 }
 .btn-outline:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
 }
 
 .btn-ghost {
@@ -253,23 +257,20 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 2px solid var(--foreground);
-  background: var(--accent-3-soft);
-  color: var(--foreground);
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 12px;
-  font-weight: 800;
-  font-family: var(--font-mono);
+  font-weight: 700;
   flex-shrink: 0;
-  box-shadow: var(--shadow-pop-sm);
 }
 
 .upload-drop {
-  border: 2px dashed var(--border-strong);
-  border-radius: 12px;
-  background: var(--background-elevated-2);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--background-elevated);
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .upload-drop:hover {
@@ -285,26 +286,23 @@ textarea {
   padding: 4px 12px;
   font-size: 12px;
   font-weight: 700;
-  border: 1.5px solid var(--foreground);
+  border: none;
 }
 .badge-pill.neutral {
-  color: var(--foreground);
+  color: var(--muted);
   background: var(--background-elevated-2);
 }
 .badge-pill.success {
-  color: var(--foreground);
+  color: #0b6e4a;
   background: var(--success-soft);
-  border-color: var(--success);
 }
 .badge-pill.warning {
-  color: var(--foreground);
+  color: #6b4b00;
   background: var(--warning-soft);
-  border-color: var(--warning);
 }
 .badge-pill.danger {
-  color: var(--foreground);
+  color: #9b1c3e;
   background: var(--danger-soft);
-  border-color: var(--danger);
 }
 
 input[type="file"] {
@@ -314,20 +312,16 @@ input[type="file"] {
 input[type="file"]::file-selector-button {
   margin-right: 12px;
   padding: 8px 16px;
-  border-radius: 10px;
-  border: 2px solid var(--foreground);
-  background: var(--background);
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--background-elevated);
   color: var(--foreground);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: var(--shadow-pop-sm);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 input[type="file"]::file-selector-button:hover {
-  background: var(--accent-soft);
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-pop-hover);
+  background: var(--background-elevated-2);
 }
 
 .tab-bar {
@@ -343,23 +337,22 @@ input[type="file"]::file-selector-button:hover {
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
-  border-radius: 10px;
-  border: 2px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  border-radius: 999px;
+  border: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 .tab-button:hover {
   color: var(--foreground);
 }
 .tab-button.active {
-  color: var(--foreground);
+  color: var(--accent);
   background: var(--accent-soft);
-  border-color: var(--foreground);
 }
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(36, 28, 21, 0.5);
+  background: rgba(31, 27, 23, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -368,10 +361,10 @@ input[type="file"]::file-selector-button:hover {
 }
 
 .modal-panel {
-  background: var(--background);
-  border: 2px solid var(--foreground);
+  background: var(--background-elevated);
+  border: none;
   border-radius: 16px;
-  box-shadow: 6px 6px 0 var(--foreground);
+  box-shadow: 0 12px 40px rgba(31, 27, 23, 0.2);
   max-width: 560px;
   width: 100%;
   max-height: 80vh;
@@ -380,23 +373,21 @@ input[type="file"]::file-selector-button:hover {
 }
 
 .preset-card {
-  border: 2px solid var(--foreground);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--background);
-  box-shadow: var(--shadow-pop-sm);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  background: var(--background-elevated);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
   text-align: left;
 }
 .preset-card:hover {
+  border-color: var(--accent);
   background: var(--accent-soft);
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-pop-hover);
 }
 
 input[type="color"] {
-  border: 2px solid var(--foreground);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: var(--background-elevated-2);
+  background: var(--background-elevated);
   padding: 3px;
   cursor: pointer;
 }
@@ -410,11 +401,11 @@ input[type="color"]::-webkit-color-swatch {
 
 /* --- 進捗バー(レンダー・字幕生成) --- */
 .progress-track {
-  height: 10px;
+  height: 8px;
   width: 100%;
   overflow: hidden;
   border-radius: 999px;
-  border: 1.5px solid var(--foreground);
+  border: none;
   background: var(--background-elevated-2);
 }
 .progress-fill {
@@ -455,4 +446,73 @@ input[type="color"]::-webkit-color-swatch {
 .log-panel .log-line.current {
   color: var(--foreground);
   font-weight: 700;
+}
+
+/* --- 手順画面(/create系・書き出し)の共通レイアウト --- */
+.flow-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.flow-main {
+  flex: 1;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+.flow-lead {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* 次へ進むボタンの置き場。親指が届く画面下端に固定し、横幅いっぱいのボタンを並べる */
+.bottom-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--background-elevated);
+  border-top: 1px solid var(--border);
+}
+.bottom-action-bar > .btn-primary,
+.bottom-action-bar > .btn-outline {
+  height: 52px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+@media (min-width: 768px) {
+  .bottom-action-bar {
+    align-items: center;
+  }
+  .bottom-action-bar > .btn-primary,
+  .bottom-action-bar > .btn-outline {
+    width: 100%;
+    max-width: 608px;
+  }
+}
+
+.text-link {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.text-link:hover {
+  color: var(--accent);
 }
