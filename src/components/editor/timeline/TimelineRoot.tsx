@@ -107,7 +107,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
     const observer = new ResizeObserver(handleResize);
     observer.observe(el);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 表示時と幅の変化時だけ合わせる(理由は上のコメント)
+    // 表示時と幅の変化時だけ合わせる(理由は上のコメント)
   }, []);
 
   const zoomTo = (next: number) => {
