@@ -516,3 +516,173 @@ input[type="color"]::-webkit-color-swatch {
 .text-link:hover {
   color: var(--accent);
 }
+
+/* --- 上部バー(AppTopBar.tsx) --- */
+.app-topbar {
+  background: var(--background-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.app-topbar-row {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 2px;
+}
+.app-topbar-back {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground);
+}
+.app-topbar-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-topbar-title h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-topbar-step {
+  font-size: 11px;
+  color: var(--muted);
+}
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.app-topbar-progress {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 0 16px 10px;
+}
+.app-topbar-progress span {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.app-topbar-progress span.done {
+  background: var(--accent);
+}
+.topbar-icon-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.topbar-icon-btn:hover:not(:disabled) {
+  background: var(--background-elevated-2);
+}
+.topbar-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.topbar-pill {
+  height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--background-elevated);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.topbar-pill svg {
+  color: var(--accent);
+}
+.topbar-pill.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.topbar-cta {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.topbar-text-btn {
+  height: 36px;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.topbar-text-btn:hover {
+  color: var(--foreground);
+}
+
+/* --- 操作ボタン(ToolButtons.tsx) --- */
+.tool-grid {
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-elevated);
+  border-top: 1px solid var(--border);
+}
+.tool-grid-btn {
+  height: 56px;
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--background-elevated-2);
+  color: var(--foreground);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.tool-grid-btn span {
+  white-space: nowrap;
+}
+.tool-grid-btn:disabled,
+.tool-inline-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tool-grid-btn.danger,
+.tool-inline-btn.danger {
+  color: var(--danger);
+}
+.tool-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tool-inline-btn {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--background-elevated-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.tool-inline-btn kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
