@@ -95,12 +95,9 @@ export const ExportScreen: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <a href="/edit" className="btn-ghost w-fit text-xs">
-        ← 編集に戻る
-      </a>
       <div className="panel flex flex-col gap-1 p-4">
-        <p className="text-sm font-medium">{project.videoFileName ?? "動画"}を書き出しています</p>
-        <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+        <p className="break-anywhere text-sm font-bold">{project.videoFileName ?? "動画"}を書き出しています</p>
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
           クリップ {project.segments.length}個・このブラウザの中で書き出します。終わるまでこの画面を開いたままにしてください
         </p>
       </div>

@@ -86,13 +86,16 @@ export const RenderPanel: React.FC<Props> = ({
             </span>
           </div>
           {logs.length > 0 ? (
-            <div className="log-panel">
-              {logs.map((line, i) => (
-                <span key={i} className={`log-line${i === logs.length - 1 ? " current" : ""}`}>
-                  {line}
-                </span>
-              ))}
-            </div>
+            <details className="text-xs" style={{ color: "var(--muted)" }}>
+              <summary className="cursor-pointer py-1">詳しい進み具合を見る</summary>
+              <div className="log-panel mt-1">
+                {logs.map((line, i) => (
+                  <span key={i} className={`log-line${i === logs.length - 1 ? " current" : ""}`}>
+                    {line}
+                  </span>
+                ))}
+              </div>
+            </details>
           ) : null}
         </div>
       ) : null}
@@ -101,13 +104,16 @@ export const RenderPanel: React.FC<Props> = ({
         <div className="flex flex-col gap-2">
           <p className="badge-pill danger w-fit">{renderState.message}</p>
           {logs.length > 0 ? (
-            <div className="log-panel">
-              {logs.map((line, i) => (
-                <span key={i} className={`log-line${i === logs.length - 1 ? " current" : ""}`}>
-                  {line}
-                </span>
-              ))}
-            </div>
+            <details className="text-xs" style={{ color: "var(--muted)" }}>
+              <summary className="cursor-pointer py-1">詳しい進み具合を見る</summary>
+              <div className="log-panel mt-1">
+                {logs.map((line, i) => (
+                  <span key={i} className={`log-line${i === logs.length - 1 ? " current" : ""}`}>
+                    {line}
+                  </span>
+                ))}
+              </div>
+            </details>
           ) : null}
           <button type="button" onClick={onRender} disabled={!canRender} className="btn-outline w-fit px-4 py-1.5 text-sm">
             もう一度試す
@@ -121,7 +127,7 @@ export const RenderPanel: React.FC<Props> = ({
             src={renderState.url}
             controls
             className="w-full max-w-xs self-center rounded-lg"
-            style={{ border: "1.5px solid var(--foreground)" }}
+            style={{ border: "1px solid var(--border)" }}
           />
           <div className="flex flex-wrap gap-2">
             {result && canShareVideo(result) ? (
