@@ -1517,7 +1517,7 @@ export const ClipEditor: React.FC = () => {
         title="編集"
         actions={
           <>
-            <button type="button" className="topbar-text-btn hidden lg:inline-flex" onClick={handleExportProject}>
+            <button type="button" className="topbar-text-btn hidden items-center lg:inline-flex" onClick={handleExportProject}>
               編集データを保存
             </button>
             <label className="topbar-text-btn hidden cursor-pointer items-center lg:inline-flex">
