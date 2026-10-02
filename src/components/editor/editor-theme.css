@@ -6,6 +6,18 @@
  * 色味はアプリ既存のブランドを維持する"というフィードバックに合わせた構成)。
  */
 
+/* トラック名の列幅と映像レーンの高さ。スマホでは狭く・低くして、タイムラインに幅を回す */
+:root {
+  --track-label-width: 36px;
+  --video-lane-height: 56px;
+}
+@media (min-width: 1024px) {
+  :root {
+    --track-label-width: 64px;
+    --video-lane-height: 64px;
+  }
+}
+
 /* --- レイアウト --- */
 .editor-shell {
   display: flex;
@@ -92,28 +104,6 @@
   display: flex;
   flex-direction: column;
   background: var(--background-elevated);
-  border: 1.5px solid var(--foreground);
-  border-radius: 16px;
-  box-shadow: var(--shadow-pop);
-  overflow: hidden;
-}
-
-.editor-timeline-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--background-elevated-2);
-  border-bottom: 1.5px solid var(--foreground);
-  flex-wrap: wrap;
-}
-
-.editor-toolbar-hint {
-  order: 99;
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 11px;
-  color: var(--muted-2);
 }
 
 .editor-toolbar-btn {
@@ -154,25 +144,44 @@
   cursor: pointer;
 }
 
-.editor-timeline-spacer {
-  flex: 1;
-}
-
-.editor-timecode {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.editor-zoom-control {
+/* 拡大縮小の行(タイムラインの下) */
+.editor-timeline-zoom {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  padding: 4px 12px 8px;
 }
-.editor-zoom-control input[type="range"] {
+.editor-timeline-zoom-hint {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+.editor-zoom-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background-elevated);
+  color: var(--muted);
+  font-size: 12px;
+}
+.editor-zoom-range {
+  display: none;
   width: 100px;
   accent-color: var(--accent);
+}
+@media (min-width: 1024px) {
+  .editor-zoom-range {
+    display: block;
+  }
+}
+/* マウス操作の端末ではピンチの案内は不要 */
+@media (hover: hover) and (pointer: fine) {
+  .editor-timeline-zoom-hint {
+    display: none;
+  }
 }
 
 /* --- タイムライン本体 --- */
@@ -180,6 +189,8 @@
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--background);
+  /* ページ全体の拡大ではなく、TimelineRootのピンチ処理に2本指の動きを渡す */
+  touch-action: pan-x;
 }
 
 .editor-timeline-content {
@@ -189,7 +200,7 @@
 
 .editor-ruler {
   position: relative;
-  background: var(--background-elevated-2);
+  background: var(--background);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
@@ -198,7 +209,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border);
   padding-left: 4px;
   display: flex;
   align-items: center;
@@ -224,7 +235,7 @@
   position: sticky;
   left: 0;
   z-index: 5;
-  width: 64px;
+  width: var(--track-label-width);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -240,7 +251,7 @@
   background: var(--background);
 }
 .editor-track-video .editor-lane {
-  height: 76px;
+  height: var(--video-lane-height);
 }
 .editor-track-sfx .editor-lane,
 .editor-track-bgm .editor-lane {
@@ -263,7 +274,7 @@
 }
 .editor-clip-block.video {
   background: var(--background-elevated-2);
-  border-color: var(--foreground);
+  border-color: var(--border-strong);
 }
 .editor-clip-block.video.selected {
   outline: 2px solid var(--accent);

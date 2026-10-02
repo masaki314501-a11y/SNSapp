@@ -5,9 +5,13 @@ import type { ProjectBgm, ProjectSegment, ProjectSfxClip } from "@/lib/videoProj
 import { beginPointerDrag } from "./pointerDrag";
 import {
   DEFAULT_PIXELS_PER_SECOND,
+  MAX_PIXELS_PER_SECOND,
+  MIN_PIXELS_PER_SECOND,
   clampPixelsPerSecond,
+  fitPixelsPerSecond,
   formatTimecode,
   pickRulerStepSeconds,
+  pinchPixelsPerSecond,
   pixelsToSeconds,
   secondsToPixels,
 } from "./timelineScale";
@@ -17,6 +21,10 @@ import { SfxTrack, BgmTrack } from "./AudioTracks";
 type SelectModifiers = { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean };
 export type AudioSelection = { kind: "sfx"; key: string } | { kind: "bgm" } | null;
 
+/**
+ * 分割・イン点/アウト点・元に戻す等の操作ボタンは、画面ごとの配置に合わせて呼び出し側
+ * (ToolButtons.tsx・PlaybackBar.tsx)に置く。ここはルーラー・トラック・拡大縮小だけを持つ。
+ */
 type TimelineRootProps = {
   segments: ProjectSegment[];
   sfxClips: ProjectSfxClip[];
@@ -37,26 +45,11 @@ type TimelineRootProps = {
   onMoveSfx: (key: string, desiredStartSeconds: number) => void;
   onSelectBgm: () => void;
   onScrub: (seconds: number) => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  canAddSegment: boolean;
-  onAddSegment: () => void;
-  selectedCount: number;
-  onDeleteSelected: () => void;
-  canSplitAtPlayhead: boolean;
-  onSplitAtPlayhead: () => void;
-  /** 再生ヘッドが乗っているクリップのイン点/アウト点(開始/終了)を、その位置に打ち直す。 */
-  onTrimStartToPlayhead: () => void;
-  onTrimEndToPlayhead: () => void;
   /**
    * どのトラックを表示するか(タブごとに今やりたいこと以外のトラックは隠す)。
    * 省略時は全トラック表示(ラフカット画面等、値を明示的に渡さない呼び出し向けの既定値)。
    */
   tracks?: { video?: boolean; sfx?: boolean; bgm?: boolean };
-  /** +クリップ/分割/イン点/アウト点など、動画カット専用のツールバーボタンを表示するか。 */
-  showCutTools?: boolean;
 };
 
 const RULER_HEIGHT = 28;
@@ -80,27 +73,80 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   onMoveSfx,
   onSelectBgm,
   onScrub,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  canAddSegment,
-  onAddSegment,
-  selectedCount,
-  onDeleteSelected,
-  canSplitAtPlayhead,
-  onSplitAtPlayhead,
-  onTrimStartToPlayhead,
-  onTrimEndToPlayhead,
   tracks,
-  showCutTools = true,
 }) => {
   const showVideoTrack = tracks?.video ?? true;
   const showSfxTrack = tracks?.sfx ?? true;
   const showBgmTrack = tracks?.bgm ?? true;
-  const canTrimAtPlayhead = activeSegmentKey !== null;
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_PIXELS_PER_SECOND);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 最初は動画全体が見える幅に収める。利用者が拡大縮小した後は、その倍率を尊重して勝手に戻さない。
+  // 長さが変わるたびに合わせ直すと、トリムのドラッグ中にクリップが指から逃げるため、
+  // 合わせ直すのは表示した時と画面幅が変わった時だけにする。
+  const userZoomedRef = useRef(false);
+  const durationRef = useRef(totalDurationSeconds);
+  useEffect(() => {
+    durationRef.current = totalDurationSeconds;
+  }, [totalDurationSeconds]);
+
+  const fitToWidth = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const labelWidth = el.querySelector<HTMLElement>(".editor-track-label")?.offsetWidth ?? 0;
+    setPixelsPerSecond(fitPixelsPerSecond(el.clientWidth - labelWidth, durationRef.current));
+  };
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleResize = () => {
+      if (!userZoomedRef.current) fitToWidth();
+    };
+    handleResize();
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(el);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 表示時と幅の変化時だけ合わせる(理由は上のコメント)
+  }, []);
+
+  const zoomTo = (next: number) => {
+    userZoomedRef.current = true;
+    setPixelsPerSecond(clampPixelsPerSecond(next));
+  };
+
+  const showWholeTimeline = () => {
+    userZoomedRef.current = false;
+    fitToWidth();
+  };
+
+  // 2本指のピンチで拡大縮小する。指の位置は子要素(クリップ等)に届いたイベントも含めて
+  // 捕捉段階で拾う(クリップ側がsetPointerCaptureしていても、親には伝わってくる)。
+  const touchPointsRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ startDistance: number; startPixelsPerSecond: number } | null>(null);
+  const pointDistance = () => {
+    const [a, b] = [...touchPointsRef.current.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+  const handleTouchPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "touch") return;
+    touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touchPointsRef.current.size === 2) {
+      pinchRef.current = { startDistance: pointDistance(), startPixelsPerSecond: pixelsPerSecond };
+    }
+  };
+  const handleTouchPointerMove = (e: React.PointerEvent) => {
+    if (!touchPointsRef.current.has(e.pointerId)) return;
+    touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pinch = pinchRef.current;
+    if (pinch && touchPointsRef.current.size === 2) {
+      zoomTo(pinchPixelsPerSecond(pinch.startPixelsPerSecond, pinch.startDistance, pointDistance()));
+    }
+  };
+  const handleTouchPointerEnd = (e: React.PointerEvent) => {
+    touchPointsRef.current.delete(e.pointerId);
+    if (touchPointsRef.current.size < 2) pinchRef.current = null;
+  };
 
   const contentWidthPx = Math.max(1, secondsToPixels(Math.max(totalDurationSeconds, 1), pixelsPerSecond));
   const rulerStepSeconds = pickRulerStepSeconds(pixelsPerSecond);
@@ -133,82 +179,14 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
 
   return (
     <div className="editor-timeline-wrap">
-      <div className="editor-timeline-toolbar">
-        {showCutTools ? (
-          <>
-            <button
-              type="button"
-              className="editor-toolbar-btn"
-              onClick={onAddSegment}
-              disabled={!canAddSegment}
-              title="元の動画のうち、まだ使っていない部分をクリップとして足します"
-            >
-              + クリップ
-            </button>
-            <button
-              type="button"
-              className="editor-toolbar-btn"
-              onClick={onSplitAtPlayhead}
-              disabled={!canSplitAtPlayhead}
-              title="赤い線の位置で、クリップを2つに分けます (S)"
-            >
-              ✂ 分割
-            </button>
-            <button
-              type="button"
-              className="editor-toolbar-btn"
-              onClick={onTrimStartToPlayhead}
-              disabled={!canTrimAtPlayhead}
-              title="赤い線より前をカットして、クリップをここから始めます (I)"
-            >
-              ⇤ ここから使う
-            </button>
-            <button
-              type="button"
-              className="editor-toolbar-btn"
-              onClick={onTrimEndToPlayhead}
-              disabled={!canTrimAtPlayhead}
-              title="赤い線より後ろをカットして、クリップをここで終わらせます (O)"
-            >
-              ここまで使う ⇥
-            </button>
-            {/* ボタンの説明(title)はスマホでは出ないため、使い方を常に見える形で書いておく */}
-            <p className="editor-toolbar-hint">
-              赤い線(再生位置)を動かしてからボタンを押すと、その位置でクリップを分けたり、前後をカットしたりできます
-            </p>
-          </>
-        ) : null}
-        <button type="button" className="editor-toolbar-btn" onClick={onUndo} disabled={!canUndo} title="元に戻す (Ctrl/Cmd+Z)">
-          ↶
-        </button>
-        <button type="button" className="editor-toolbar-btn" onClick={onRedo} disabled={!canRedo} title="やり直す (Ctrl/Cmd+Shift+Z)">
-          ↷
-        </button>
-        {showCutTools && selectedCount > 0 ? (
-          <button type="button" className="editor-toolbar-btn danger" onClick={onDeleteSelected}>
-            選択を削除({selectedCount})
-          </button>
-        ) : null}
-        <div className="editor-timeline-spacer" />
-        <span className="editor-timecode">{formatTimecode(currentSeconds)} / {formatTimecode(totalDurationSeconds)}</span>
-        <div className="editor-zoom-control">
-          <button type="button" className="editor-toolbar-btn" onClick={() => setPixelsPerSecond((v) => clampPixelsPerSecond(v / 1.4))}>
-            −
-          </button>
-          <input
-            type="range"
-            min={12}
-            max={320}
-            value={pixelsPerSecond}
-            onChange={(e) => setPixelsPerSecond(clampPixelsPerSecond(Number(e.target.value)))}
-          />
-          <button type="button" className="editor-toolbar-btn" onClick={() => setPixelsPerSecond((v) => clampPixelsPerSecond(v * 1.4))}>
-            +
-          </button>
-        </div>
-      </div>
-
-      <div className="editor-timeline-scroll" ref={scrollRef}>
+      <div
+        className="editor-timeline-scroll"
+        ref={scrollRef}
+        onPointerDownCapture={handleTouchPointerDown}
+        onPointerMoveCapture={handleTouchPointerMove}
+        onPointerUpCapture={handleTouchPointerEnd}
+        onPointerCancelCapture={handleTouchPointerEnd}
+      >
         <div className="editor-timeline-content" style={{ width: contentWidthPx }}>
           <div
             className="editor-ruler"
@@ -264,6 +242,38 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
 
           <div className="editor-playhead" style={{ left: playheadLeftPx }} />
         </div>
+      </div>
+
+      <div className="editor-timeline-zoom">
+        <span className="editor-timeline-zoom-hint">2本の指で広げると拡大</span>
+        <button type="button" className="editor-zoom-btn" onClick={showWholeTimeline}>
+          全体
+        </button>
+        <button
+          type="button"
+          className="editor-zoom-btn"
+          aria-label="縮小"
+          onClick={() => zoomTo(pixelsPerSecond / 1.4)}
+        >
+          −
+        </button>
+        <input
+          type="range"
+          className="editor-zoom-range"
+          aria-label="拡大率"
+          min={MIN_PIXELS_PER_SECOND}
+          max={MAX_PIXELS_PER_SECOND}
+          value={pixelsPerSecond}
+          onChange={(e) => zoomTo(Number(e.target.value))}
+        />
+        <button
+          type="button"
+          className="editor-zoom-btn"
+          aria-label="拡大"
+          onClick={() => zoomTo(pixelsPerSecond * 1.4)}
+        >
+          ＋
+        </button>
       </div>
     </div>
   );
