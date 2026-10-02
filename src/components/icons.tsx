@@ -177,3 +177,18 @@ export const InfoIcon: React.FC<IconProps> = (p) => (
     <path d="M12 16.5v.01" />
   </Svg>
 );
+export const SpeakerOffIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M11 5L6 9H3v6h3l5 4z" />
+    <path d="M22 9l-6 6" />
+    <path d="M16 9l6 6" />
+  </Svg>
+);
+export const FullscreenIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 9V4h5" />
+    <path d="M20 9V4h-5" />
+    <path d="M4 15v5h5" />
+    <path d="M20 15v5h-5" />
+  </Svg>
+);

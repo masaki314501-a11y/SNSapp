@@ -10,6 +10,8 @@ export type MenuItem = {
   /** 指定するとファイル選択になる(「保存した編集データを開く」用)。 */
   onFile?: (file: File | null) => void;
   accept?: string;
+  /** 押した後もメニューを開いたままにする(「コピーしました」等の結果をその場で見せる時)。 */
+  keepOpen?: boolean;
 };
 
 /**
@@ -57,7 +59,7 @@ export const EditorMenu: React.FC<{ items: MenuItem[]; footer?: React.ReactNode 
                   role="menuitem"
                   className="editor-menu-item"
                   onClick={() => {
-                    close();
+                    if (!item.keepOpen) close();
                     item.onClick?.();
                   }}
                 >

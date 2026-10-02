@@ -7,6 +7,8 @@ export type ToolItem = {
   /** PCで添えるキーボードの割り当て(例: "S")。 */
   shortcut?: string;
   danger?: boolean;
+  /** 画面幅によって隠す等、ボタンごとに付けるクラス。 */
+  className?: string;
 };
 
 /** スマホ・タブレット縦向き用。アイコン+短い文言のボタンを等分で1行に並べる。 */
@@ -19,7 +21,7 @@ export const ToolGrid: React.FC<{ items: ToolItem[]; className?: string }> = ({ 
       <button
         key={item.key}
         type="button"
-        className={`tool-grid-btn${item.danger ? " danger" : ""}`}
+        className={`tool-grid-btn${item.danger ? " danger" : ""}${item.className ? ` ${item.className}` : ""}`}
         onClick={item.onClick}
         disabled={item.disabled}
       >

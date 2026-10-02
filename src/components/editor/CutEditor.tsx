@@ -136,6 +136,8 @@ export const CutEditor: React.FC = () => {
 
   const [previewFrame, setPreviewFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Remotion標準のコントロールをやめたので、音のオン/オフは再生バーのボタンで切り替える。
+  const [isMuted, setIsMuted] = useState(false);
   const hasClips = segments.length > 0;
   useEffect(() => {
     if (!hasClips) return;
@@ -593,6 +595,15 @@ export const CutEditor: React.FC = () => {
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
+        isMuted={isMuted}
+        onToggleMute={() => {
+          const player = playerRef.current;
+          if (!player) return;
+          if (player.isMuted()) player.unmute();
+          else player.mute();
+          setIsMuted(player.isMuted());
+        }}
+        onFullscreen={() => playerRef.current?.requestFullscreen()}
       />
 
       <div className="editor-area-timeline">
@@ -691,6 +702,9 @@ export const CutEditor: React.FC = () => {
         <div className="editor-area-tools">
           <ToolGrid items={cutTools} />
         </div>
+        <p className="keyboard-hint hidden text-xs lg:block" style={{ color: "var(--muted-2)" }}>
+          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=分割・I=ここから使う・O=ここまで使う・Delete=選んだ範囲を捨てる
+        </p>
 
         <div className="editor-area-action">
           <button

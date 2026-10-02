@@ -108,7 +108,7 @@ export const AutoEditScreen: React.FC = () => {
           <span className="text-sm font-bold">AIがまとめて決めること</span>
           <div className="flex flex-wrap gap-1.5">
             {AI_DECIDES.map((label) => (
-              <span key={label} className="badge-pill neutral font-normal">
+              <span key={label} className="badge-pill neutral" style={{ fontWeight: 400 }}>
                 {label}
               </span>
             ))}

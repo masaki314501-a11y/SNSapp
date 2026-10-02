@@ -94,12 +94,15 @@ body {
   word-break: auto-phrase;
 }
 
-h1,
-h2,
-h3,
-p,
-li {
-  text-wrap: pretty;
+/* 要素セレクタはTailwindの whitespace-nowrap 等より弱くなるよう base レイヤーに置く */
+@layer base {
+  h1,
+  h2,
+  h3,
+  p,
+  li {
+    text-wrap: pretty;
+  }
 }
 
 .break-anywhere {
@@ -450,6 +453,7 @@ input[type="color"]::-webkit-color-swatch {
 
 /* --- 手順画面(/create系・書き出し)の共通レイアウト --- */
 .flow-page {
+  min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -653,8 +657,11 @@ input[type="color"]::-webkit-color-swatch {
   font-size: 11px;
   line-height: 1.2;
 }
+/* 幅360px程度の端末でも隣のボタンにはみ出さないよう、入りきらない時は文節で2行に折り返す */
 .tool-grid-btn span {
-  white-space: nowrap;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.15;
 }
 .tool-grid-btn:disabled,
 .tool-inline-btn:disabled {

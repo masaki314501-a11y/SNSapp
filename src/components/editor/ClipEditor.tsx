@@ -207,6 +207,8 @@ export const ClipEditor: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   // 設定パネルに出すもの。「AIに頼む」を押した時だけAIの依頼欄にする。
   const [settingsView, setSettingsView] = useState<"tab" | "ai">("tab");
+  // Remotion標準のコントロールをやめたので、音のオン/オフは再生バーのボタンで切り替える。
+  const [isMuted, setIsMuted] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditText, setBulkEditText] = useState("");
 
@@ -1269,6 +1271,14 @@ export const ClipEditor: React.FC = () => {
     setSettingsView("tab");
   };
   const togglePlay = () => playerRef.current?.toggle();
+  const toggleMute = () => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (player.isMuted()) player.unmute();
+    else player.mute();
+    setIsMuted(player.isMuted());
+  };
+  const showFullscreen = () => playerRef.current?.requestFullscreen();
 
   if (!hasCheckedProject) {
     return null;
@@ -1322,7 +1332,8 @@ export const ClipEditor: React.FC = () => {
   // スマホでは選択中クリップの設定(複製・結合・削除・音量)を開くボタンも並べる
   const cutToolsWithSettings: ToolItem[] = [
     ...cutTools,
-    { key: "settings", label: "設定", icon: <SettingsIcon />, onClick: openSettings },
+    // タブレット縦向き以上では設定が常に見えているので出さない(.tool-only-sheet)
+    { key: "settings", label: "設定", icon: <SettingsIcon />, onClick: openSettings, className: "tool-only-sheet" },
   ];
 
   const tabSettings =
@@ -1559,6 +1570,7 @@ export const ClipEditor: React.FC = () => {
                   key: "copy",
                   label: copyStatus === "done" ? "✓ 字幕をコピーしました" : "字幕をコピー",
                   onClick: () => void handleCopyCaptions(),
+                  keepOpen: true,
                 },
                 { key: "start-over", label: "別の動画からやり直す", onClick: handleStartOver },
               ]}
@@ -1642,6 +1654,9 @@ export const ClipEditor: React.FC = () => {
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        onFullscreen={showFullscreen}
       >
         {activeTab === "cut" ? <ToolInline items={cutTools} /> : null}
       </PlaybackBar>

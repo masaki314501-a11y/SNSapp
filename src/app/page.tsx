@@ -62,7 +62,7 @@ export default function Home() {
           >
             動画を作成する →
           </Link>
-          <Link href="/dev/edit-examples" className="text-link text-xs">
+          <Link href="/dev/edit-examples" className="text-link" style={{ fontSize: 12 }}>
             学習・正解動画をアップロード(開発者用)
           </Link>
         </div>
