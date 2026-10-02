@@ -438,9 +438,11 @@
   .cut-side .editor-area-tools {
     display: block;
   }
+  /* 右側の列は幅が狭いので、5個の操作を3列に折り返す(列数はToolGridが要素に直接指定するため上書きする) */
   .cut-side .tool-grid {
     border-top: none;
     padding: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
   .cut-side .editor-area-coverage,
   .cut-side .editor-area-action {
