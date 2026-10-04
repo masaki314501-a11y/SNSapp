@@ -1275,7 +1275,9 @@ export const ClipEditor: React.FC = () => {
   };
 
   /**
-   * タブを押した時。カット以外は設定シートも開く(カットはタイムラインの下の操作ボタンが主役なので開かない)。
+   * タブを押した時。字幕・音声と演出は設定シートも開く。カットはタイムラインの下の操作ボタンが主役、
+   * 効果音・BGMは動画全体の時刻で置く音なのでタイムラインで位置を見たいことが多く、どちらも開かない
+   * (設定はタイムラインの下の「〜の設定を開く」から開く)。
    * クリップを押しただけではシートを開かない: 押した瞬間にシートが出ると、ドラッグ中のタイムラインが隠れるため。
    */
   const handleSelectTab = (tab: EditorTab) => {
@@ -1286,7 +1288,7 @@ export const ClipEditor: React.FC = () => {
       if (key) selectOnly(key);
     }
     setSettingsView("tab");
-    setSheetOpen(tab !== "cut");
+    setSheetOpen(tab === "caption" || tab === "effects");
   };
   const openSettings = () => {
     setSettingsView("tab");
