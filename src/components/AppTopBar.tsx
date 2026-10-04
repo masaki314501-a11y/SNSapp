@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BackIcon } from "./icons";
+import { BackIcon, HomeIcon } from "./icons";
 
 type AppTopBarProps = {
   backHref: string;
@@ -16,6 +16,10 @@ type AppTopBarProps = {
    * 渡した場合はリンクではなくボタンになり、移動はこの関数の中で行う。
    */
   onBack?: () => void;
+  /** 戻り先がトップの時は "home"(前の手順へ戻るのではないことが分かるよう、家のアイコンにする)。 */
+  backIcon?: "back" | "home";
+  /** 渡すと、戻る(前の手順へ)の横に「トップへ戻る」(家のアイコン)を出す。 */
+  onHome?: () => void;
   className?: string;
 };
 
@@ -31,35 +35,45 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   hideProgress,
   actions,
   onBack,
+  backIcon = "back",
+  onHome,
   className,
-}) => (
-  <header className={`app-topbar${className ? ` ${className}` : ""}`}>
-    <div className="app-topbar-row">
-      {onBack ? (
-        <button type="button" onClick={onBack} aria-label={backLabel} className="app-topbar-back">
-          <BackIcon size={22} />
-        </button>
-      ) : (
-        <Link href={backHref} aria-label={backLabel} className="app-topbar-back">
-          <BackIcon size={22} />
-        </Link>
-      )}
-      <div className="app-topbar-title">
-        {step ? (
-          <span className="app-topbar-step">
-            ステップ {step.current} / {step.total}
-          </span>
+}) => {
+  const Icon = backIcon === "home" ? HomeIcon : BackIcon;
+  return (
+    <header className={`app-topbar${className ? ` ${className}` : ""}`}>
+      <div className="app-topbar-row">
+        {onBack ? (
+          <button type="button" onClick={onBack} aria-label={backLabel} title={backLabel} className="app-topbar-back">
+            <Icon size={22} />
+          </button>
+        ) : (
+          <Link href={backHref} aria-label={backLabel} title={backLabel} className="app-topbar-back">
+            <Icon size={22} />
+          </Link>
+        )}
+        {onHome ? (
+          <button type="button" onClick={onHome} aria-label="トップへ戻る" title="トップへ戻る" className="app-topbar-back">
+            <HomeIcon size={21} />
+          </button>
         ) : null}
-        <h1>{title}</h1>
+        <div className="app-topbar-title">
+          {step ? (
+            <span className="app-topbar-step">
+              ステップ {step.current} / {step.total}
+            </span>
+          ) : null}
+          <h1>{title}</h1>
+        </div>
+        {actions ? <div className="app-topbar-actions">{actions}</div> : null}
       </div>
-      {actions ? <div className="app-topbar-actions">{actions}</div> : null}
-    </div>
-    {step && !hideProgress ? (
-      <div className="app-topbar-progress" aria-hidden="true">
-        {Array.from({ length: step.total }, (_, i) => (
-          <span key={i} className={i < step.current ? "done" : undefined} />
-        ))}
-      </div>
-    ) : null}
-  </header>
-);
+      {step && !hideProgress ? (
+        <div className="app-topbar-progress" aria-hidden="true">
+          {Array.from({ length: step.total }, (_, i) => (
+            <span key={i} className={i < step.current ? "done" : undefined} />
+          ))}
+        </div>
+      ) : null}
+    </header>
+  );
+};

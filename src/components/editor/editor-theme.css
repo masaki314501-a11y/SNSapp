@@ -484,7 +484,8 @@
 }
 
 /* 冒頭の見出しと補足は2つで1組。枠で囲み、見え方(見出しの下に補足が小さく)を上に添える */
-.hook-set {
+.hook-set,
+.field-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -493,7 +494,8 @@
   border-radius: 10px;
   background: var(--background-elevated-2);
 }
-.hook-set .editor-field input {
+.hook-set .editor-field input,
+.field-group .editor-field input {
   background: var(--background-elevated);
 }
 .hook-set-preview {
@@ -842,6 +844,15 @@
 }
 
 /* --- 元動画のうち使う範囲の可視化バー(カット画面) --- */
+/* 選んだ範囲への操作(削除・だけ残す・解除)は折り返さず1行に並べる */
+.coverage-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.coverage-actions .editor-toolbar-btn {
+  white-space: nowrap;
+}
 .editor-coverage-wrap {
   display: flex;
   flex-direction: column;
@@ -912,6 +923,15 @@
 .editor-toolbar-btn:hover:not(:disabled) {
   background: var(--background-elevated-2);
 }
+/* 基本となる操作(AIナレーションの一括生成など)。赤く塗って、補助の操作と見分ける */
+.editor-toolbar-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.editor-toolbar-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
 .editor-toolbar-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -935,24 +955,37 @@
   gap: 6px;
   padding: 4px 12px 8px;
 }
-.editor-timeline-zoom-hint {
+.editor-timeline-zoom-label {
   margin-right: auto;
+  min-width: 0;
   font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor-timeline-zoom-hint {
   color: var(--muted-2);
 }
 .editor-zoom-btn {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
+  height: 30px;
+  padding: 0 10px 0 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--background-elevated);
-  color: var(--muted);
+  color: var(--foreground);
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.editor-zoom-btn svg {
+  color: var(--muted);
 }
 .editor-zoom-range {
   display: none;
-  width: 100px;
+  width: 120px;
   accent-color: var(--accent);
 }
 @media (min-width: 1024px) {

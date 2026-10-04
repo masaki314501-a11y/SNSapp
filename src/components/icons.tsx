@@ -44,6 +44,66 @@ export const BackIcon: React.FC<IconProps> = (p) => (
     <path d="M15 18l-6-6 6-6" />
   </Svg>
 );
+export const HomeIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 11l8-7 8 7" />
+    <path d="M6 9.5V20h4.5v-5.5h3V20H18V9.5" />
+  </Svg>
+);
+export const CropIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 2v14a2 2 0 002 2h14" />
+    <path d="M18 22V8a2 2 0 00-2-2H2" />
+  </Svg>
+);
+export const CloseIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 6l12 12" />
+    <path d="M18 6L6 18" />
+  </Svg>
+);
+export const ZoomInIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-3.5-3.5" />
+    <path d="M11 8v6" />
+    <path d="M8 11h6" />
+  </Svg>
+);
+export const ZoomOutIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-3.5-3.5" />
+    <path d="M8 11h6" />
+  </Svg>
+);
+export const FitWidthIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M3 5v14" />
+    <path d="M21 5v14" />
+    <path d="M7 12h10" />
+    <path d="M9.5 9.5L7 12l2.5 2.5" />
+    <path d="M14.5 9.5L17 12l-2.5 2.5" />
+  </Svg>
+);
+export const FilmPlusIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 4v16" />
+    <path d="M14 9v6" />
+    <path d="M11 12h6" />
+  </Svg>
+);
+/** 字幕とAIナレーション(読み上げ音声)の両方を扱う字幕タブ用。字幕の枠に音の波を添える。 */
+export const CaptionVoiceIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="2" y="5" width="14" height="14" rx="2" />
+    <path d="M5.5 11h7" />
+    <path d="M5.5 15h4.5" />
+    <path d="M19 9.5a3.5 3.5 0 010 5" />
+    <path d="M21.5 7.5a7 7 0 010 9" />
+  </Svg>
+);
 export const ChevronRightIcon: React.FC<IconProps> = (p) => (
   <Svg {...p}>
     <path d="M9 6l6 6-6 6" />

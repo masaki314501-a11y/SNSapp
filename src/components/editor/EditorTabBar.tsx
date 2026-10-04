@@ -1,5 +1,5 @@
 import {
-  CaptionIcon,
+  CaptionVoiceIcon,
   CheckCircleIcon,
   MusicIcon,
   ScissorsIcon,
@@ -9,11 +9,12 @@ import {
 } from "@/components/icons";
 
 // 「AI音声」は字幕タブに、「見た目」は字幕タブ(字幕の見た目)と演出タブ(全体のフェード)にまとめた。
+// 字幕タブでAIナレーション(読み上げ音声)も付けられることが分かるよう、名前は「字幕・音声」にする。
 export type EditorTab = "cut" | "caption" | "effects" | "se" | "bgm";
 
 export const EDITOR_TAB_LABELS: Record<EditorTab, string> = {
   cut: "カット",
-  caption: "字幕",
+  caption: "字幕・音声",
   effects: "演出",
   se: "効果音",
   bgm: "BGM",
@@ -21,7 +22,7 @@ export const EDITOR_TAB_LABELS: Record<EditorTab, string> = {
 
 const TABS: { id: EditorTab; Icon: React.FC<IconProps> }[] = [
   { id: "cut", Icon: ScissorsIcon },
-  { id: "caption", Icon: CaptionIcon },
+  { id: "caption", Icon: CaptionVoiceIcon },
   { id: "effects", Icon: SparkleIcon },
   { id: "se", Icon: SpeakerIcon },
   { id: "bgm", Icon: MusicIcon },

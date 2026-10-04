@@ -7,6 +7,8 @@ export type ToolItem = {
   /** PCで添えるキーボードの割り当て(例: "S")。 */
   shortcut?: string;
   danger?: boolean;
+  /** 押すと何が起きるかの補足(マウスを乗せた時に出す)。 */
+  title?: string;
   /** 画面幅によって隠す等、ボタンごとに付けるクラス。 */
   className?: string;
 };
@@ -24,6 +26,7 @@ export const ToolGrid: React.FC<{ items: ToolItem[]; className?: string }> = ({ 
         className={`tool-grid-btn${item.danger ? " danger" : ""}${item.className ? ` ${item.className}` : ""}`}
         onClick={item.onClick}
         disabled={item.disabled}
+        title={item.title}
       >
         {item.icon}
         <span>{item.label}</span>
@@ -42,6 +45,7 @@ export const ToolInline: React.FC<{ items: ToolItem[]; className?: string }> = (
         className={`tool-inline-btn${item.danger ? " danger" : ""}`}
         onClick={item.onClick}
         disabled={item.disabled}
+        title={item.title}
       >
         {item.icon}
         <span>{item.label}</span>

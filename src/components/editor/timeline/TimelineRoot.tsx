@@ -15,6 +15,7 @@ import {
   pixelsToSeconds,
   secondsToPixels,
 } from "./timelineScale";
+import { FitWidthIcon, ZoomInIcon, ZoomOutIcon } from "@/components/icons";
 import { VideoTrack } from "./VideoTrack";
 import { SfxTrack, BgmTrack } from "./AudioTracks";
 
@@ -278,23 +279,33 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
         </div>
       </div>
 
+      {/*
+        タイムラインの表示幅(拡大・縮小)。他の動画編集ツールと同じく、虫眼鏡のアイコンと「全体を表示」を並べる
+        (以前の「−」「＋」は、クリップの削除・追加と見分けにくかった)。
+      */}
       <div className="editor-timeline-zoom">
-        <span className="editor-timeline-zoom-hint">2本の指で広げると拡大</span>
-        <button type="button" className="editor-zoom-btn" onClick={showWholeTimeline}>
-          全体
+        <span className="editor-timeline-zoom-label">
+          タイムライン
+          <span className="editor-timeline-zoom-hint">(2本指でも可)</span>
+        </span>
+        <button type="button" className="editor-zoom-btn" onClick={showWholeTimeline} title="動画全体が横幅に収まるようにします">
+          <FitWidthIcon size={16} />
+          <span>全体</span>
         </button>
         <button
           type="button"
           className="editor-zoom-btn"
-          aria-label="縮小"
+          aria-label="タイムラインを縮小"
+          title="タイムラインを縮小"
           onClick={() => zoomTo(pixelsPerSecond / 1.4)}
         >
-          −
+          <ZoomOutIcon size={16} />
+          <span>縮小</span>
         </button>
         <input
           type="range"
           className="editor-zoom-range"
-          aria-label="拡大率"
+          aria-label="タイムラインの拡大率"
           min={MIN_PIXELS_PER_SECOND}
           max={MAX_PIXELS_PER_SECOND}
           value={pixelsPerSecond}
@@ -303,10 +314,12 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
         <button
           type="button"
           className="editor-zoom-btn"
-          aria-label="拡大"
+          aria-label="タイムラインを拡大"
+          title="タイムラインを拡大"
           onClick={() => zoomTo(pixelsPerSecond * 1.4)}
         >
-          ＋
+          <ZoomInIcon size={16} />
+          <span>拡大</span>
         </button>
       </div>
     </div>

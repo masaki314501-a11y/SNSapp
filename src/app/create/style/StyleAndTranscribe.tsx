@@ -13,7 +13,7 @@ import {
 import { loadProject, saveProject, type ProjectStyleReference, type VideoProject } from "@/lib/videoProject";
 import { useExtractStyleJob } from "../useExtractStyleJob";
 import { uploadVideoFile } from "../uploadVideoFile";
-import { UploadIcon } from "@/components/icons";
+import { RestartIcon, UploadIcon } from "@/components/icons";
 
 /**
  * ラフカット(/create/cut)で絞り込んだ「使う範囲」に対して、参考画像/参考動画からスタイルを
@@ -163,36 +163,23 @@ export const StyleAndTranscribe: React.FC = () => {
           }}
         />
 
+        {/* 動画を選ぶ画面と同じく、未選択の時は選ぶ枠を画面の下まで広げ、選んだら同じ場所にプレビューを出す */}
         {referencePreviewUrl ? (
-          <div className="flex items-start gap-3">
+          <div className="upload-preview">
             {referenceFile?.type.startsWith("video/") ? (
-              <video
-                src={referencePreviewUrl}
-                controls
-                muted
-                className="w-28 rounded-lg object-cover"
-                style={{ aspectRatio: "9 / 16" }}
-              />
+              <video src={referencePreviewUrl} controls muted playsInline aria-label="見た目の手本のプレビュー" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={referencePreviewUrl}
-                alt="見た目の手本のプレビュー"
-                className="w-28 rounded-lg object-cover"
-                style={{ aspectRatio: "9 / 16" }}
-              />
+              <img src={referencePreviewUrl} alt="見た目の手本のプレビュー" />
             )}
-            <label htmlFor="style-reference-file" className="btn-outline cursor-pointer px-4 py-1.5 text-sm">
-              別の手本にする
-            </label>
           </div>
         ) : (
           <label
             htmlFor="style-reference-file"
-            className="upload-drop flex cursor-pointer flex-col items-center justify-center gap-2 p-8 text-center"
+            className="upload-drop upload-drop-fill flex cursor-pointer flex-col items-center justify-center gap-3 p-8 text-center"
           >
-            <UploadIcon size={28} />
-            <span className="text-base font-bold">手本の画像・動画を選ぶ</span>
+            <UploadIcon size={40} />
+            <span className="upload-drop-title">手本の画像・動画を選ぶ</span>
             <span className="text-xs" style={{ color: "var(--muted)" }}>
               動画なら、文字の出し方の動きも読み取ります
             </span>
@@ -235,9 +222,18 @@ export const StyleAndTranscribe: React.FC = () => {
       </main>
 
       <div className="bottom-action-bar">
-        <button type="button" onClick={goToAutoEdit} disabled={isBusy} className="btn-primary">
-          {hasAnyReference ? "自動編集へ進む" : "手本なしで進む"}
-        </button>
+        {/* 選び直しは、次へ進むボタンと同じ場所(画面の一番下)に並べる */}
+        <div className="bottom-action-row">
+          {referencePreviewUrl && !isBusy ? (
+            <label htmlFor="style-reference-file" className="btn-outline cursor-pointer">
+              <RestartIcon size={18} />
+              別の手本にする
+            </label>
+          ) : null}
+          <button type="button" onClick={goToAutoEdit} disabled={isBusy} className="btn-primary">
+            {hasAnyReference ? "自動編集へ進む" : "手本なしで進む"}
+          </button>
+        </div>
       </div>
     </>
   );

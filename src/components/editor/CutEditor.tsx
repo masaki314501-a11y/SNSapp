@@ -30,7 +30,16 @@ import {
 import { TimelineRoot } from "./timeline/TimelineRoot";
 import { beginPointerDrag } from "./timeline/pointerDrag";
 import { AppTopBar } from "@/components/AppTopBar";
-import { PlusIcon, RestartIcon, ScissorsIcon, TrashIcon, TrimEndIcon, TrimStartIcon } from "@/components/icons";
+import {
+  CloseIcon,
+  CropIcon,
+  FilmPlusIcon,
+  RestartIcon,
+  ScissorsIcon,
+  TrashIcon,
+  TrimEndIcon,
+  TrimStartIcon,
+} from "@/components/icons";
 import { PlaybackBar } from "./PlaybackBar";
 import { ToolGrid, type ToolItem } from "./ToolButtons";
 
@@ -542,7 +551,15 @@ export const CutEditor: React.FC = () => {
       onClick: trimEndToPlayhead,
       disabled: activeSegmentKey === null,
     },
-    { key: "add", label: "クリップ追加", icon: <PlusIcon />, onClick: addSegment, disabled: !canAddSegment },
+    {
+      key: "add",
+      label: "未使用を追加",
+      // 選んだクリップの複製ではなく、カットで使っていない部分(一番長い空き)を末尾に足す
+      title: "元の動画でまだ使っていない部分を、最後に1クリップとして追加します",
+      icon: <FilmPlusIcon />,
+      onClick: addSegment,
+      disabled: !canAddSegment,
+    },
     {
       key: "discard",
       label: "クリップ削除",
@@ -677,21 +694,31 @@ export const CutEditor: React.FC = () => {
               ) : null}
             </div>
             {sourceRange ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col gap-1.5">
                 <span className="text-xs" style={{ color: "var(--muted)" }}>
                   選択範囲 {sourceRange.start.toFixed(1)}秒 〜 {sourceRange.end.toFixed(1)}秒
                   ({(sourceRange.end - sourceRange.start).toFixed(1)}秒)
                 </span>
-                <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
-                  <TrashIcon size={14} />
-                  この範囲を削除
-                </button>
-                <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
-                  ここだけ残す
-                </button>
-                <button type="button" className="btn-ghost text-xs" onClick={() => setSourceRange(null)}>
-                  選択解除
-                </button>
+                {/* 選んだ範囲への操作は1行にまとめる(以前は折り返して2行に分かれていた) */}
+                <div className="coverage-actions">
+                  <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
+                    <TrashIcon size={14} />
+                    選択範囲を削除
+                  </button>
+                  <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
+                    <CropIcon size={14} />
+                    選択範囲だけ残す
+                  </button>
+                  <button
+                    type="button"
+                    className="editor-toolbar-btn"
+                    onClick={() => setSourceRange(null)}
+                    aria-label="選択解除"
+                    title="選択解除"
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                </div>
               </div>
             ) : (
               <p className="text-xs" style={{ color: "var(--muted-2)" }}>

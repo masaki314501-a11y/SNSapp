@@ -67,8 +67,7 @@ import { AppTopBar } from "@/components/AppTopBar";
 import {
   CopyIcon,
   FolderOpenIcon,
-  PaletteIcon,
-  PlusIcon,
+  FilmPlusIcon,
   RestartIcon,
   SaveIcon,
   ScissorsIcon,
@@ -81,7 +80,7 @@ import { EditorMenu } from "./EditorMenu";
 import { EDITOR_TAB_LABELS, EditorTabBar, type EditorTab } from "./EditorTabBar";
 import { PlaybackBar } from "./PlaybackBar";
 import { SettingsPanel, type ClipNav } from "./SettingsPanel";
-import { Collapsible, SettingsSection } from "./SettingsSection";
+import { Collapsible } from "./SettingsSection";
 import { ToolGrid, ToolInline, type ToolItem } from "./ToolButtons";
 import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
 
@@ -142,7 +141,7 @@ const applySegmentPatch = (
 
 const EmptyState: React.FC = () => (
   <div className="flow-page">
-    <AppTopBar backHref="/" title="編集" />
+    <AppTopBar backHref="/" backLabel="トップへ戻る" backIcon="home" title="編集" />
     <main className="flow-main">
       <div className="panel flex flex-col items-center gap-3 p-10 text-center">
         <p className="text-sm font-medium">編集する動画がありません</p>
@@ -242,6 +241,12 @@ export const ClipEditor: React.FC = () => {
       setFadeInOut(loaded.fadeInOut);
       setSfxClips(loaded.sfx);
       setBgm(loaded.bgm);
+      // 最初はクリップ1を選んだ状態にする(「クリップ未選択」から始めると、設定を開いても何も編集できないため)
+      const first = loaded.segments[0];
+      if (first) {
+        setSelectedSegmentKey(first.key);
+        setSelectedKeys(new Set([first.key]));
+      }
     }
     setHasCheckedProject(true);
   }, []);
@@ -1266,6 +1271,11 @@ export const ClipEditor: React.FC = () => {
    */
   const handleSelectTab = (tab: EditorTab) => {
     setActiveTab(tab);
+    // クリップごとに設定するタブで何も選んでいなければ(効果音を選んだ後など)、再生位置のクリップを選ぶ
+    if ((tab === "cut" || tab === "caption" || tab === "effects") && selectedKeys.size === 0) {
+      const key = activeSegmentKey ?? form.segments[0]?.key ?? null;
+      if (key) selectOnly(key);
+    }
     setSettingsView("tab");
     setSheetOpen(tab !== "cut");
   };
@@ -1305,19 +1315,6 @@ export const ClipEditor: React.FC = () => {
     selectOnly(target.key);
     const range = segmentFrameRanges.find((r) => r.key === target.key);
     if (range) playerRef.current?.seekTo(range.startFrame);
-  };
-
-  /** 設定パネルの「‹ 効果音N ›」。効果音は再生順(開始秒の順)に並べ、選んだ音の頭へ動画も移す。 */
-  const sfxNavOrder = [...sfxOnlyClips].sort((x, y) => x.startFromSeconds - y.startFromSeconds);
-  const goToSfx = (index: number) => {
-    const target = sfxNavOrder[Math.max(0, Math.min(sfxNavOrder.length - 1, index))];
-    if (!target) return;
-    selectSfx(target.key);
-    playerRef.current?.seekTo(Math.round(target.startFromSeconds * VIDEO_FPS));
-  };
-  /** BGMは1つだけなので、選ぶだけ(未選択から「›」で選べる)。 */
-  const goToBgm = () => {
-    if (bgm) selectBgm();
   };
 
   if (!hasCheckedProject) {
@@ -1369,7 +1366,15 @@ export const ClipEditor: React.FC = () => {
       disabled: activeSegmentKey === null,
       shortcut: "O",
     },
-    { key: "add", label: "クリップ追加", icon: <PlusIcon />, onClick: addSegment, disabled: !canAddSegment },
+    {
+      key: "add",
+      label: "未使用を追加",
+      // 選んだクリップの複製ではなく、カットで使っていない部分(一番長い空き)を末尾に足す
+      title: "元の動画でまだ使っていない部分を、最後に1クリップとして追加します",
+      icon: <FilmPlusIcon />,
+      onClick: addSegment,
+      disabled: !canAddSegment,
+    },
   ];
   // スマホでは選択中クリップの設定(複製・結合・削除・音量)を開くボタンも並べる
   const cutToolsWithSettings: ToolItem[] = [
@@ -1400,91 +1405,86 @@ export const ClipEditor: React.FC = () => {
     />
   );
 
-  // 字幕の見た目(旧「見た目」タブ)。普段は畳んでおき、押すと開く。全体のフェードは演出タブの「動画全体」に移した。
-  const captionLookPanel = (
-    <div className="editor-inspector">
-      <div className="editor-inspector-body">
-        <SettingsSection title="字幕の見た目" icon={<PaletteIcon size={16} />}>
-          <Collapsible summary="プリセット・配色・フォント・位置・文字サイズ">
-            <div className="flex flex-col gap-2">
-              <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-                プリセットを押すと、配色・フォント・位置・見た目・演出をまとめて適用します
+  // 字幕の見た目(旧「見た目」タブ)のうち全クリップ共通の設定。普段は畳んでおき、押すと開く。
+  // 字幕タブの「字幕の見た目」欄に、強調する単語と一緒に並べる。全体のフェードは演出タブの「動画全体」に移した。
+  const captionLookSettings = (
+    <Collapsible summary="プリセット・配色・フォント・位置・文字サイズ">
+      <div className="flex flex-col gap-2">
+        <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+          プリセットを押すと、配色・フォント・位置・見た目・演出をまとめて適用します
+        </span>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {STYLE_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => applyStylePreset(preset, true)}
+              className="preset-card flex flex-col gap-1 p-3"
+              title={preset.description}
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  className="h-4 w-4 shrink-0 rounded-full"
+                  style={{ background: preset.primaryColor, border: "1px solid var(--border-strong)" }}
+                />
+                <span className="text-xs font-semibold">{preset.label}</span>
               </span>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {STYLE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => applyStylePreset(preset, true)}
-                    className="preset-card flex flex-col gap-1 p-3"
-                    title={preset.description}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="h-4 w-4 shrink-0 rounded-full"
-                        style={{ background: preset.primaryColor, border: "1px solid var(--border-strong)" }}
-                      />
-                      <span className="text-xs font-semibold">{preset.label}</span>
-                    </span>
-                    <span className="text-[11px]" style={{ color: "var(--muted-2)" }}>
-                      {preset.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="editor-field-row">
-              <label className="editor-field">
-                <span>配色</span>
-                <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
-              </label>
-              <label className="editor-field">
-                <span>見た目</span>
-                <select value={captionStyle} onChange={(e) => setCaptionStyle(e.target.value as CaptionStyle)}>
-                  {CAPTION_STYLE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="editor-field-row">
-              <label className="editor-field">
-                <span>フォント</span>
-                <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value as CaptionFontFamily)}>
-                  {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="editor-field">
-                <span>位置</span>
-                <select value={captionPosition} onChange={(e) => setCaptionPosition(e.target.value as CaptionPosition)}>
-                  {CAPTION_POSITION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label className="editor-field">
-              <span>文字サイズ</span>
-              <select value={fontSize} onChange={(e) => setFontSize(e.target.value as CaptionFontSize)}>
-                {CAPTION_FONT_SIZE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </Collapsible>
-        </SettingsSection>
+              <span className="text-[11px]" style={{ color: "var(--muted-2)" }}>
+                {preset.description}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+      <div className="editor-field-row">
+        <label className="editor-field">
+          <span>配色</span>
+          <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+        </label>
+        <label className="editor-field">
+          <span>見た目</span>
+          <select value={captionStyle} onChange={(e) => setCaptionStyle(e.target.value as CaptionStyle)}>
+            {CAPTION_STYLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="editor-field-row">
+        <label className="editor-field">
+          <span>フォント</span>
+          <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value as CaptionFontFamily)}>
+            {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="editor-field">
+          <span>位置</span>
+          <select value={captionPosition} onChange={(e) => setCaptionPosition(e.target.value as CaptionPosition)}>
+            {CAPTION_POSITION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="editor-field">
+        <span>文字サイズ</span>
+        <select value={fontSize} onChange={(e) => setFontSize(e.target.value as CaptionFontSize)}>
+          {CAPTION_FONT_SIZE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Collapsible>
   );
 
   const tabSettings =
@@ -1500,7 +1500,6 @@ export const ClipEditor: React.FC = () => {
         onDeleteSelected={() => removeSegments(selectedKeys)}
       />
     ) : activeTab === "caption" ? (
-      <>
         <CaptionInspectorPanel
           segments={form.segments}
           selectedSegmentKey={selectedSegmentKey}
@@ -1515,10 +1514,9 @@ export const ClipEditor: React.FC = () => {
           captionsError={transcribeState.status === "error" ? transcribeState.message : null}
           onClearCaptions={handleClearCaptions}
           hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
+          narrationSection={narrationPanel}
+          lookSettings={captionLookSettings}
         />
-        {narrationPanel}
-        {captionLookPanel}
-      </>
     ) : activeTab === "effects" ? (
       <EffectsInspectorPanel
         scope={effectsScope}
@@ -1564,43 +1562,21 @@ export const ClipEditor: React.FC = () => {
       />
     ) : null;
 
-  // カット・字幕・演出(クリップごと)・効果音・BGMでは、設定パネルを閉じずに前後のクリップ(音)へ移れるようにする。
-  // 効果音・BGMは、動画のクリップではなくタイムライン上の音のブロックを順に切り替える。
-  type NavTarget = { kind: "clip" | "sfx" | "bgm"; name: string; count: number; index: number };
-  const navTarget: NavTarget | null =
-    settingsView !== "tab"
-      ? null
-      : activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip")
-        ? { kind: "clip", name: "クリップ", count: form.segments.length, index: selectedSegmentIndex }
-        : activeTab === "se"
-          ? {
-              kind: "sfx",
-              name: "効果音",
-              count: sfxNavOrder.length,
-              index:
-                audioSelection?.kind === "sfx" ? sfxNavOrder.findIndex((clip) => clip.key === audioSelection.key) : -1,
-            }
-          : activeTab === "bgm"
-            ? { kind: "bgm", name: "BGM", count: bgm ? 1 : 0, index: audioSelection?.kind === "bgm" ? 0 : -1 }
-            : null;
-  const goToNavIndex = (kind: NavTarget["kind"], index: number) => {
-    if (kind === "clip") goToClip(index);
-    else if (kind === "sfx") goToSfx(index);
-    else goToBgm();
-  };
-  const clipNav: ClipNav | undefined = navTarget
+  // カット・字幕・演出(クリップごと)では、設定パネルを閉じずに前後のクリップへ移れるようにする。
+  // 効果音・BGMは動画全体の時刻で置く音で、クリップごとの設定ではないため切り替えは出さない。
+  const showClipNav =
+    settingsView === "tab" &&
+    (activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip"));
+  const clipNav: ClipNav | undefined = showClipNav
     ? {
-        // 「BGM 1 / 1」のように、英字の名前だけ数字との間を空ける
         label:
-          navTarget.count === 0
-            ? `${navTarget.name}なし`
-            : navTarget.index >= 0
-              ? `${navTarget.name}${/[A-Za-z]$/.test(navTarget.name) ? " " : ""}${navTarget.index + 1} / ${navTarget.count}`
-              : `${navTarget.name}未選択`,
-        canPrev: navTarget.index > 0,
-        canNext: navTarget.index < navTarget.count - 1,
-        onPrev: () => goToNavIndex(navTarget.kind, navTarget.index - 1),
-        onNext: () => goToNavIndex(navTarget.kind, navTarget.index + 1),
+          selectedSegmentIndex >= 0
+            ? `クリップ${selectedSegmentIndex + 1} / ${form.segments.length}`
+            : "クリップ未選択",
+        canPrev: selectedSegmentIndex > 0,
+        canNext: selectedSegmentIndex < form.segments.length - 1,
+        onPrev: () => goToClip(selectedSegmentIndex - 1),
+        onNext: () => goToClip(selectedSegmentIndex + 1),
       }
     : undefined;
 
@@ -1608,9 +1584,10 @@ export const ClipEditor: React.FC = () => {
     <div className={`editor-app${sheetOpen ? " sheet-open" : ""}`}>
       <AppTopBar
         className="editor-area-topbar"
-        backHref="/"
-        backLabel="トップへ戻る"
-        onBack={handleBackToTop}
+        backHref="/create/auto-edit"
+        backLabel="前の手順(AIで自動編集)へ戻る"
+        onBack={handleGoToAutoEdit}
+        onHome={handleBackToTop}
         title="編集"
         step={{ current: 5, total: 6 }}
         hideProgress
