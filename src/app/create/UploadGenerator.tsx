@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { UploadIcon } from "@/components/icons";
+import { useEffect, useState } from "react";
+import { RestartIcon, TrashIcon, UploadIcon } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import {
   DEFAULT_CAPTION_ANIMATION,
@@ -75,6 +75,14 @@ export const UploadGenerator: React.FC = () => {
   const [videoDurationInSeconds, setVideoDurationInSeconds] = useState<number | null>(null);
   const [durationError, setDurationError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  /** 選んだ動画のプレビュー用URL(選んだ動画が合っているか確かめられるように画面に出す)。 */
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // 別の動画を選び直した時・画面を離れる時に、前のプレビュー用URLを解放する
+  useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
   const canProceed = Boolean(videoPath) && videoDurationInSeconds !== null && !videoUploading;
 
@@ -95,6 +103,7 @@ export const UploadGenerator: React.FC = () => {
     setVideoFileName(file.name);
     setVideoDurationInSeconds(null);
     setVideoPath("");
+    setPreviewUrl(URL.createObjectURL(file));
 
     try {
       // どの端末でも書き出せる形式にそろえてから送る(理由はprepareVideoFile.ts参照)。
@@ -102,11 +111,14 @@ export const UploadGenerator: React.FC = () => {
       const prepared = await prepareVideoFile(file, setVideoConvertPercent);
       setVideoConvertPercent(null);
       setPendingFile(prepared);
+      // 変換した場合は変換後の動画を見せる(元がHEVCだと、ブラウザによっては元の動画を再生できないため)
+      if (prepared !== file) setPreviewUrl(URL.createObjectURL(prepared));
       detectDuration(prepared);
       const path = await uploadVideoFile(prepared, setVideoUploadPercent);
       setVideoPath(path);
     } catch (error) {
       setVideoFileName(null);
+      setPreviewUrl(null);
       alert(error instanceof Error ? error.message : "アップロードに失敗しました");
     } finally {
       setVideoConvertPercent(null);
@@ -163,7 +175,7 @@ export const UploadGenerator: React.FC = () => {
           if (file) void handleVideoFileChange(file);
         }}
       >
-        <p className="flow-lead">編集したい縦長の動画を1本選んでください。長さは自動で読み取ります。</p>
+        <p className="flow-lead">編集したい縦長の動画を1本選んでください。</p>
 
         {existingProject ? (
           <div className="panel flex flex-col gap-3 p-4">
@@ -178,8 +190,13 @@ export const UploadGenerator: React.FC = () => {
               <a href="/edit" className="btn-primary px-4 py-2 text-sm">
                 編集を再開する
               </a>
-              <button type="button" onClick={handleDiscardExisting} className="btn-outline px-4 py-2 text-sm">
-                破棄して新しくはじめる
+              <button
+                type="button"
+                onClick={handleDiscardExisting}
+                className="btn-outline inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+              >
+                <TrashIcon size={16} />
+                削除して新しくはじめる
               </button>
             </div>
           </div>
@@ -197,51 +214,52 @@ export const UploadGenerator: React.FC = () => {
         />
 
         {videoFileName ? (
-          <div className="panel flex flex-col gap-3 p-4">
-            <span className="break-anywhere line-clamp-2 text-sm font-bold">{videoFileName}</span>
-            {videoUploading ? (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs" style={{ color: "var(--muted)" }}>
-                  {videoConvertPercent !== null
-                    ? `どの端末でも使える形式に変換中... ${videoConvertPercent}%`
-                    : videoUploadPercent < 100
-                      ? `アップロード中... ${videoUploadPercent}%`
-                      : "保存中..."}
-                </span>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${videoConvertPercent ?? videoUploadPercent}%` }} />
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                {videoDurationInSeconds ? (
-                  <span className="badge-pill success">長さ {videoDurationInSeconds.toFixed(1)}秒</span>
-                ) : null}
-                <label htmlFor="video-file" className="btn-outline cursor-pointer px-4 py-1.5 text-sm">
-                  別の動画にする
-                </label>
-              </div>
-            )}
-            {durationError ? (
-              <div className="flex flex-col gap-2">
-                <span className="badge-pill danger w-fit">{durationError}(長さが取得できず、次へ進めません)</span>
-                <button
-                  type="button"
-                  className="btn-outline w-fit px-3 py-1.5 text-xs"
-                  onClick={() => pendingFile && detectDuration(pendingFile)}
-                >
-                  長さの取得を再試行
-                </button>
+          <>
+            {previewUrl ? (
+              <div className="upload-preview">
+                <video src={previewUrl} controls playsInline preload="metadata" aria-label="選んだ動画のプレビュー" />
               </div>
             ) : null}
-          </div>
+            <div className="panel flex flex-col gap-3 p-4">
+              <span className="break-anywhere line-clamp-2 text-sm font-bold">{videoFileName}</span>
+              {videoUploading ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>
+                    {videoConvertPercent !== null
+                      ? `どの端末でも使える形式に変換中... ${videoConvertPercent}%`
+                      : videoUploadPercent < 100
+                        ? `アップロード中... ${videoUploadPercent}%`
+                        : "保存中..."}
+                  </span>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${videoConvertPercent ?? videoUploadPercent}%` }} />
+                  </div>
+                </div>
+              ) : videoDurationInSeconds ? (
+                <span className="badge-pill success w-fit">長さ {videoDurationInSeconds.toFixed(1)}秒</span>
+              ) : null}
+              {durationError ? (
+                <div className="flex flex-col gap-2">
+                  <span className="badge-pill danger w-fit">{durationError}(長さが取得できず、次へ進めません)</span>
+                  <button
+                    type="button"
+                    className="btn-outline w-fit px-3 py-1.5 text-xs"
+                    onClick={() => pendingFile && detectDuration(pendingFile)}
+                  >
+                    長さの取得を再試行
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </>
         ) : (
+          // 親指が届きやすいよう、選ぶ場所は画面の下まで広げる
           <label
             htmlFor="video-file"
-            className="upload-drop flex cursor-pointer flex-col items-center justify-center gap-2 p-8 text-center"
+            className="upload-drop upload-drop-fill flex cursor-pointer flex-col items-center justify-center gap-3 p-8 text-center"
           >
-            <UploadIcon size={28} />
-            <span className="text-base font-bold">動画を選ぶ</span>
+            <UploadIcon size={40} />
+            <span className="upload-drop-title">動画を選ぶ</span>
             <span className="text-xs" style={{ color: "var(--muted)" }}>
               縦長の動画を1本
             </span>
@@ -250,9 +268,18 @@ export const UploadGenerator: React.FC = () => {
       </main>
 
       <div className="bottom-action-bar">
-        <button type="button" onClick={handleGoToCut} disabled={!canProceed} className="btn-primary">
-          使う範囲を選ぶへ進む
-        </button>
+        {/* 選び直しは、次へ進むボタンと同じ場所(画面の一番下)に並べる */}
+        <div className="bottom-action-row">
+          {videoFileName && !videoUploading ? (
+            <label htmlFor="video-file" className="btn-outline cursor-pointer">
+              <RestartIcon size={18} />
+              別の動画にする
+            </label>
+          ) : null}
+          <button type="button" onClick={handleGoToCut} disabled={!canProceed} className="btn-primary">
+            使う範囲を選ぶへ進む
+          </button>
+        </div>
       </div>
     </>
   );

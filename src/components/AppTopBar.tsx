@@ -5,8 +5,10 @@ type AppTopBarProps = {
   backHref: string;
   backLabel?: string;
   title: string;
-  /** 作成手順の画面だけ渡す。「ステップ N / 4」と進み具合のバーを出す。 */
+  /** 作成手順の画面だけ渡す。「ステップ N / M」と進み具合のバーを出す。 */
   step?: { current: number; total: number };
+  /** 進み具合のバーを出さない(編集画面は縦の余裕が無いため、ステップの文字だけにする)。 */
+  hideProgress?: boolean;
   /** 右側に並べるボタン類。 */
   actions?: React.ReactNode;
   /**
@@ -26,6 +28,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   backLabel = "戻る",
   title,
   step,
+  hideProgress,
   actions,
   onBack,
   className,
@@ -51,7 +54,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       </div>
       {actions ? <div className="app-topbar-actions">{actions}</div> : null}
     </div>
-    {step ? (
+    {step && !hideProgress ? (
       <div className="app-topbar-progress" aria-hidden="true">
         {Array.from({ length: step.total }, (_, i) => (
           <span key={i} className={i < step.current ? "done" : undefined} />

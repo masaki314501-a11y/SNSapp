@@ -94,7 +94,7 @@ export const BgmInspectorPanel: React.FC<Props> = ({
             }}
           >
             <option value="" disabled>
-              ＋ BGMを追加(無料素材)
+              {bgm ? "＋ BGMを差し替え(無料素材)" : "＋ BGMを追加(無料素材)"}
             </option>
             {bgmPresets.map((preset) => (
               <option key={preset.id} value={preset.id}>
@@ -104,8 +104,8 @@ export const BgmInspectorPanel: React.FC<Props> = ({
           </select>
         ) : null}
         <label className="editor-toolbar-btn cursor-pointer">
-          {bgm ? null : <PlusIcon size={14} />}
-          {bgmUploading ? "アップロード中..." : bgm ? "BGMを差し替え" : "BGMをアップロード"}
+          <PlusIcon size={14} />
+          {bgmUploading ? "アップロード中..." : bgm ? "BGMを差し替え(ファイルから)" : "BGMを追加(ファイルから)"}
           <input
             type="file"
             accept="audio/*"

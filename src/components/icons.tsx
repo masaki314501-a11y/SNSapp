@@ -247,6 +247,12 @@ export const TextIcon: React.FC<IconProps> = (p) => (
     <path d="M9 20h6" />
   </Svg>
 );
+export const CheckCircleIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 12.5l2.7 2.7L16 9.8" />
+  </Svg>
+);
 export const FlagIcon: React.FC<IconProps> = (p) => (
   <Svg {...p}>
     <path d="M5 21V4" />

@@ -1,5 +1,6 @@
 import {
   CaptionIcon,
+  CheckCircleIcon,
   MusicIcon,
   ScissorsIcon,
   SparkleIcon,
@@ -27,15 +28,19 @@ const TABS: { id: EditorTab; Icon: React.FC<IconProps> }[] = [
 ];
 
 /**
- * 編集画面のタブ。スマホ・タブレット縦向きでは画面下端に等分で、1024px以上では左端に縦に並ぶ
+ * 編集画面のタブ。末尾に、編集を終えて書き出し画面へ進む赤い「編集完了」を置く
+ * (以前は上部バーの「書き出す」だったが、最後に押すボタンだと気付きにくかった)。スマホ・タブレット縦向きでは画面下端に等分で、1024px以上では左端に縦に並ぶ
  * (並び方はeditor-theme.cssの.editor-tabbarで切り替える)。以前の横並びの文字タブは
  * スマホ幅からはみ出し、横スクロールしないと「AI音声」以降が見えなかった。
  */
 export const EditorTabBar: React.FC<{
   active: EditorTab;
   onSelect: (tab: EditorTab) => void;
+  /** 「編集完了」を押した時(書き出し画面へ進む)。 */
+  onFinish: () => void;
+  canFinish: boolean;
   className?: string;
-}> = ({ active, onSelect, className }) => (
+}> = ({ active, onSelect, onFinish, canFinish, className }) => (
   <nav aria-label="編集メニュー" className={`editor-tabbar${className ? ` ${className}` : ""}`}>
     {TABS.map(({ id, Icon }) => (
       <button
@@ -49,5 +54,15 @@ export const EditorTabBar: React.FC<{
         <span>{EDITOR_TAB_LABELS[id]}</span>
       </button>
     ))}
+    <button
+      type="button"
+      className="editor-tabbar-btn finish"
+      onClick={onFinish}
+      disabled={!canFinish}
+      title="編集を終えて、書き出し画面へ進みます"
+    >
+      <CheckCircleIcon size={22} />
+      <span>編集完了</span>
+    </button>
   </nav>
 );

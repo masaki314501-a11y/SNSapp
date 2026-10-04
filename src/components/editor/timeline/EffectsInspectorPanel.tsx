@@ -253,7 +253,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                 ))}
                 <label className="editor-toolbar-btn self-start" style={{ cursor: uploading ? "wait" : "pointer" }}>
                   <PlusIcon size={14} />
-                  {uploading ? "アップロード中..." : "画像を差し込む"}
+                  {uploading ? "アップロード中..." : "画像を追加"}
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif"
@@ -370,7 +370,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
               ))}
               <label className="editor-toolbar-btn self-start" style={{ cursor: uploading ? "wait" : "pointer" }}>
                 <PlusIcon size={14} />
-                {uploading ? "アップロード中..." : "ずっと出す画像を差し込む"}
+                {uploading ? "アップロード中..." : "ずっと出す画像を追加"}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"

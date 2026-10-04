@@ -662,7 +662,7 @@ export const ClipEditor: React.FC = () => {
   const canRedo = future.length > 0;
 
   const handleStartOver = () => {
-    if (!window.confirm("現在の編集内容を破棄して、新しい動画のアップロードからやり直しますか?")) {
+    if (!window.confirm("現在の編集内容を削除して、新しい動画のアップロードからやり直しますか?")) {
       return;
     }
     clearProject();
@@ -1125,6 +1125,8 @@ export const ClipEditor: React.FC = () => {
   };
 
   const handleClearCaptions = () => {
+    // 1回押すだけで全クリップの字幕が消えてしまうため、確認を挟む(元に戻すでも戻せる)。
+    if (!window.confirm("全クリップの字幕を削除します。よろしいですか?")) return;
     pushHistory();
     setForm((prev) => ({ ...prev, segments: prev.segments.map((segment) => ({ ...segment, caption: "" })) }));
   };
@@ -1303,6 +1305,19 @@ export const ClipEditor: React.FC = () => {
     selectOnly(target.key);
     const range = segmentFrameRanges.find((r) => r.key === target.key);
     if (range) playerRef.current?.seekTo(range.startFrame);
+  };
+
+  /** 設定パネルの「‹ 効果音N ›」。効果音は再生順(開始秒の順)に並べ、選んだ音の頭へ動画も移す。 */
+  const sfxNavOrder = [...sfxOnlyClips].sort((x, y) => x.startFromSeconds - y.startFromSeconds);
+  const goToSfx = (index: number) => {
+    const target = sfxNavOrder[Math.max(0, Math.min(sfxNavOrder.length - 1, index))];
+    if (!target) return;
+    selectSfx(target.key);
+    playerRef.current?.seekTo(Math.round(target.startFromSeconds * VIDEO_FPS));
+  };
+  /** BGMは1つだけなので、選ぶだけ(未選択から「›」で選べる)。 */
+  const goToBgm = () => {
+    if (bgm) selectBgm();
   };
 
   if (!hasCheckedProject) {
@@ -1549,20 +1564,43 @@ export const ClipEditor: React.FC = () => {
       />
     ) : null;
 
-  // カット・字幕・演出(クリップごと)では、設定パネルを閉じずに前後のクリップへ移れるようにする。
-  const showClipNav =
-    settingsView === "tab" &&
-    (activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip"));
-  const clipNav: ClipNav | undefined = showClipNav
+  // カット・字幕・演出(クリップごと)・効果音・BGMでは、設定パネルを閉じずに前後のクリップ(音)へ移れるようにする。
+  // 効果音・BGMは、動画のクリップではなくタイムライン上の音のブロックを順に切り替える。
+  type NavTarget = { kind: "clip" | "sfx" | "bgm"; name: string; count: number; index: number };
+  const navTarget: NavTarget | null =
+    settingsView !== "tab"
+      ? null
+      : activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip")
+        ? { kind: "clip", name: "クリップ", count: form.segments.length, index: selectedSegmentIndex }
+        : activeTab === "se"
+          ? {
+              kind: "sfx",
+              name: "効果音",
+              count: sfxNavOrder.length,
+              index:
+                audioSelection?.kind === "sfx" ? sfxNavOrder.findIndex((clip) => clip.key === audioSelection.key) : -1,
+            }
+          : activeTab === "bgm"
+            ? { kind: "bgm", name: "BGM", count: bgm ? 1 : 0, index: audioSelection?.kind === "bgm" ? 0 : -1 }
+            : null;
+  const goToNavIndex = (kind: NavTarget["kind"], index: number) => {
+    if (kind === "clip") goToClip(index);
+    else if (kind === "sfx") goToSfx(index);
+    else goToBgm();
+  };
+  const clipNav: ClipNav | undefined = navTarget
     ? {
+        // 「BGM 1 / 1」のように、英字の名前だけ数字との間を空ける
         label:
-          selectedSegmentIndex >= 0
-            ? `クリップ${selectedSegmentIndex + 1} / ${form.segments.length}`
-            : "クリップ未選択",
-        canPrev: selectedSegmentIndex > 0,
-        canNext: selectedSegmentIndex < form.segments.length - 1,
-        onPrev: () => goToClip(selectedSegmentIndex - 1),
-        onNext: () => goToClip(selectedSegmentIndex + 1),
+          navTarget.count === 0
+            ? `${navTarget.name}なし`
+            : navTarget.index >= 0
+              ? `${navTarget.name}${/[A-Za-z]$/.test(navTarget.name) ? " " : ""}${navTarget.index + 1} / ${navTarget.count}`
+              : `${navTarget.name}未選択`,
+        canPrev: navTarget.index > 0,
+        canNext: navTarget.index < navTarget.count - 1,
+        onPrev: () => goToNavIndex(navTarget.kind, navTarget.index - 1),
+        onNext: () => goToNavIndex(navTarget.kind, navTarget.index + 1),
       }
     : undefined;
 
@@ -1574,6 +1612,8 @@ export const ClipEditor: React.FC = () => {
         backLabel="トップへ戻る"
         onBack={handleBackToTop}
         title="編集"
+        step={{ current: 5, total: 6 }}
+        hideProgress
         actions={
           <>
             <button type="button" className="btn-outline topbar-outline hidden lg:inline-flex" onClick={handleExportProject}>
@@ -1593,6 +1633,14 @@ export const ClipEditor: React.FC = () => {
                 }}
               />
             </label>
+            <button
+              type="button"
+              className={`topbar-pill${settingsView === "ai" && sheetOpen ? " active" : ""}`}
+              onClick={openAiPanel}
+            >
+              <SparkleIcon size={16} />
+              AIに頼む
+            </button>
             <EditorMenu
               items={[
                 {
@@ -1628,7 +1676,7 @@ export const ClipEditor: React.FC = () => {
                 {
                   key: "start-over",
                   label: "別の動画からやり直す",
-                  description: "今の編集を消して、動画のアップロードからやり直す",
+                  description: "今の編集を削除して、動画のアップロードからやり直す",
                   icon: <RestartIcon />,
                   danger: true,
                   onClick: handleStartOver,
@@ -1640,27 +1688,17 @@ export const ClipEditor: React.FC = () => {
                 </span>
               }
             />
-            <button
-              type="button"
-              className={`topbar-pill${settingsView === "ai" && sheetOpen ? " active" : ""}`}
-              onClick={openAiPanel}
-            >
-              <SparkleIcon size={16} />
-              AIに頼む
-            </button>
-            <button
-              type="button"
-              className="btn-primary topbar-cta"
-              onClick={handleGoToExport}
-              disabled={!canRender}
-            >
-              書き出す
-            </button>
           </>
         }
       />
 
-      <EditorTabBar className="editor-area-tabs" active={activeTab} onSelect={handleSelectTab} />
+      <EditorTabBar
+        className="editor-area-tabs"
+        active={activeTab}
+        onSelect={handleSelectTab}
+        onFinish={handleGoToExport}
+        canFinish={canRender}
+      />
 
       {/* プログラムモニター(再生しながら編集できる中心のプレビュー) */}
       <div className="editor-area-stage editor-stage">

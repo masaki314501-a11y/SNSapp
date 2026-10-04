@@ -508,6 +508,66 @@ input[type="color"]::-webkit-color-swatch {
   }
 }
 
+/* 戻る系(別の動画にする等)と次へ進むを、画面の一番下に横に並べる */
+.bottom-action-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.bottom-action-row > .btn-primary,
+.bottom-action-row > .btn-outline {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.bottom-action-row > .btn-primary {
+  flex: 1;
+  font-size: 15px;
+}
+.bottom-action-row > .btn-outline {
+  flex-shrink: 0;
+  padding: 0 14px;
+  font-size: 14px;
+}
+@media (min-width: 768px) {
+  .bottom-action-row {
+    max-width: 608px;
+  }
+}
+
+/* 動画を選ぶ画面: 選ぶ場所は画面の下まで広げ、選んだ後はプレビューを同じ場所に出す */
+.upload-drop-fill {
+  flex: 1;
+  min-height: 240px;
+}
+.upload-drop-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+@media (min-width: 768px) {
+  .upload-drop-title {
+    font-size: 20px;
+  }
+}
+.upload-preview {
+  flex: 1;
+  min-height: 280px;
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--stage-background);
+}
+.upload-preview video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .text-link {
   min-height: 40px;
   display: inline-flex;
@@ -617,12 +677,6 @@ input[type="color"]::-webkit-color-swatch {
 .topbar-pill.active {
   border-color: var(--accent);
   background: var(--accent-soft);
-}
-.topbar-cta {
-  height: 36px;
-  padding: 0 16px;
-  font-size: 14px;
-  white-space: nowrap;
 }
 /* 上部バーに並べる枠付きの小さなボタン(表示の切り替えはTailwindの hidden 等に任せるため display は指定しない) */
 .topbar-outline {

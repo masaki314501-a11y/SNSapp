@@ -98,7 +98,7 @@ export const SfxInspectorPanel: React.FC<Props> = ({
         ) : null}
         <label className="editor-toolbar-btn cursor-pointer">
           <PlusIcon size={14} />
-          {sfxUploading ? "アップロード中..." : "効果音をアップロード"}
+          {sfxUploading ? "アップロード中..." : "効果音を追加(ファイルから)"}
           <input
             type="file"
             accept="audio/*"

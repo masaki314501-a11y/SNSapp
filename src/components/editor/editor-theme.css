@@ -129,7 +129,7 @@
 /* タブ(EditorTabBar.tsx)。スマホ・タブレット縦向きは下端に7等分 */
 .editor-tabbar {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   height: var(--editor-tabbar-h);
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--background-elevated);
@@ -154,6 +154,21 @@
   color: var(--accent);
   font-weight: 700;
   box-shadow: inset 0 2px 0 var(--accent);
+}
+/* 書き出し画面へ進む「編集完了」。タブではなく最後に押すボタンなので、赤く塗って区別する */
+.editor-tabbar-btn.finish {
+  margin: 6px 4px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+}
+.editor-tabbar-btn.finish:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.editor-tabbar-btn.finish:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* カット以外のタブで、操作ボタンの代わりに出す「〜の設定を開く」(スマホのみ) */
@@ -451,6 +466,13 @@
   background: var(--background-elevated);
   border: 2px solid var(--accent);
   cursor: grab;
+}
+
+/* 字幕タブの一番上に置く、全クリップへの操作 */
+.caption-bulk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* 小見出しの下に添える説明(どこに出るか・空にするとどうなるか) */
@@ -769,6 +791,9 @@
   .editor-tabbar-btn.active {
     background: var(--accent-soft);
     box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .editor-tabbar-btn.finish {
+    margin: 8px 6px 0;
   }
   .playback-bar {
     height: 54px;

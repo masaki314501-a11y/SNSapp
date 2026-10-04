@@ -36,7 +36,7 @@ export const ImageOverlayFields: React.FC<Props> = ({
 }) => (
   <Collapsible summary={label} icon={<ImageIcon size={16} />} defaultOpen={defaultOpen}>
     {/* eslint-disable-next-line @next/next/no-img-element -- アップロード済み画像の小さなサムネイル */}
-    <img src={resolveClipSrc(image.src)} alt="差し込んだ画像" className="max-h-20 self-start rounded" />
+    <img src={resolveClipSrc(image.src)} alt="追加した画像" className="max-h-20 self-start rounded" />
     <div className="editor-field-row">
       <label className="editor-field">
         <span>横位置 {Math.round(image.xPercent)}%</span>

@@ -65,7 +65,7 @@ const applyTrimPatch = (
 
 const EmptyState: React.FC = () => (
   <div className="flow-page">
-    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 4 }} />
+    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 6 }} />
     <main className="flow-main">
       <div className="panel flex flex-col items-center gap-3 p-10 text-center">
         <p className="text-sm font-medium">カットする動画がありません</p>
@@ -506,7 +506,7 @@ export const CutEditor: React.FC = () => {
   });
 
   const handleStartOver = () => {
-    if (!window.confirm("現在の内容を破棄して、新しい動画のアップロードからやり直しますか?")) return;
+    if (!window.confirm("現在の内容を削除して、新しい動画のアップロードからやり直しますか?")) return;
     clearProject();
     router.push("/create");
   };
@@ -545,7 +545,7 @@ export const CutEditor: React.FC = () => {
     { key: "add", label: "クリップ追加", icon: <PlusIcon />, onClick: addSegment, disabled: !canAddSegment },
     {
       key: "discard",
-      label: "捨てる",
+      label: "クリップ削除",
       icon: <TrashIcon />,
       onClick: () => removeSegments(selectedKeys),
       disabled: selectedKeys.size === 0,
@@ -560,7 +560,7 @@ export const CutEditor: React.FC = () => {
         backHref="/create"
         onBack={handleBackToUpload}
         title="使う範囲を選ぶ"
-        step={{ current: 2, total: 4 }}
+        step={{ current: 2, total: 6 }}
         actions={
           <button type="button" className="btn-outline topbar-outline inline-flex" onClick={handleStartOver}>
             <RestartIcon size={16} />
@@ -683,7 +683,8 @@ export const CutEditor: React.FC = () => {
                   ({(sourceRange.end - sourceRange.start).toFixed(1)}秒)
                 </span>
                 <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
-                  この範囲を捨てる
+                  <TrashIcon size={14} />
+                  この範囲を削除
                 </button>
                 <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
                   ここだけ残す
@@ -694,7 +695,7 @@ export const CutEditor: React.FC = () => {
               </div>
             ) : (
               <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-                バーを指でなぞると、まとめて捨てる範囲を選べます
+                バーを指でなぞると、まとめて削除する範囲を選べます
               </p>
             )}
           </div>
@@ -704,7 +705,7 @@ export const CutEditor: React.FC = () => {
           <ToolGrid items={cutTools} />
         </div>
         <p className="keyboard-hint hidden text-xs lg:block" style={{ color: "var(--muted-2)" }}>
-          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=クリップ分割・I=ここから使う・O=ここまで使う・Delete=選んだ範囲を捨てる
+          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=クリップ分割・I=ここから使う・O=ここまで使う・Delete=選んだクリップを削除
         </p>
 
         <div className="editor-area-action">

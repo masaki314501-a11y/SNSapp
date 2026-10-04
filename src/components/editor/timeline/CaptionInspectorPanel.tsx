@@ -56,6 +56,31 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   return (
     <div className="editor-inspector">
       <div className="editor-inspector-body">
+        {/* 全クリップへの操作(一括生成・一括編集・全部削除)。クリップを選んでいなくても使うため一番上に置く */}
+        <div className="caption-bulk-actions">
+          {captionsError ? <p className="badge-pill danger w-fit">{captionsError}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              onClick={onGenerateCaptionsForAll}
+              disabled={!canOpenBulkEdit || captionsGenerating}
+              title="全クリップに、話している内容を字幕として付けます(今ある字幕は上書きされます)"
+            >
+              <SparkleIcon size={14} />
+              {captionsGenerating ? "字幕を生成中..." : "字幕を一括生成"}
+            </button>
+            <button type="button" className="editor-toolbar-btn" onClick={onOpenBulkEdit} disabled={!canOpenBulkEdit}>
+              <EditIcon size={14} />
+              字幕を一括編集
+            </button>
+            <button type="button" className="editor-toolbar-btn danger" onClick={onClearCaptions} disabled={!hasAnyCaption}>
+              <TrashIcon size={14} />
+              字幕を全部削除
+            </button>
+          </div>
+        </div>
+
         <SettingsSection title="クリップの字幕" icon={<CaptionIcon size={16} />}>
           {selectedCount > 1 ? (
             <div className="editor-inspector-empty">
@@ -132,29 +157,6 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
         ) : null}
       </div>
 
-      <div className="editor-inspector-footer flex flex-col gap-2">
-        {captionsError ? <p className="badge-pill danger w-fit">{captionsError}</p> : null}
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="editor-toolbar-btn"
-            onClick={onGenerateCaptionsForAll}
-            disabled={!canOpenBulkEdit || captionsGenerating}
-            title="全クリップに、話している内容を字幕として付けます(今ある字幕は上書きされます)"
-          >
-            <SparkleIcon size={14} />
-            {captionsGenerating ? "字幕を生成中..." : "字幕を一括生成"}
-          </button>
-          <button type="button" className="editor-toolbar-btn" onClick={onOpenBulkEdit} disabled={!canOpenBulkEdit}>
-            <EditIcon size={14} />
-            字幕を一括編集
-          </button>
-          <button type="button" className="editor-toolbar-btn danger" onClick={onClearCaptions} disabled={!hasAnyCaption}>
-            <TrashIcon size={14} />
-            字幕を全部消す
-          </button>
-        </div>
-      </div>
     </div>
   );
 };
