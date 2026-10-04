@@ -30,16 +30,16 @@ type Props = {
   hasAnyCaption: boolean;
   /** AIナレーションの一括生成(NarrationBulkGenerate)。「全クリップの字幕」欄に、字幕の一括操作と段を分けて置く。 */
   narrationBulkAction: React.ReactNode;
-  /** AIナレーションの欄(NarrationInspectorPanel)。一括操作のすぐ下に置く。 */
+  /** クリップごとのAIナレーションの欄(NarrationInspectorPanel)。字幕の見た目の次に置く。 */
   narrationSection: React.ReactNode;
   /** 字幕の見た目のうち、全クリップ共通の設定(プリセット・配色・フォント等。ClipEditor側で組み立てる)。 */
   lookSettings: React.ReactNode;
 };
 
 /**
- * 「字幕」タブのパネル。上から順に、全クリップへの一括操作 → AIナレーション(旧「AI音声」タブ) →
- * 選んだクリップの字幕 → 字幕の見た目(強調する単語と、旧「見た目」タブの設定) → 出現演出、と並べる。
- * よく使う一括操作とナレーションを上に、細かい見た目の調整を下に置く。
+ * 「字幕」タブのパネル。上から順に、全クリップへの一括操作(字幕とAIナレーションの一括生成) →
+ * 選んだクリップの字幕 → 字幕の見た目(強調する単語と、旧「見た目」タブの設定) →
+ * クリップごとのAIナレーション(旧「AI音声」タブ) → 出現演出、と並べる。
  */
 export const CaptionInspectorPanel: React.FC<Props> = ({
   segments,
@@ -122,8 +122,6 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           </div>
         </SettingsSection>
 
-        {narrationSection}
-
         <SettingsSection title="クリップの字幕" icon={<EditIcon size={16} />}>
           {multiSelectedNote ??
             (target ? (
@@ -171,6 +169,8 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           ) : null}
           {lookSettings}
         </SettingsSection>
+
+        {narrationSection}
 
         <SettingsSection title="出現演出" icon={<HighlightIcon size={16} />}>
           {multiSelectedNote ??

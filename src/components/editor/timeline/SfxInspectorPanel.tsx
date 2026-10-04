@@ -87,7 +87,7 @@ export const SfxInspectorPanel: React.FC<Props> = ({
             }}
           >
             <option value="" disabled>
-              ＋ 効果音を追加(無料素材)
+              ＋ 効果音を追加(プリセットから選ぶ)
             </option>
             {sfxPresets.map((preset) => (
               <option key={preset.id} value={preset.id}>

@@ -1076,6 +1076,28 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
+  /** 選択中クリップのテロップをAIナレーション(読み上げ音声)に変換し、SEと同じ扱いでタイムラインに追加する。 */
+  const handleGenerateNarrationForSegment = async (key: string) => {
+    const index = form.segments.findIndex((segment) => segment.key === key);
+    if (index === -1) return;
+    const caption = form.segments[index].caption.trim();
+    if (!caption) return;
+    const isReplacing = sfxClips.some((clip) => clip.narrationSegmentKey === key);
+    if (!isReplacing && sfxClips.length >= MAX_SFX_CLIPS) {
+      alert(`効果音/ナレーションの上限(${MAX_SFX_CLIPS}件)に達しているため追加できません`);
+      return;
+    }
+    setNarrationGenerating({ current: 0, total: 1 });
+    try {
+      const { path } = await requestVoiceover(caption, narrationVoice);
+      upsertNarrationClip(key, segmentStartSeconds(index), caption, path);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "ナレーション生成に失敗しました");
+    } finally {
+      setNarrationGenerating(null);
+    }
+  };
+
   /**
    * テロップが入っている全クリップ分、順番にAIナレーションを生成してタイムラインに追加する。
    * 既に同じ声で作ってあるクリップは飛ばす(無料枠のTTSは1日あたりの上限が厳しく、
@@ -1131,7 +1153,7 @@ export const ClipEditor: React.FC = () => {
     if (targets.length === 0) {
       alert(
         withCaption.length > 0
-          ? "テロップのあるクリップは全てナレーション生成済みです。作り直したいクリップは、そのナレーションを削除してから一括生成を押してください"
+          ? "テロップのあるクリップは全てナレーション生成済みです。作り直したいクリップは、そのクリップを選んで個別に生成してください"
           : "テロップが入っているクリップがありません"
       );
       return;
@@ -1374,34 +1396,29 @@ export const ClipEditor: React.FC = () => {
     { key: "settings", label: "設定", icon: <SettingsIcon />, onClick: openSettings, className: "tool-only-sheet" },
   ];
 
-  const narrationPanel = (
-    <NarrationInspectorPanel
-      segments={form.segments}
-      selectedSegmentKey={selectedSegmentKey}
-      audioSelection={audioSelection}
-      narrationClips={narrationOnlyClips}
-      onUpdateSfx={updateSfxClip}
-      onRemoveSfx={removeSfxClip}
-      voiceOptions={VOICE_OPTIONS}
-      narrationVoice={narrationVoice}
-      onChangeNarrationVoice={setNarrationVoice}
-      narrationGenerating={narrationGenerating}
-    />
-  );
-
-  const narrationBulkAction = (
-    <NarrationBulkGenerate
-      segments={form.segments}
-      narrationClips={narrationOnlyClips}
-      totalSfxCount={sfxClips.length}
-      maxSfxClips={MAX_SFX_CLIPS}
-      narrationGenerating={narrationGenerating}
-      onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
-      onCancelNarrationGeneration={() => {
-        narrationCancelRef.current = true;
-      }}
-    />
-  );
+  // AIナレーションは、一括生成(「全クリップの字幕」欄)とクリップごとの欄(字幕の見た目の次)に分けて置く。
+  // どちらも同じ声の設定・生成中の状態を使うので、同じ値を渡す。
+  const narrationProps = {
+    segments: form.segments,
+    selectedSegmentKey,
+    audioSelection,
+    narrationClips: narrationOnlyClips,
+    totalSfxCount: sfxClips.length,
+    maxSfxClips: MAX_SFX_CLIPS,
+    onUpdateSfx: updateSfxClip,
+    onRemoveSfx: removeSfxClip,
+    voiceOptions: VOICE_OPTIONS,
+    narrationVoice,
+    onChangeNarrationVoice: setNarrationVoice,
+    narrationGenerating,
+    onGenerateNarrationForSegment: (key: string) => void handleGenerateNarrationForSegment(key),
+    onGenerateNarrationForAll: () => void handleGenerateNarrationForAll(),
+    onCancelNarrationGeneration: () => {
+      narrationCancelRef.current = true;
+    },
+  };
+  const narrationPanel = <NarrationInspectorPanel {...narrationProps} />;
+  const narrationBulkAction = <NarrationBulkGenerate {...narrationProps} />;
 
   // 字幕の見た目(旧「見た目」タブ)のうち全クリップ共通の設定。普段は畳んでおき、押すと開く。
   // 字幕タブの「字幕の見た目」欄に、強調する単語と一緒に並べる。全体のフェードは演出タブの「動画全体」に移した。

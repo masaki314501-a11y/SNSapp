@@ -1328,6 +1328,8 @@
 }
 .editor-inspector-footer {
   display: flex;
+  /* 幅の狭いスマホでは、2つ目のボタンを次の行へ送る(はみ出して見えなくならないように) */
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);

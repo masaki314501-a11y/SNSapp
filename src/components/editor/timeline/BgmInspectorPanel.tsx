@@ -94,7 +94,7 @@ export const BgmInspectorPanel: React.FC<Props> = ({
             }}
           >
             <option value="" disabled>
-              {bgm ? "BGMを変更(無料素材)" : "＋ BGMを追加(無料素材)"}
+              {bgm ? "BGMを変更(プリセットから選ぶ)" : "＋ BGMを追加(プリセットから選ぶ)"}
             </option>
             {bgmPresets.map((preset) => (
               <option key={preset.id} value={preset.id}>
