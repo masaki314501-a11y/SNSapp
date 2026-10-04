@@ -235,14 +235,21 @@
   font-size: 11px;
   color: var(--muted);
 }
+/* シートを閉じる「閉じる」。赤は「編集完了」(書き出しへ進む)に使うので、文字の色で塗って目立たせる */
 .editor-settings-close {
   height: 36px;
-  padding: 0 16px;
+  padding: 0 14px 0 12px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--foreground);
+  color: var(--background-elevated);
   font-size: 13px;
   font-weight: 700;
+}
+.editor-settings-close:hover {
+  opacity: 0.85;
 }
 .editor-settings-body {
   flex: 1;
@@ -717,6 +724,39 @@
   width: 100%;
   height: 50px;
   font-size: 15px;
+}
+
+/* スマホの効果音・BGMタブ: 設定をシートにせず、タイムラインの下に常に出す(音の位置を見ながら直せるように)。
+   動画は残りの高さに縮め、設定は高さを抑えて中だけスクロールさせる */
+@media (max-width: 767px) {
+  .editor-app.settings-inline {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas:
+      "topbar"
+      "stage"
+      "playback"
+      "timeline"
+      "settings"
+      "tabs";
+  }
+  .editor-app.settings-inline .editor-area-tools {
+    display: none;
+  }
+  .editor-app.settings-inline .editor-settings {
+    position: static;
+    display: flex;
+    max-height: 38dvh;
+    border-radius: 0;
+    box-shadow: none;
+    border-top: 1px solid var(--border);
+  }
+  .editor-app.settings-inline .editor-settings-handle,
+  .editor-app.settings-inline .editor-settings-close {
+    display: none;
+  }
+  .editor-app.settings-inline .editor-settings-header {
+    padding-top: 10px;
+  }
 }
 
 /* タブレット縦向き以上では設定が常に見えているので、設定を開くためだけのボタンは出さない */

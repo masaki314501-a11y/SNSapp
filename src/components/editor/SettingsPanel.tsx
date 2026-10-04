@@ -1,4 +1,4 @@
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
 
 export type ClipNav = {
   /** 例: 「クリップ2 / 5」「クリップ未選択」 */
@@ -23,7 +23,7 @@ type SettingsPanelProps = {
 /**
  * 各タブの設定(既存のInspectorPanel)の入れ物。スマホでは画面下からせり上がるシート、
  * タブレット縦向きではタイムラインの下、1024px以上では右側に常に表示される
- * (出し分けはeditor-theme.cssの.editor-settings)。「完了」はシートの時だけ見える。
+ * (出し分けはeditor-theme.cssの.editor-settings)。「閉じる」はシートの時だけ見える。
  */
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   title,
@@ -52,7 +52,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       ) : null}
       <button type="button" className="editor-settings-close" onClick={onClose}>
-        完了
+        <CloseIcon size={16} />
+        閉じる
       </button>
     </div>
     <div className="editor-settings-body">{children}</div>

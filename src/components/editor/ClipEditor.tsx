@@ -1276,10 +1276,12 @@ export const ClipEditor: React.FC = () => {
 
   /**
    * タブを押した時。字幕・音声と演出は設定シートも開く。カットはタイムラインの下の操作ボタンが主役、
-   * 効果音・BGMは動画全体の時刻で置く音なのでタイムラインで位置を見たいことが多く、どちらも開かない
-   * (設定はタイムラインの下の「〜の設定を開く」から開く)。
+   * 効果音・BGMは設定をタイムラインの下に常に出す(settingsInline)ので、どちらもシートは開かない。
    * クリップを押しただけではシートを開かない: 押した瞬間にシートが出ると、ドラッグ中のタイムラインが隠れるため。
    */
+  // 効果音・BGMは動画全体の時刻で置く音なので、スマホでもタイムラインと設定を同時に見られるよう、
+  // 設定をシートにせずタイムラインの下に常に出す(「AIに頼む」を開いた時だけは、これまでどおりシート)。
+  const settingsInline = (activeTab === "se" || activeTab === "bgm") && !sheetOpen;
   const handleSelectTab = (tab: EditorTab) => {
     setActiveTab(tab);
     // クリップごとに設定するタブで何も選んでいなければ(効果音を選んだ後など)、再生位置のクリップを選ぶ
@@ -1599,7 +1601,9 @@ export const ClipEditor: React.FC = () => {
     : undefined;
 
   return (
-    <div className={`editor-app${sheetOpen ? " sheet-open" : ""}`}>
+    <div
+      className={`editor-app${sheetOpen ? " sheet-open" : ""}${settingsInline ? " settings-inline" : ""}`}
+    >
       <AppTopBar
         className="editor-area-topbar"
         backHref="/create/auto-edit"
@@ -1776,7 +1780,7 @@ export const ClipEditor: React.FC = () => {
       <div className="editor-area-tools">
         {activeTab === "cut" ? (
           <ToolGrid items={cutToolsWithSettings} />
-        ) : (
+        ) : settingsInline ? null : (
           <div className="editor-tools-single">
             <button type="button" className="editor-open-settings-btn" onClick={openSettings}>
               {EDITOR_TAB_LABELS[activeTab]}の設定を開く{settingsTargetLabel ? `(${settingsTargetLabel})` : ""}
