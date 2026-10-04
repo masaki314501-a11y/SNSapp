@@ -5,7 +5,7 @@ import {
   CAPTION_ANIMATION_OPTIONS,
   type CaptionAnimation,
 } from "@video/shared/schema";
-import { CaptionIcon, EditIcon, HighlightIcon, PaletteIcon, SparkleIcon, TrashIcon } from "@/components/icons";
+import { CaptionIcon, EditIcon, HighlightIcon, MicIcon, PaletteIcon, SparkleIcon, TrashIcon } from "@/components/icons";
 import { SettingsSection } from "../SettingsSection";
 
 const DEFAULT_EMPHASIS_COLOR = "#FFE600";
@@ -28,6 +28,8 @@ type Props = {
   captionsError: string | null;
   onClearCaptions: () => void;
   hasAnyCaption: boolean;
+  /** AIナレーションの一括生成(NarrationBulkGenerate)。「全クリップの字幕」欄に、字幕の一括操作と段を分けて置く。 */
+  narrationBulkAction: React.ReactNode;
   /** AIナレーションの欄(NarrationInspectorPanel)。一括操作のすぐ下に置く。 */
   narrationSection: React.ReactNode;
   /** 字幕の見た目のうち、全クリップ共通の設定(プリセット・配色・フォント等。ClipEditor側で組み立てる)。 */
@@ -53,6 +55,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   captionsError,
   onClearCaptions,
   hasAnyCaption,
+  narrationBulkAction,
   narrationSection,
   lookSettings,
 }) => {
@@ -109,6 +112,13 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
               <TrashIcon size={14} />
               一括削除
             </button>
+          </div>
+          <div className="bulk-subgroup">
+            <p className="bulk-sublabel">
+              <MicIcon size={14} />
+              AIナレーション
+            </p>
+            {narrationBulkAction}
           </div>
         </SettingsSection>
 

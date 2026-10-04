@@ -28,67 +28,46 @@ type Props = {
   onCancelNarrationGeneration: () => void;
 };
 
-/**
- * 字幕タブの「AIナレーション」欄(旧「AI音声」タブ)。テロップを読み上げる声の選択・未生成分の一括生成(基本)、
- * 選択中クリップだけの生成(補助)、生成済みナレーションの開始秒・音量・削除を扱う。
- * 字幕タブの上の方に置くため、パネルの枠は持たず小見出し付きのまとまりだけを返す。
- */
-export const NarrationInspectorPanel: React.FC<Props> = ({
-  segments,
-  selectedSegmentKey,
-  audioSelection,
-  narrationClips,
-  totalSfxCount,
-  maxSfxClips,
-  onUpdateSfx,
-  onRemoveSfx,
-  voiceOptions,
-  narrationVoice,
-  onChangeNarrationVoice,
-  narrationGenerating,
-  onGenerateNarrationForSegment,
-  onGenerateNarrationForAll,
-  onCancelNarrationGeneration,
-}) => {
-  const selectedSegmentIndex = selectedSegmentKey
-    ? segments.findIndex((segment) => segment.key === selectedSegmentKey)
-    : -1;
-  const selectedSegment = selectedSegmentIndex >= 0 ? segments[selectedSegmentIndex] : null;
-  // タイムラインのAI音声の段で選んだナレーション。段を選んでいなくても、選んだクリップに生成済みの
-  // ナレーションがあればそれを編集できるようにする(生成した後に、すぐ音量や削除を触れるように)。
-  const selected =
-    (audioSelection?.kind === "sfx" ? narrationClips.find((c) => c.key === audioSelection.key) : undefined) ??
-    (selectedSegment ? narrationClips.find((c) => c.narrationSegmentKey === selectedSegment.key) : undefined) ??
-    null;
-
-  // 生成済みのクリップは一括生成の対象外になる(ClipEditor側で同じ判定をしている)。
-  // 「あと何件ぶんAPIを使うのか」が押す前に分かるよう、残り件数として見せる。
+/** 生成済みのクリップは一括生成の対象外になる(ClipEditor側で同じ判定をしている)。 */
+const countNarration = (segments: ProjectSegment[], narrationClips: ProjectSfxClip[]) => {
   const generatedSegmentKeys = new Set(
     narrationClips.map((clip) => clip.narrationSegmentKey).filter((key): key is string => Boolean(key))
   );
   const captionedSegments = segments.filter((segment) => segment.caption.trim().length > 0);
   const pendingCount = captionedSegments.filter((segment) => !generatedSegmentKeys.has(segment.key)).length;
-  const selectedHasNarration = selectedSegment ? generatedSegmentKeys.has(selectedSegment.key) : false;
+  return { generatedSegmentKeys, captionedCount: captionedSegments.length, pendingCount };
+};
+
+type BulkProps = Pick<
+  Props,
+  | "segments"
+  | "narrationClips"
+  | "totalSfxCount"
+  | "maxSfxClips"
+  | "narrationGenerating"
+  | "onGenerateNarrationForAll"
+  | "onCancelNarrationGeneration"
+>;
+
+/**
+ * AIナレーションの一括生成ボタン。全クリップへの操作なので、字幕タブの「全クリップの字幕」欄に
+ * 字幕の一括操作と段を分けて置く。生成中は中断ボタンに変わる(1件だけの生成中も同じ)。
+ */
+export const NarrationBulkGenerate: React.FC<BulkProps> = ({
+  segments,
+  narrationClips,
+  totalSfxCount,
+  maxSfxClips,
+  narrationGenerating,
+  onGenerateNarrationForAll,
+  onCancelNarrationGeneration,
+}) => {
+  // 「あと何件ぶんAPIを使うのか」が押す前に分かるよう、残り件数として見せる。
+  const { captionedCount, pendingCount } = countNarration(segments, narrationClips);
   const atLimit = totalSfxCount >= maxSfxClips;
 
   return (
-    <SettingsSection title="AIナレーション(字幕の読み上げ)" icon={<MicIcon size={16} />}>
-      <p className="settings-hint">字幕の文章を、AIの声で読み上げた音声にして動画に付けます</p>
-      <select
-        className="editor-toolbar-btn self-start"
-        value={narrationVoice}
-        disabled={narrationGenerating !== null}
-        onChange={(e) => onChangeNarrationVoice(e.target.value)}
-        aria-label="AIナレーションの声"
-      >
-        {voiceOptions.map((option) => (
-          <option key={option.id} value={option.id}>
-            声: {option.label}
-          </option>
-        ))}
-      </select>
-
-      {/* 基本は未生成の分をまとめて生成する。字幕が入っていれば押せる */}
+    <>
       {narrationGenerating ? (
         <button type="button" className="editor-toolbar-btn danger self-start" onClick={onCancelNarrationGeneration}>
           生成中... ({narrationGenerating.current}/{narrationGenerating.total}) 中断
@@ -103,7 +82,7 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
             atLimit
               ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
               : pendingCount === 0
-                ? captionedSegments.length === 0
+                ? captionedCount === 0
                   ? "字幕を入れると生成できます"
                   : "字幕のあるクリップは全て生成済みです"
                 : `まだナレーションが無い${pendingCount}件だけを、順番に生成して追加します(生成済みの分はAPIを使いません)`
@@ -113,35 +92,93 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
           未生成の{pendingCount}件を一括生成
         </button>
       )}
-      {captionedSegments.length === 0 ? (
+      {captionedCount === 0 ? (
         <p className="settings-hint">字幕を入れる(上の「一括生成」等)と、読み上げ音声を生成できます</p>
       ) : null}
+    </>
+  );
+};
 
-      {/* 選んだクリップだけ生成する・作り直すのは補助的な操作なので下に置く */}
-      {selectedSegment ? (
-        <button
-          type="button"
-          className="editor-toolbar-btn self-start"
-          disabled={
-            selectedSegment.caption.trim().length === 0 ||
-            narrationGenerating !== null ||
-            (!selectedHasNarration && atLimit)
-          }
-          onClick={() => onGenerateNarrationForSegment(selectedSegment.key)}
-          title={
-            !selectedHasNarration && atLimit
-              ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
-              : selectedHasNarration
-                ? "このクリップのナレーションを作り直して差し替えます"
-                : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
-          }
+/**
+ * 字幕タブの「AIナレーション」欄(旧「AI音声」タブ)。テロップを読み上げる声の選択と、選択中クリップだけの
+ * 生成、生成済みナレーションの開始秒・音量・削除を扱う。一括生成は「全クリップの字幕」欄(NarrationBulkGenerate)に置く。
+ * 字幕タブの上の方に置くため、パネルの枠は持たず小見出し付きのまとまりだけを返す。
+ */
+export const NarrationInspectorPanel: React.FC<Omit<Props, "onGenerateNarrationForAll" | "onCancelNarrationGeneration">> = ({
+  segments,
+  selectedSegmentKey,
+  audioSelection,
+  narrationClips,
+  totalSfxCount,
+  maxSfxClips,
+  onUpdateSfx,
+  onRemoveSfx,
+  voiceOptions,
+  narrationVoice,
+  onChangeNarrationVoice,
+  narrationGenerating,
+  onGenerateNarrationForSegment,
+}) => {
+  const selectedSegmentIndex = selectedSegmentKey
+    ? segments.findIndex((segment) => segment.key === selectedSegmentKey)
+    : -1;
+  const selectedSegment = selectedSegmentIndex >= 0 ? segments[selectedSegmentIndex] : null;
+  // タイムラインのAI音声の段で選んだナレーション。段を選んでいなくても、選んだクリップに生成済みの
+  // ナレーションがあればそれを編集できるようにする(生成した後に、すぐ音量や削除を触れるように)。
+  const selected =
+    (audioSelection?.kind === "sfx" ? narrationClips.find((c) => c.key === audioSelection.key) : undefined) ??
+    (selectedSegment ? narrationClips.find((c) => c.narrationSegmentKey === selectedSegment.key) : undefined) ??
+    null;
+
+  const { generatedSegmentKeys } = countNarration(segments, narrationClips);
+  const selectedHasNarration = selectedSegment ? generatedSegmentKeys.has(selectedSegment.key) : false;
+  const atLimit = totalSfxCount >= maxSfxClips;
+
+  return (
+    <SettingsSection title="AIナレーション(字幕の読み上げ)" icon={<MicIcon size={16} />}>
+      <p className="settings-hint">
+        字幕の文章を、AIの声で読み上げた音声にして動画に付けます(まとめて作る時は、上の「全クリップの字幕」から)
+      </p>
+      {/* 声の選択と、選んだクリップだけの生成・作り直しを横に並べる */}
+      <div className="flex flex-wrap gap-2">
+        <select
+          className="editor-toolbar-btn"
+          value={narrationVoice}
+          disabled={narrationGenerating !== null}
+          onChange={(e) => onChangeNarrationVoice(e.target.value)}
+          aria-label="AIナレーションの声"
         >
-          <MicIcon size={14} />
-          {selectedHasNarration
-            ? `クリップ${selectedSegmentIndex + 1}だけ作り直す`
-            : `クリップ${selectedSegmentIndex + 1}だけ生成`}
-        </button>
-      ) : null}
+          {voiceOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              声: {option.label}
+            </option>
+          ))}
+        </select>
+        {selectedSegment ? (
+          <button
+            type="button"
+            className="editor-toolbar-btn"
+            disabled={
+              selectedSegment.caption.trim().length === 0 ||
+              narrationGenerating !== null ||
+              (!selectedHasNarration && atLimit)
+            }
+            onClick={() => onGenerateNarrationForSegment(selectedSegment.key)}
+            title={
+              !selectedHasNarration && atLimit
+                ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
+                : selectedHasNarration
+                  ? "このクリップのナレーションを作り直して差し替えます"
+                  : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
+            }
+          >
+            <MicIcon size={14} />
+            {selectedHasNarration
+              ? `クリップ${selectedSegmentIndex + 1}だけ作り直す`
+              : `クリップ${selectedSegmentIndex + 1}だけ生成`}
+          </button>
+        ) : null}
+      </div>
 
       {selected ? (
         <div className="field-group">

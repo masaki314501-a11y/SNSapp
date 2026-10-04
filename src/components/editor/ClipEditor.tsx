@@ -59,7 +59,7 @@ import {
 import { useTranscribeJob } from "@/app/create/useTranscribeJob";
 import { assignTranscriptToSegments } from "./timelineUtils";
 import { SfxInspectorPanel } from "./timeline/SfxInspectorPanel";
-import { NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
+import { NarrationBulkGenerate, NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
 import { BgmInspectorPanel } from "./timeline/BgmInspectorPanel";
 import { PreviewDragLayer, type DragTarget } from "./PreviewDragLayer";
 import { AiRevisePanel } from "./AiRevisePanel";
@@ -994,16 +994,19 @@ export const ClipEditor: React.FC = () => {
         stats.totalSeconds,
         Math.max(0, (playerRef.current?.getCurrentFrame() ?? 0) / VIDEO_FPS)
       );
+      const key = crypto.randomUUID();
       setSfxClips((prev) => [
         ...prev,
         {
-          key: crypto.randomUUID(),
+          key,
           src: path,
           label: fileName,
           startFromSeconds: currentSeconds,
           volume: DEFAULT_CLIP_VOLUME,
         },
       ]);
+      // 追加した効果音を選び、そのまま開始(秒)を決められるようにする
+      selectSfx(key);
     } catch (error) {
       alert(error instanceof Error ? error.message : "効果音のアップロードに失敗しました");
     } finally {
@@ -1018,16 +1021,19 @@ export const ClipEditor: React.FC = () => {
       stats.totalSeconds,
       Math.max(0, (playerRef.current?.getCurrentFrame() ?? 0) / VIDEO_FPS)
     );
+    const key = crypto.randomUUID();
     setSfxClips((prev) => [
       ...prev,
       {
-        key: crypto.randomUUID(),
+        key,
         src: preset.src,
         label: preset.label,
         startFromSeconds: currentSeconds,
         volume: DEFAULT_CLIP_VOLUME,
       },
     ]);
+    // 追加した効果音を選び、そのまま開始(秒)を決められるようにする
+    selectSfx(key);
   };
 
   const updateSfxClip = (key: string, patch: Partial<Pick<ProjectSfxClip, "startFromSeconds" | "volume">>) => {
@@ -1191,6 +1197,8 @@ export const ClipEditor: React.FC = () => {
     try {
       const { path, fileName } = await uploadAudioFile(file);
       setBgm({ src: path, label: fileName, volume: 0.4, fadeInSeconds: 0, fadeOutSeconds: 0 });
+      // 追加・変更したBGMを選び、そのまま音量やフェードを決められるようにする
+      selectBgm();
     } catch (error) {
       alert(error instanceof Error ? error.message : "BGMのアップロードに失敗しました");
     } finally {
@@ -1198,9 +1206,10 @@ export const ClipEditor: React.FC = () => {
     }
   };
 
-  /** アップロードなしで、同梱プリセット(著作権フリー)のBGMに差し替える。 */
+  /** アップロードなしで、同梱プリセット(著作権フリー)のBGMに変更する。 */
   const handleSetBgmPreset = (preset: AudioPreset) => {
     setBgm({ src: preset.src, label: preset.label, volume: 0.4, fadeInSeconds: 0, fadeOutSeconds: 0 });
+    selectBgm();
   };
 
   const handleCopyCaptions = async () => {
@@ -1402,6 +1411,16 @@ export const ClipEditor: React.FC = () => {
       onChangeNarrationVoice={setNarrationVoice}
       narrationGenerating={narrationGenerating}
       onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
+    />
+  );
+
+  const narrationBulkAction = (
+    <NarrationBulkGenerate
+      segments={form.segments}
+      narrationClips={narrationOnlyClips}
+      totalSfxCount={sfxClips.length}
+      maxSfxClips={MAX_SFX_CLIPS}
+      narrationGenerating={narrationGenerating}
       onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
       onCancelNarrationGeneration={() => {
         narrationCancelRef.current = true;
@@ -1518,6 +1537,7 @@ export const ClipEditor: React.FC = () => {
           captionsError={transcribeState.status === "error" ? transcribeState.message : null}
           onClearCaptions={handleClearCaptions}
           hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
+          narrationBulkAction={narrationBulkAction}
           narrationSection={narrationPanel}
           lookSettings={captionLookSettings}
         />

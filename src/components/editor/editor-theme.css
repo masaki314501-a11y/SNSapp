@@ -475,6 +475,26 @@
   gap: 8px;
 }
 
+/* 「全クリップの字幕」欄の中で、字幕の一括操作と段を分けて置くAIナレーションの一括生成 */
+.bulk-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.bulk-sublabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 /* 小見出しの下に添える説明(どこに出るか・空にするとどうなるか) */
 .settings-hint {
   margin: 0;
