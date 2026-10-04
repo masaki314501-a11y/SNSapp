@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ImageOverlay, TextOverlay } from "@video/shared/schema";
 import type { ProjectSegment, VideoProject } from "@/lib/videoProject";
-import { ImageIcon, PlusIcon, SparkleIcon, TextIcon } from "@/components/icons";
+import { FlagIcon, ImageIcon, PlusIcon, SparkleIcon, TextIcon } from "@/components/icons";
 import { uploadImageFile } from "../uploadImageFile";
 import { SettingsSection } from "../SettingsSection";
 import { TextOverlayFields, createDefaultTextOverlay } from "./TextOverlayFields";
@@ -16,7 +16,7 @@ export type ProjectEffectsPatch = Partial<Pick<VideoProject, "hook" | "cta" | "g
 export type EffectsScope = "clip" | "global";
 
 type Props = {
-  /** 「このクリップ」の演出か、「動画全体」の演出か(パネル上部の切り替え)。 */
+  /** 「クリップごと」の演出か、「動画全体」の演出か(パネル上部の切り替え)。 */
   scope: EffectsScope;
   onChangeScope: (scope: EffectsScope) => void;
   segments: ProjectSegment[];
@@ -37,13 +37,12 @@ type Props = {
   onPreviewInProgram: (seconds: number) => void;
 };
 
-const DEFAULT_EMPHASIS_COLOR = "#FFE600";
-
 /**
  * 「演出」タブのパネル。自動編集(Gemini)が決めた演出を、ここですべて手で直せるようにする。
- * 上部の切り替えで、選択中クリップの演出(寄り・字幕の強調・強調テキスト・画像)と、動画全体の演出
+ * 上部の切り替えで、選択中クリップの演出(寄り・強調テキスト・画像)と、動画全体の演出
  * (冒頭の見出し・締めの一言・ずっと出す文字・画像・全体のフェード)を分けて表示する
  * (以前は縦に続けて並べていて、どちらを編集しているのか見分けにくかった)。
+ * 字幕の強調(強調する単語・色)は字幕に関わる設定なので、字幕タブ(CaptionInspectorPanel)に置く。
  */
 export const EffectsInspectorPanel: React.FC<Props> = ({
   scope,
@@ -111,7 +110,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
             className={scope === "clip" ? "active" : undefined}
             onClick={() => onChangeScope("clip")}
           >
-            このクリップ
+            クリップごと
           </button>
           <button
             type="button"
@@ -211,34 +210,6 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                 ) : null}
               </SettingsSection>
 
-              <SettingsSection title="字幕の強調">
-                <div className="editor-field-row">
-                  <label className="editor-field">
-                    <span>強調する単語(、区切り)</span>
-                    <input
-                      type="text"
-                      value={(selected.emphasisWords ?? []).join("、")}
-                      placeholder="例: 3倍、結論"
-                      onChange={(e) => {
-                        const words = e.target.value
-                          .split(/[、,]/)
-                          .map((w) => w.trim())
-                          .filter((w) => w.length > 0);
-                        onUpdateSegmentEffects(selected.key, { emphasisWords: words.length > 0 ? words : undefined });
-                      }}
-                    />
-                  </label>
-                  <label className="editor-field">
-                    <span>強調の色</span>
-                    <input
-                      type="color"
-                      value={selected.emphasisColor ?? DEFAULT_EMPHASIS_COLOR}
-                      onChange={(e) => onUpdateSegmentEffects(selected.key, { emphasisColor: e.target.value })}
-                    />
-                  </label>
-                </div>
-              </SettingsSection>
-
               <SettingsSection title="強調テキスト" icon={<TextIcon size={16} />}>
                 {overlays.map((overlay, i) => (
                   <TextOverlayFields
@@ -302,44 +273,58 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
             </div>
           ) : (
             <div className="editor-inspector-empty">
-              <p>クリップを選択すると、そのクリップの寄り・強調テキストを編集できます</p>
+              <p>クリップを選択すると、そのクリップの寄り・強調テキスト・画像を編集できます</p>
             </div>
           )
         ) : (
           <div className="editor-inspector-fields">
-            <SettingsSection title="冒頭の見出し・締めの一言" icon={<SparkleIcon size={16} />}>
-              <label className="editor-field">
-                <span>冒頭の見出し(0〜3秒に重ねる。空にすると出さない)</span>
+            <SettingsSection title="冒頭の見出し" icon={<SparkleIcon size={16} />}>
+              <p className="settings-hint">動画の最初(0〜3秒)に重ねます。見出しを空にすると出しません</p>
+              {/* 見出しと補足は2つで1組(見出しの下に補足が小さく出る)。枠で囲み、見え方も添えて締めの一言と区別する */}
+              <div className="hook-set">
+                {hook?.headline ? (
+                  <div className="hook-set-preview" aria-hidden="true">
+                    <strong>{hook.headline}</strong>
+                    {hook.subline ? <small>{hook.subline}</small> : null}
+                  </div>
+                ) : null}
+                <label className="editor-field">
+                  <span>見出し(大きい文字)</span>
+                  <input
+                    type="text"
+                    value={hook?.headline ?? ""}
+                    placeholder="(なし)"
+                    onChange={(e) =>
+                      onUpdateProjectEffects({ hook: e.target.value ? { ...hook, headline: e.target.value } : null })
+                    }
+                  />
+                </label>
+                <label className="editor-field">
+                  <span>補足(見出しの下に小さく)</span>
+                  <input
+                    type="text"
+                    value={hook?.subline ?? ""}
+                    placeholder={hook ? "(なし)" : "先に見出しを入れてください"}
+                    disabled={!hook}
+                    onChange={(e) =>
+                      hook ? onUpdateProjectEffects({ hook: { ...hook, subline: e.target.value || undefined } }) : undefined
+                    }
+                  />
+                </label>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection title="締めの一言" icon={<FlagIcon size={16} />}>
+              <p className="settings-hint">動画の最後の数秒に重ねます。空にすると出しません</p>
+              <div className="editor-field">
                 <input
                   type="text"
-                  value={hook?.headline ?? ""}
-                  placeholder="(なし)"
-                  onChange={(e) =>
-                    onUpdateProjectEffects({ hook: e.target.value ? { ...hook, headline: e.target.value } : null })
-                  }
-                />
-              </label>
-              <label className="editor-field">
-                <span>見出しの補足(小さい文字)</span>
-                <input
-                  type="text"
-                  value={hook?.subline ?? ""}
-                  placeholder="(なし)"
-                  disabled={!hook}
-                  onChange={(e) =>
-                    hook ? onUpdateProjectEffects({ hook: { ...hook, subline: e.target.value || undefined } }) : undefined
-                  }
-                />
-              </label>
-              <label className="editor-field">
-                <span>締めの一言(最後の数秒に重ねる。空にすると出さない)</span>
-                <input
-                  type="text"
+                  aria-label="締めの一言"
                   value={cta?.text ?? ""}
                   placeholder="(なし)"
                   onChange={(e) => onUpdateProjectEffects({ cta: e.target.value ? { text: e.target.value } : null })}
                 />
-              </label>
+              </div>
             </SettingsSection>
 
             <SettingsSection title="ずっと出す文字" icon={<TextIcon size={16} />}>

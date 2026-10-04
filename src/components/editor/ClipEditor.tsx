@@ -214,7 +214,7 @@ export const ClipEditor: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   // 設定パネルに出すもの。「AIに頼む」を押した時だけAIの依頼欄にする。
   const [settingsView, setSettingsView] = useState<"tab" | "ai">("tab");
-  // 演出タブで「このクリップ」と「動画全体」のどちらを編集しているか。
+  // 演出タブで「クリップごと」と「動画全体」のどちらを編集しているか。
   const [effectsScope, setEffectsScope] = useState<EffectsScope>("clip");
   // Remotion標準のコントロールをやめたので、音のオン/オフは再生バーのボタンで切り替える。
   const [isMuted, setIsMuted] = useState(false);
@@ -1326,6 +1326,8 @@ export const ClipEditor: React.FC = () => {
           : audioSelection?.kind === "sfx"
             ? "選んだ音"
             : undefined;
+  // 演出タブの「動画全体」はクリップに関係ない設定なので、選択中のクリップ名は出さない。
+  const settingsTargetLabel = activeTab === "effects" && effectsScope === "global" ? undefined : selectionLabel;
 
   const cutTools: ToolItem[] = [
     {
@@ -1489,6 +1491,7 @@ export const ClipEditor: React.FC = () => {
           selectedSegmentKey={selectedSegmentKey}
           selectedCount={selectedKeys.size}
           onUpdateSegment={updateSegment}
+          onUpdateEmphasis={updateSegmentEffects}
           onApplyAnimationToAll={applyAnimationToAll}
           onOpenBulkEdit={openBulkEdit}
           canOpenBulkEdit={form.segments.length > 0}
@@ -1546,7 +1549,7 @@ export const ClipEditor: React.FC = () => {
       />
     ) : null;
 
-  // カット・字幕・演出(このクリップ)では、設定パネルを閉じずに前後のクリップへ移れるようにする。
+  // カット・字幕・演出(クリップごと)では、設定パネルを閉じずに前後のクリップへ移れるようにする。
   const showClipNav =
     settingsView === "tab" &&
     (activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip"));
@@ -1743,7 +1746,7 @@ export const ClipEditor: React.FC = () => {
         ) : (
           <div className="editor-tools-single">
             <button type="button" className="editor-open-settings-btn" onClick={openSettings}>
-              {EDITOR_TAB_LABELS[activeTab]}の設定を開く{selectionLabel ? `(${selectionLabel})` : ""}
+              {EDITOR_TAB_LABELS[activeTab]}の設定を開く{settingsTargetLabel ? `(${settingsTargetLabel})` : ""}
             </button>
           </div>
         )}
@@ -1752,7 +1755,7 @@ export const ClipEditor: React.FC = () => {
       <SettingsPanel
         className="editor-area-settings"
         title={settingsView === "ai" ? "AIに頼む" : EDITOR_TAB_LABELS[activeTab]}
-        subtitle={settingsView === "ai" ? undefined : selectionLabel}
+        subtitle={settingsView === "ai" ? undefined : settingsTargetLabel}
         clipNav={clipNav}
         onClose={closeSettings}
       >

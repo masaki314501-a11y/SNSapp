@@ -5,8 +5,10 @@ import {
   CAPTION_ANIMATION_OPTIONS,
   type CaptionAnimation,
 } from "@video/shared/schema";
-import { CaptionIcon, EditIcon, SparkleIcon, TrashIcon } from "@/components/icons";
+import { CaptionIcon, EditIcon, HighlightIcon, SparkleIcon, TrashIcon } from "@/components/icons";
 import { SettingsSection } from "../SettingsSection";
+
+const DEFAULT_EMPHASIS_COLOR = "#FFE600";
 
 type Props = {
   segments: ProjectSegment[];
@@ -16,6 +18,8 @@ type Props = {
     key: string,
     patch: Partial<Pick<ProjectSegment, "caption" | "captionAnimation">>
   ) => void;
+  /** 字幕の中で強調する単語と、その色(旧・演出タブの「字幕の強調」)。 */
+  onUpdateEmphasis: (key: string, patch: Partial<Pick<ProjectSegment, "emphasisWords" | "emphasisColor">>) => void;
   onApplyAnimationToAll: (animation: CaptionAnimation) => void;
   onOpenBulkEdit: () => void;
   canOpenBulkEdit: boolean;
@@ -27,7 +31,7 @@ type Props = {
 };
 
 /**
- * 「字幕」タブのうち、選択中クリップのテロップ文言・出現演出と、全クリップへの一括操作を扱う部分。
+ * 「字幕」タブのうち、選択中クリップのテロップ文言・出現演出・強調する単語と、全クリップへの一括操作を扱う部分。
  * AIナレーション(旧「AI音声」タブ)と字幕の見た目(旧「見た目」タブ)も同じ字幕タブに並べる
  * (ClipEditor側で NarrationInspectorPanel と字幕の見た目の欄をこの下に続けて置く)。
  */
@@ -36,6 +40,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   selectedSegmentKey,
   selectedCount,
   onUpdateSegment,
+  onUpdateEmphasis,
   onApplyAnimationToAll,
   onOpenBulkEdit,
   canOpenBulkEdit,
@@ -95,6 +100,36 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
             </div>
           )}
         </SettingsSection>
+
+        {selectedCount <= 1 && selectedSegment ? (
+          <SettingsSection title="字幕の強調" icon={<HighlightIcon size={16} />}>
+            <div className="editor-field-row">
+              <label className="editor-field">
+                <span>強調する単語(、区切り)</span>
+                <input
+                  type="text"
+                  value={(selectedSegment.emphasisWords ?? []).join("、")}
+                  placeholder="例: 3倍、結論"
+                  onChange={(e) => {
+                    const words = e.target.value
+                      .split(/[、,]/)
+                      .map((w) => w.trim())
+                      .filter((w) => w.length > 0);
+                    onUpdateEmphasis(selectedSegment.key, { emphasisWords: words.length > 0 ? words : undefined });
+                  }}
+                />
+              </label>
+              <label className="editor-field">
+                <span>強調の色</span>
+                <input
+                  type="color"
+                  value={selectedSegment.emphasisColor ?? DEFAULT_EMPHASIS_COLOR}
+                  onChange={(e) => onUpdateEmphasis(selectedSegment.key, { emphasisColor: e.target.value })}
+                />
+              </label>
+            </div>
+          </SettingsSection>
+        ) : null}
       </div>
 
       <div className="editor-inspector-footer flex flex-col gap-2">

@@ -247,6 +247,19 @@ export const TextIcon: React.FC<IconProps> = (p) => (
     <path d="M9 20h6" />
   </Svg>
 );
+export const FlagIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M5 21V4" />
+    <path d="M5 4h11l-2 4 2 4H5" />
+  </Svg>
+);
+export const HighlightIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 20h16" />
+    <path d="M7 16l5-12 5 12" />
+    <path d="M9 12h6" />
+  </Svg>
+);
 export const ImageIcon: React.FC<IconProps> = (p) => (
   <Svg {...p}>
     <rect x="3" y="4" width="18" height="16" rx="2" />
