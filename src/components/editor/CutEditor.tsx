@@ -32,7 +32,7 @@ import { beginPointerDrag } from "./timeline/pointerDrag";
 import { AppTopBar } from "@/components/AppTopBar";
 import {
   CropIcon,
-  FilmPlusIcon,
+  RestoreClipIcon,
   RestartIcon,
   ScissorsIcon,
   TrashIcon,
@@ -552,10 +552,10 @@ export const CutEditor: React.FC = () => {
     },
     {
       key: "add",
-      label: "未使用を追加",
-      // 選んだクリップの複製ではなく、カットで使っていない部分(一番長い空き)を末尾に足す
-      title: "元の動画でまだ使っていない部分を、最後に1クリップとして追加します",
-      icon: <FilmPlusIcon />,
+      label: "削除部分を復元",
+      // 選んだクリップの複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
+      title: "削除した部分のうち一番長い所から、最大5秒を動画の最後に戻します",
+      icon: <RestoreClipIcon />,
       onClick: addSegment,
       disabled: !canAddSegment,
     },

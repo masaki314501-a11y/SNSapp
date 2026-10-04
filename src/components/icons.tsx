@@ -86,15 +86,16 @@ export const FitWidthIcon: React.FC<IconProps> = (p) => (
     <path d="M14.5 9.5L17 12l-2.5 2.5" />
   </Svg>
 );
-export const FilmPlusIcon: React.FC<IconProps> = (p) => (
+/** 「削除部分を復元」用。フィルム(クリップ)に、元へ戻る丸い矢印を重ねる(元に戻すの↶と見分けられるように)。 */
+export const RestoreClipIcon: React.FC<IconProps> = (p) => (
   <Svg {...p}>
-    <rect x="3" y="4" width="18" height="16" rx="2" />
-    <path d="M7 4v16" />
-    <path d="M14 9v6" />
-    <path d="M11 12h6" />
+    <path d="M3 8V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-6" />
+    <path d="M7 4v4" />
+    <path d="M17 4v16" />
+    <path d="M4 15.5a4.5 4.5 0 108-2.8" />
+    <path d="M12 9.5v3.2H8.8" />
   </Svg>
 );
-/** 字幕とAIナレーション(読み上げ音声)の両方を扱う字幕タブ用。字幕の枠に音の波を添える。 */
 export const CaptionVoiceIcon: React.FC<IconProps> = (p) => (
   <Svg {...p}>
     <rect x="2" y="5" width="14" height="14" rx="2" />
