@@ -1076,28 +1076,6 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
-  /** 選択中クリップのテロップをAIナレーション(読み上げ音声)に変換し、SEと同じ扱いでタイムラインに追加する。 */
-  const handleGenerateNarrationForSegment = async (key: string) => {
-    const index = form.segments.findIndex((segment) => segment.key === key);
-    if (index === -1) return;
-    const caption = form.segments[index].caption.trim();
-    if (!caption) return;
-    const isReplacing = sfxClips.some((clip) => clip.narrationSegmentKey === key);
-    if (!isReplacing && sfxClips.length >= MAX_SFX_CLIPS) {
-      alert(`効果音/ナレーションの上限(${MAX_SFX_CLIPS}件)に達しているため追加できません`);
-      return;
-    }
-    setNarrationGenerating({ current: 0, total: 1 });
-    try {
-      const { path } = await requestVoiceover(caption, narrationVoice);
-      upsertNarrationClip(key, segmentStartSeconds(index), caption, path);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "ナレーション生成に失敗しました");
-    } finally {
-      setNarrationGenerating(null);
-    }
-  };
-
   /**
    * テロップが入っている全クリップ分、順番にAIナレーションを生成してタイムラインに追加する。
    * 既に同じ声で作ってあるクリップは飛ばす(無料枠のTTSは1日あたりの上限が厳しく、
@@ -1153,7 +1131,7 @@ export const ClipEditor: React.FC = () => {
     if (targets.length === 0) {
       alert(
         withCaption.length > 0
-          ? "テロップのあるクリップは全てナレーション生成済みです。作り直したいクリップは、そのクリップを選んで個別に生成してください"
+          ? "テロップのあるクリップは全てナレーション生成済みです。作り直したいクリップは、そのナレーションを削除してから一括生成を押してください"
           : "テロップが入っているクリップがありません"
       );
       return;
@@ -1402,15 +1380,12 @@ export const ClipEditor: React.FC = () => {
       selectedSegmentKey={selectedSegmentKey}
       audioSelection={audioSelection}
       narrationClips={narrationOnlyClips}
-      totalSfxCount={sfxClips.length}
-      maxSfxClips={MAX_SFX_CLIPS}
       onUpdateSfx={updateSfxClip}
       onRemoveSfx={removeSfxClip}
       voiceOptions={VOICE_OPTIONS}
       narrationVoice={narrationVoice}
       onChangeNarrationVoice={setNarrationVoice}
       narrationGenerating={narrationGenerating}
-      onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
     />
   );
 
