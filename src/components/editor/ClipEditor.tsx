@@ -1423,7 +1423,7 @@ export const ClipEditor: React.FC = () => {
   // 字幕の見た目(旧「見た目」タブ)のうち全クリップ共通の設定。普段は畳んでおき、押すと開く。
   // 字幕タブの「字幕の見た目」欄に、強調する単語と一緒に並べる。全体のフェードは演出タブの「動画全体」に移した。
   const captionLookSettings = (
-    <Collapsible summary="プリセット・配色・フォント・位置・文字サイズ">
+    <Collapsible summary="プリセットから選ぶ">
       <div className="flex flex-col gap-2">
         <span className="text-xs" style={{ color: "var(--muted-2)" }}>
           プリセットを押すと、配色・フォント・位置・見た目・演出をまとめて適用します
