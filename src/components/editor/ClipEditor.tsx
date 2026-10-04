@@ -1339,7 +1339,11 @@ export const ClipEditor: React.FC = () => {
             ? "選んだ音"
             : undefined;
   // 演出タブの「動画全体」はクリップに関係ない設定なので、選択中のクリップ名は出さない。
-  const settingsTargetLabel = activeTab === "effects" && effectsScope === "global" ? undefined : selectionLabel;
+  // 効果音・BGMタブも、パネルの中に選んだ音の名前が出るため、見出しの横の補足(「選んだ音」「BGM」)は出さない。
+  const settingsTargetLabel =
+    (activeTab === "effects" && effectsScope === "global") || activeTab === "se" || activeTab === "bgm"
+      ? undefined
+      : selectionLabel;
 
   const cutTools: ToolItem[] = [
     {

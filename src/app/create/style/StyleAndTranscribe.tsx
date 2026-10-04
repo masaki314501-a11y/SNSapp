@@ -222,16 +222,24 @@ export const StyleAndTranscribe: React.FC = () => {
       </main>
 
       <div className="bottom-action-bar">
-        {/* 選び直しは、次へ進むボタンと同じ場所(画面の一番下)に並べる */}
+        {/*
+          選び直し・手本なしで進むは白いボタンで、次へ進むボタンと同じ場所(画面の一番下)に並べる。
+          「自動編集へ進む」は手本を選ぶまで押せない(手本を選ばない時は「手本なしで進む」を押す)。
+        */}
         <div className="bottom-action-row">
-          {referencePreviewUrl && !isBusy ? (
+          {isBusy ? null : !hasAnyReference ? (
+            // 手本を選んでいない(または読み込みに失敗した)時は、手本なしで進めるようにする
+            <button type="button" onClick={goToAutoEdit} className="btn-outline">
+              手本なしで進む
+            </button>
+          ) : referencePreviewUrl ? (
             <label htmlFor="style-reference-file" className="btn-outline cursor-pointer">
               <RestartIcon size={18} />
               別の手本にする
             </label>
           ) : null}
-          <button type="button" onClick={goToAutoEdit} disabled={isBusy} className="btn-primary">
-            {hasAnyReference ? "自動編集へ進む" : "手本なしで進む"}
+          <button type="button" onClick={goToAutoEdit} disabled={isBusy || !hasAnyReference} className="btn-primary">
+            自動編集へ進む
           </button>
         </div>
       </div>

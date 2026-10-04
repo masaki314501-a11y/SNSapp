@@ -31,7 +31,6 @@ import { TimelineRoot } from "./timeline/TimelineRoot";
 import { beginPointerDrag } from "./timeline/pointerDrag";
 import { AppTopBar } from "@/components/AppTopBar";
 import {
-  CloseIcon,
   CropIcon,
   FilmPlusIcon,
   RestartIcon,
@@ -699,7 +698,7 @@ export const CutEditor: React.FC = () => {
                   選択範囲 {sourceRange.start.toFixed(1)}秒 〜 {sourceRange.end.toFixed(1)}秒
                   ({(sourceRange.end - sourceRange.start).toFixed(1)}秒)
                 </span>
-                {/* 選んだ範囲への操作は1行にまとめる(以前は折り返して2行に分かれていた) */}
+                {/* 選んだ範囲への操作は1行にまとめる(以前は折り返して2行に分かれていた)。選択はバーの別の場所を押すと外れる */}
                 <div className="coverage-actions">
                   <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
                     <TrashIcon size={14} />
@@ -708,15 +707,6 @@ export const CutEditor: React.FC = () => {
                   <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
                     <CropIcon size={14} />
                     選択範囲だけ残す
-                  </button>
-                  <button
-                    type="button"
-                    className="editor-toolbar-btn"
-                    onClick={() => setSourceRange(null)}
-                    aria-label="選択解除"
-                    title="選択解除"
-                  >
-                    <CloseIcon size={14} />
                   </button>
                 </div>
               </div>
