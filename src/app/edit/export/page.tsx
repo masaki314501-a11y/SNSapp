@@ -6,9 +6,7 @@ export default function ExportPage() {
   return (
     <div className="flow-page">
       <AppTopBar backHref="/edit" backLabel="編集に戻る" title="書き出し" step={{ current: 6, total: 6 }} />
-      <main className="flow-main">
-        <ExportScreen />
-      </main>
+      <ExportScreen />
     </div>
   );
 }
