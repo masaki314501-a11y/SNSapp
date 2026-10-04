@@ -241,19 +241,6 @@ textarea {
   cursor: not-allowed;
 }
 
-/* 手順の終わり(書き出し画面の「閉じる」)。赤の主ボタンと並んでも見分けられるよう、文字の色で塗る */
-.btn-dark {
-  background: var(--foreground);
-  color: var(--background-elevated);
-  font-weight: 700;
-  border-radius: 999px;
-  border: none;
-  transition: opacity 0.15s ease;
-}
-.btn-dark:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
 .btn-ghost {
   color: var(--muted);
   border-radius: 8px;
@@ -502,8 +489,7 @@ input[type="color"]::-webkit-color-swatch {
   border-top: 1px solid var(--border);
 }
 .bottom-action-bar > .btn-primary,
-.bottom-action-bar > .btn-outline,
-.bottom-action-bar > .btn-dark {
+.bottom-action-bar > .btn-outline {
   height: 52px;
   font-size: 15px;
   display: flex;
@@ -516,8 +502,7 @@ input[type="color"]::-webkit-color-swatch {
     align-items: center;
   }
   .bottom-action-bar > .btn-primary,
-  .bottom-action-bar > .btn-outline,
-  .bottom-action-bar > .btn-dark {
+  .bottom-action-bar > .btn-outline {
     width: 100%;
     max-width: 608px;
   }
