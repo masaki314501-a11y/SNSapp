@@ -192,3 +192,65 @@ export const FullscreenIcon: React.FC<IconProps> = (p) => (
     <path d="M20 15v5h-5" />
   </Svg>
 );
+export const ChevronDownIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+export const ChevronLeftIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M15 18l-6-6 6-6" />
+  </Svg>
+);
+export const CopyIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 012-2h9" />
+  </Svg>
+);
+export const MergeIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="7" width="8" height="10" rx="1.5" />
+    <rect x="13" y="7" width="8" height="10" rx="1.5" />
+    <path d="M9 12h6" />
+  </Svg>
+);
+export const EditIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9l-4-4L4 16z" />
+    <path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+export const SaveIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M12 4v11" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M4 18v2h16v-2" />
+  </Svg>
+);
+export const FolderOpenIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1H3z" />
+    <path d="M3 10h18l-2 9H5z" />
+  </Svg>
+);
+export const RestartIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+    <path d="M4 4v4h4" />
+  </Svg>
+);
+export const TextIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M5 6V4h14v2" />
+    <path d="M12 4v16" />
+    <path d="M9 20h6" />
+  </Svg>
+);
+export const ImageIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="2" />
+    <path d="M21 16l-5-5-9 9" />
+  </Svg>
+);

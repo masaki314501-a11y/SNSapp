@@ -624,6 +624,15 @@ input[type="color"]::-webkit-color-swatch {
   font-size: 14px;
   white-space: nowrap;
 }
+/* 上部バーに並べる枠付きの小さなボタン(表示の切り替えはTailwindの hidden 等に任せるため display は指定しない) */
+.topbar-outline {
+  height: 36px;
+  padding: 0 12px;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
 .topbar-text-btn {
   height: 36px;
   padding: 0 8px;

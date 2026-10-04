@@ -50,6 +50,8 @@ type TimelineRootProps = {
    * 省略時は全トラック表示(ラフカット画面等、値を明示的に渡さない呼び出し向けの既定値)。
    */
   tracks?: { video?: boolean; sfx?: boolean; bgm?: boolean };
+  /** 効果音の段の名前(字幕タブではAIナレーションだけを出すため「AI音声」にする)。 */
+  sfxTrackLabel?: string;
 };
 
 const RULER_HEIGHT = 28;
@@ -74,6 +76,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   onSelectBgm,
   onScrub,
   tracks,
+  sfxTrackLabel,
 }) => {
   const showVideoTrack = tracks?.video ?? true;
   const showSfxTrack = tracks?.sfx ?? true;
@@ -251,6 +254,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
             ) : null}
             {showSfxTrack ? (
               <SfxTrack
+                label={sfxTrackLabel}
                 clips={sfxClips}
                 totalDurationSeconds={totalDurationSeconds}
                 pixelsPerSecond={pixelsPerSecond}

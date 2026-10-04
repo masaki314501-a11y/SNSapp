@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import { useAutoEditJob } from "../useAutoEditJob";
-import { InfoIcon, SparkleIcon } from "@/components/icons";
+import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -128,8 +128,9 @@ export const AutoEditScreen: React.FC = () => {
             <InfoIcon size={20} className="mt-0.5 shrink-0" />
             <div className="flex flex-col gap-1.5 text-sm">
               <span>見た目の手本が未設定です。設定すると、その雰囲気に寄せて編集します。</span>
-              <a href="/create/style" className="font-bold" style={{ color: "#6b4b00" }}>
-                見た目の手本を設定する ›
+              <a href="/create/style" className="btn-outline flex w-fit items-center gap-1 px-4 py-2 text-sm font-bold">
+                見た目の手本を設定する
+                <ChevronRightIcon size={16} />
               </a>
             </div>
           </div>
@@ -207,7 +208,8 @@ export const AutoEditScreen: React.FC = () => {
                 : "AIで自動編集する"}
           </button>
         )}
-        <button type="button" onClick={goToEditorWithoutChanges} className="text-link">
+        <button type="button" onClick={goToEditorWithoutChanges} className="btn-outline">
+          <EditIcon size={18} />
           AIを使わず自分で編集する
         </button>
       </div>

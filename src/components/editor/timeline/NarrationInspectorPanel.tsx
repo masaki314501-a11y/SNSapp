@@ -3,6 +3,8 @@
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import type { AudioSelection } from "./TimelineRoot";
 import type { VoiceOption } from "@/lib/gemini/voiceOptions";
+import { MicIcon, TrashIcon } from "@/components/icons";
+import { SettingsSection } from "../SettingsSection";
 
 type Props = {
   segments: ProjectSegment[];
@@ -27,9 +29,8 @@ type Props = {
 };
 
 /**
- * 「AI音声」タブの右側パネル。読み上げの声選択・全クリップ一括生成、
- * 選択中クリップ単体の生成、生成済みナレーションクリップのプロパティ編集を扱う。
- * (映像トラックはこのタブでも表示したままなので、クリップを選んで個別生成できる)
+ * 字幕タブの「AIナレーション」欄(旧「AI音声」タブ)。テロップを読み上げる声の選択・全クリップ一括生成、
+ * 選択中クリップ単体の生成、生成済みナレーション(タイムラインのAI音声の段)の開始秒・音量・削除を扱う。
  */
 export const NarrationInspectorPanel: React.FC<Props> = ({
   segments,
@@ -67,51 +68,50 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
   return (
     <div className="editor-inspector">
       <div className="editor-inspector-body">
-        {selected ? (
-          <div className="editor-inspector-fields">
-            <h3>ナレーション: {selected.label}</h3>
-            <label className="editor-field">
-              <span>開始(秒)</span>
-              <input
-                type="number"
-                step={0.1}
-                min={0}
-                value={Math.round(selected.startFromSeconds * 10) / 10}
-                onChange={(e) => onUpdateSfx(selected.key, { startFromSeconds: Number(e.target.value) })}
-              />
-            </label>
-            <label className="editor-field">
-              <span>音量 {Math.round(selected.volume * 100)}%</span>
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.1}
-                value={selected.volume}
-                onChange={(e) => onUpdateSfx(selected.key, { volume: Number(e.target.value) })}
-              />
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={selected.volume === 0}
-                onChange={(e) => onUpdateSfx(selected.key, { volume: e.target.checked ? 0 : 1 })}
-              />
-              <span className="field-label">ミュート</span>
-            </label>
-            <button type="button" className="editor-toolbar-btn danger" onClick={() => onRemoveSfx(selected.key)}>
-              削除
-            </button>
-          </div>
-        ) : selectedSegment ? (
-          <div className="editor-inspector-fields">
-            <h3>クリップ{selectedSegmentIndex + 1}</h3>
-            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-              {selectedSegment.caption || "(テロップ無し)"}
-            </p>
+        <SettingsSection title="AIナレーション" icon={<MicIcon size={16} />}>
+          {selected ? (
+            <div className="editor-inspector-fields">
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                選んだナレーション: {selected.label}
+              </p>
+              <label className="editor-field">
+                <span>開始(秒)</span>
+                <input
+                  type="number"
+                  step={0.1}
+                  min={0}
+                  value={Math.round(selected.startFromSeconds * 10) / 10}
+                  onChange={(e) => onUpdateSfx(selected.key, { startFromSeconds: Number(e.target.value) })}
+                />
+              </label>
+              <label className="editor-field">
+                <span>音量 {Math.round(selected.volume * 100)}%</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={selected.volume}
+                  onChange={(e) => onUpdateSfx(selected.key, { volume: Number(e.target.value) })}
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selected.volume === 0}
+                  onChange={(e) => onUpdateSfx(selected.key, { volume: e.target.checked ? 0 : 1 })}
+                />
+                <span className="field-label">ミュート</span>
+              </label>
+              <button type="button" className="editor-toolbar-btn danger self-start" onClick={() => onRemoveSfx(selected.key)}>
+                <TrashIcon size={14} />
+                このナレーションを削除
+              </button>
+            </div>
+          ) : selectedSegment ? (
             <button
               type="button"
-              className="editor-toolbar-btn"
+              className="editor-toolbar-btn self-start"
               disabled={
                 selectedSegment.caption.trim().length === 0 ||
                 narrationGenerating !== null ||
@@ -126,55 +126,57 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
                     : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
               }
             >
+              <MicIcon size={14} />
               {narrationGenerating
                 ? "生成中..."
                 : selectedHasNarration
-                  ? "🎙 このクリップのナレーションを作り直す"
-                  : "🎙 このクリップのナレーション生成"}
+                  ? `クリップ${selectedSegmentIndex + 1}のナレーションを作り直す`
+                  : `クリップ${selectedSegmentIndex + 1}のナレーションを生成`}
             </button>
-          </div>
-        ) : (
-          <div className="editor-inspector-empty">
-            <p>映像クリップまたはナレーションブロックを選択すると、ここで生成・編集できます</p>
-          </div>
-        )}
-      </div>
+          ) : (
+            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+              クリップを選ぶとそのテロップを、タイムラインのAI音声の段を選ぶとそのナレーションを編集できます
+            </p>
+          )}
 
-      <div className="editor-inspector-footer">
-        <select
-          className="editor-toolbar-btn"
-          value={narrationVoice}
-          disabled={narrationGenerating !== null}
-          onChange={(e) => onChangeNarrationVoice(e.target.value)}
-          title="AIナレーションの声"
-        >
-          {voiceOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              🎙 {option.label}
-            </option>
-          ))}
-        </select>
-        {narrationGenerating ? (
-          <button type="button" className="editor-toolbar-btn danger" onClick={onCancelNarrationGeneration}>
-            生成中... ({narrationGenerating.current}/{narrationGenerating.total}) 中断
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="editor-toolbar-btn"
-            disabled={pendingCount === 0 || totalSfxCount >= maxSfxClips}
-            onClick={onGenerateNarrationForAll}
-            title={
-              totalSfxCount >= maxSfxClips
-                ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
-                : pendingCount === 0
-                  ? "テロップのあるクリップは全て生成済みです"
-                  : `まだナレーションが無い${pendingCount}件だけを、順番に生成して追加します(生成済みの分はAPIを使いません)`
-            }
-          >
-            🎙 未生成の{pendingCount}件を一括生成
-          </button>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="editor-toolbar-btn"
+              value={narrationVoice}
+              disabled={narrationGenerating !== null}
+              onChange={(e) => onChangeNarrationVoice(e.target.value)}
+              aria-label="AIナレーションの声"
+            >
+              {voiceOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  声: {option.label}
+                </option>
+              ))}
+            </select>
+            {narrationGenerating ? (
+              <button type="button" className="editor-toolbar-btn danger" onClick={onCancelNarrationGeneration}>
+                生成中... ({narrationGenerating.current}/{narrationGenerating.total}) 中断
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="editor-toolbar-btn"
+                disabled={pendingCount === 0 || totalSfxCount >= maxSfxClips}
+                onClick={onGenerateNarrationForAll}
+                title={
+                  totalSfxCount >= maxSfxClips
+                    ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
+                    : pendingCount === 0
+                      ? "テロップのあるクリップは全て生成済みです"
+                      : `まだナレーションが無い${pendingCount}件だけを、順番に生成して追加します(生成済みの分はAPIを使いません)`
+                }
+              >
+                <MicIcon size={14} />
+                未生成の{pendingCount}件を一括生成
+              </button>
+            )}
+          </div>
+        </SettingsSection>
       </div>
     </div>
   );

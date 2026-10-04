@@ -30,7 +30,7 @@ import {
 import { TimelineRoot } from "./timeline/TimelineRoot";
 import { beginPointerDrag } from "./timeline/pointerDrag";
 import { AppTopBar } from "@/components/AppTopBar";
-import { PlusIcon, ScissorsIcon, TrashIcon, TrimEndIcon, TrimStartIcon } from "@/components/icons";
+import { PlusIcon, RestartIcon, ScissorsIcon, TrashIcon, TrimEndIcon, TrimStartIcon } from "@/components/icons";
 import { PlaybackBar } from "./PlaybackBar";
 import { ToolGrid, type ToolItem } from "./ToolButtons";
 
@@ -527,7 +527,7 @@ export const CutEditor: React.FC = () => {
   if (!project) return <EmptyState />;
 
   const cutTools: ToolItem[] = [
-    { key: "split", label: "分割", icon: <ScissorsIcon />, onClick: splitAtPlayhead, disabled: !canSplitAtPlayhead },
+    { key: "split", label: "クリップ分割", icon: <ScissorsIcon />, onClick: splitAtPlayhead, disabled: !canSplitAtPlayhead },
     {
       key: "trim-start",
       label: "ここから使う",
@@ -562,7 +562,8 @@ export const CutEditor: React.FC = () => {
         title="使う範囲を選ぶ"
         step={{ current: 2, total: 4 }}
         actions={
-          <button type="button" className="topbar-text-btn" onClick={handleStartOver}>
+          <button type="button" className="btn-outline topbar-outline inline-flex" onClick={handleStartOver}>
+            <RestartIcon size={16} />
             別の動画にする
           </button>
         }
@@ -703,7 +704,7 @@ export const CutEditor: React.FC = () => {
           <ToolGrid items={cutTools} />
         </div>
         <p className="keyboard-hint hidden text-xs lg:block" style={{ color: "var(--muted-2)" }}>
-          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=分割・I=ここから使う・O=ここまで使う・Delete=選んだ範囲を捨てる
+          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=クリップ分割・I=ここから使う・O=ここまで使う・Delete=選んだ範囲を捨てる
         </p>
 
         <div className="editor-area-action">
