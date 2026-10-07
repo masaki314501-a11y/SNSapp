@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProjectSegment } from "@/lib/videoProject";
+import { CopyIcon, MergeIcon, TrashIcon } from "@/components/icons";
 import { canMergeWithNext } from "../timelineUtils";
 
 type Props = {
@@ -42,12 +43,12 @@ export const ClipInspectorPanel: React.FC<Props> = ({
           <div className="editor-inspector-empty">
             <p>{selectedCount}件のクリップを選択中</p>
             <button type="button" className="editor-toolbar-btn danger" onClick={onDeleteSelected}>
-              選択したクリップを削除
+              <TrashIcon size={14} />
+              選択した{selectedCount}件のクリップを削除
             </button>
           </div>
         ) : selectedSegment ? (
           <div className="editor-inspector-fields">
-            <h3>クリップ{selectedIndex + 1}</h3>
             <p className="text-xs" style={{ color: "var(--muted-2)" }}>
               {selectedSegment.caption || "(テロップ無し)"}
             </p>
@@ -95,8 +96,10 @@ export const ClipInspectorPanel: React.FC<Props> = ({
               <span className="field-label">元の音声をミュート(ナレーションやBGMだけにする)</span>
             </label>
             <div className="editor-inspector-actions">
+              {/* どのクリップが対象か分かるよう、ボタンにクリップの番号を書く */}
               <button type="button" className="editor-toolbar-btn" onClick={() => onDuplicate(selectedSegment.key)}>
-                複製
+                <CopyIcon size={14} />
+                クリップ{selectedIndex + 1}を複製
               </button>
               <button
                 type="button"
@@ -105,10 +108,14 @@ export const ClipInspectorPanel: React.FC<Props> = ({
                 onClick={() => onMergeWithNext(selectedSegment.key)}
                 title="次のクリップと結合します(元動画上で連続している場合のみ)"
               >
-                結合
+                <MergeIcon size={14} />
+                {selectedIndex + 1 < segments.length
+                  ? `クリップ${selectedIndex + 1}と${selectedIndex + 2}を結合`
+                  : "次のクリップと結合"}
               </button>
               <button type="button" className="editor-toolbar-btn danger" onClick={() => onRemove(selectedSegment.key)}>
-                削除
+                <TrashIcon size={14} />
+                クリップ{selectedIndex + 1}を削除
               </button>
             </div>
           </div>

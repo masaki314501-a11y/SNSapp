@@ -1,4 +1,4 @@
-type IconProps = {
+export type IconProps = {
   size?: number;
   className?: string;
 };
@@ -19,4 +19,318 @@ export const MicIcon: React.FC<IconProps> = ({ size = 16, className }) => (
     <path d="M12 19v3" />
     <path d="M8 22h8" />
   </svg>
+);
+
+const Svg: React.FC<IconProps & { children: React.ReactNode; filled?: boolean }> = ({
+  size = 20,
+  className,
+  children,
+  filled,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    className={className}
+    aria-hidden="true"
+    {...(filled ? { fill: "currentColor" } : base)}
+  >
+    {children}
+  </svg>
+);
+
+export const BackIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M15 18l-6-6 6-6" />
+  </Svg>
+);
+export const HomeIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 11l8-7 8 7" />
+    <path d="M6 9.5V20h4.5v-5.5h3V20H18V9.5" />
+  </Svg>
+);
+export const CropIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 2v14a2 2 0 002 2h14" />
+    <path d="M18 22V8a2 2 0 00-2-2H2" />
+  </Svg>
+);
+export const CloseIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 6l12 12" />
+    <path d="M18 6L6 18" />
+  </Svg>
+);
+export const ZoomInIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-3.5-3.5" />
+    <path d="M11 8v6" />
+    <path d="M8 11h6" />
+  </Svg>
+);
+export const ZoomOutIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-3.5-3.5" />
+    <path d="M8 11h6" />
+  </Svg>
+);
+export const FitWidthIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M3 5v14" />
+    <path d="M21 5v14" />
+    <path d="M7 12h10" />
+    <path d="M9.5 9.5L7 12l2.5 2.5" />
+    <path d="M14.5 9.5L17 12l-2.5 2.5" />
+  </Svg>
+);
+/** 「削除部分を復元」用。フィルム(クリップ)に、元へ戻る丸い矢印を重ねる(元に戻すの↶と見分けられるように)。 */
+export const RestoreClipIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M3 8V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-6" />
+    <path d="M7 4v4" />
+    <path d="M17 4v16" />
+    <path d="M4 15.5a4.5 4.5 0 108-2.8" />
+    <path d="M12 9.5v3.2H8.8" />
+  </Svg>
+);
+export const CaptionVoiceIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="2" y="5" width="14" height="14" rx="2" />
+    <path d="M5.5 11h7" />
+    <path d="M5.5 15h4.5" />
+    <path d="M19 9.5a3.5 3.5 0 010 5" />
+    <path d="M21.5 7.5a7 7 0 010 9" />
+  </Svg>
+);
+export const ChevronRightIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Svg>
+);
+export const MoreIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p} filled>
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
+  </Svg>
+);
+export const SparkleIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+  </Svg>
+);
+export const PlayIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p} filled>
+    <polygon points="7 4 20 12 7 20" />
+  </Svg>
+);
+export const PauseIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p} filled>
+    <rect x="6" y="4" width="4" height="16" rx="1" />
+    <rect x="14" y="4" width="4" height="16" rx="1" />
+  </Svg>
+);
+export const UndoIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M9 14L4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 010 11H11" />
+  </Svg>
+);
+export const RedoIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M15 14l5-5-5-5" />
+    <path d="M20 9H9.5a5.5 5.5 0 000 11H13" />
+  </Svg>
+);
+export const ScissorsIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M20 4L8.12 15.88" />
+    <path d="M14.47 14.48L20 20" />
+    <path d="M8.12 8.12L12 12" />
+  </Svg>
+);
+export const TrimStartIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 4v16" />
+    <path d="M10 12h10" />
+    <path d="M16 8l4 4-4 4" />
+  </Svg>
+);
+export const TrimEndIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M18 4v16" />
+    <path d="M14 12H4" />
+    <path d="M8 8l-4 4 4 4" />
+  </Svg>
+);
+export const PlusIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M12 5v14" />
+    <path d="M5 12h14" />
+  </Svg>
+);
+export const TrashIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 7h16" />
+    <path d="M9 7V4h6v3" />
+    <path d="M6 7l1 13h10l1-13" />
+  </Svg>
+);
+export const CaptionIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M7 11h10" />
+    <path d="M7 15h6" />
+  </Svg>
+);
+export const SpeakerIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M11 5L6 9H3v6h3l5 4z" />
+    <path d="M15.5 8.5a5 5 0 010 7" />
+    <path d="M18.5 5.5a9 9 0 010 13" />
+  </Svg>
+);
+export const MusicIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M9 18V5l11-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="17" cy="16" r="3" />
+  </Svg>
+);
+export const PaletteIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="8.5" cy="10" r="1.2" />
+    <circle cx="12" cy="7.5" r="1.2" />
+    <circle cx="15.5" cy="10" r="1.2" />
+    <path d="M12 21a3 3 0 010-6h3" />
+  </Svg>
+);
+export const SettingsIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 6h10" />
+    <path d="M18 6h2" />
+    <circle cx="16" cy="6" r="2" />
+    <path d="M4 12h2" />
+    <path d="M10 12h10" />
+    <circle cx="8" cy="12" r="2" />
+    <path d="M4 18h10" />
+    <path d="M18 18h2" />
+    <circle cx="16" cy="18" r="2" />
+  </Svg>
+);
+export const UploadIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M12 16V4" />
+    <path d="M7 9l5-5 5 5" />
+    <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" />
+  </Svg>
+);
+export const InfoIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v5" />
+    <path d="M12 16.5v.01" />
+  </Svg>
+);
+export const SpeakerOffIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M11 5L6 9H3v6h3l5 4z" />
+    <path d="M22 9l-6 6" />
+    <path d="M16 9l6 6" />
+  </Svg>
+);
+export const FullscreenIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 9V4h5" />
+    <path d="M20 9V4h-5" />
+    <path d="M4 15v5h5" />
+    <path d="M20 15v5h-5" />
+  </Svg>
+);
+export const ChevronDownIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+export const ChevronLeftIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M15 18l-6-6 6-6" />
+  </Svg>
+);
+export const CopyIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 012-2h9" />
+  </Svg>
+);
+export const MergeIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="7" width="8" height="10" rx="1.5" />
+    <rect x="13" y="7" width="8" height="10" rx="1.5" />
+    <path d="M9 12h6" />
+  </Svg>
+);
+export const EditIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9l-4-4L4 16z" />
+    <path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+export const SaveIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M12 4v11" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M4 18v2h16v-2" />
+  </Svg>
+);
+export const FolderOpenIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1H3z" />
+    <path d="M3 10h18l-2 9H5z" />
+  </Svg>
+);
+export const RestartIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+    <path d="M4 4v4h4" />
+  </Svg>
+);
+export const TextIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M5 6V4h14v2" />
+    <path d="M12 4v16" />
+    <path d="M9 20h6" />
+  </Svg>
+);
+export const CheckCircleIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 12.5l2.7 2.7L16 9.8" />
+  </Svg>
+);
+export const FlagIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M5 21V4" />
+    <path d="M5 4h11l-2 4 2 4H5" />
+  </Svg>
+);
+export const HighlightIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <path d="M4 20h16" />
+    <path d="M7 16l5-12 5 12" />
+    <path d="M9 12h6" />
+  </Svg>
+);
+export const ImageIcon: React.FC<IconProps> = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="2" />
+    <path d="M21 16l-5-5-9 9" />
+  </Svg>
 );

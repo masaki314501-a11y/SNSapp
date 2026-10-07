@@ -2,6 +2,7 @@
 
 import type { ProjectSfxClip } from "@/lib/videoProject";
 import { WaitTime } from "@/components/WaitTime";
+import { PlusIcon, TrashIcon } from "@/components/icons";
 import type { AudioSelection } from "./TimelineRoot";
 import type { AudioPreset } from "../audioPresets";
 
@@ -62,8 +63,9 @@ export const SfxInspectorPanel: React.FC<Props> = ({
                 onChange={(e) => onUpdateSfx(selectedSfx.key, { volume: Number(e.target.value) })}
               />
             </label>
-            <button type="button" className="editor-toolbar-btn danger" onClick={() => onRemoveSfx(selectedSfx.key)}>
-              削除
+            <button type="button" className="editor-toolbar-btn danger self-start" onClick={() => onRemoveSfx(selectedSfx.key)}>
+              <TrashIcon size={14} />
+              この効果音を削除
             </button>
           </div>
         ) : (
@@ -86,7 +88,7 @@ export const SfxInspectorPanel: React.FC<Props> = ({
             }}
           >
             <option value="" disabled>
-              + 効果音(無料素材)
+              ＋ 効果音を追加(無料素材)
             </option>
             {sfxPresets.map((preset) => (
               <option key={preset.id} value={preset.id}>
@@ -96,7 +98,8 @@ export const SfxInspectorPanel: React.FC<Props> = ({
           </select>
         ) : null}
         <label className="editor-toolbar-btn cursor-pointer">
-          {sfxUploading ? "アップロード中..." : "+ 効果音をアップロード"}
+          <PlusIcon size={14} />
+          {sfxUploading ? "アップロード中..." : "効果音を追加(ファイルから)"}
           <input
             type="file"
             accept="audio/*"

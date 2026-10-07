@@ -4,23 +4,28 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import { useAutoEditJob } from "../useAutoEditJob";
+import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
 
 const EmptyState: React.FC = () => (
-  <div className="panel flex flex-col items-center gap-3 p-10 text-center">
-    <p className="text-sm font-medium">対象の動画がありません</p>
-    <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-      まずは動画をアップロードし、使う範囲を選んでください
-    </p>
-    <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
-      動画をアップロードする →
-    </a>
-  </div>
+  <main className="flow-main">
+      <div className="panel flex flex-col items-center gap-3 p-10 text-center">
+        <p className="text-sm font-medium">対象の動画がありません</p>
+        <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+          まずは動画をアップロードし、使う範囲を選んでください
+        </p>
+        <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
+          動画をアップロードする →
+        </a>
+      </div>
+  </main>
 );
 
 const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
   ranges.reduce((sum, range) => sum + range.durationInSeconds, 0);
+
+const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "効果音", "ナレーション", "冒頭の見出し", "締めの一言"];
 
 /**
  * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
@@ -103,136 +108,164 @@ export const AutoEditScreen: React.FC = () => {
   };
 
   return (
-    <div className="panel flex flex-col gap-4 p-5">
-      <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-        Geminiが動画を見て、切り方・寄り(ズーム)・強調テキスト・効果音・ナレーション・冒頭の見出し・締めの一言まで
-        すべて決めます。字幕は次の編集画面で付けるか決められます。数分かかることがあります。
-      </p>
-
-      {hasReference ? (
-        <span className="badge-pill success w-fit">参考スクショ/動画({referenceCount}個)を最優先の手本にします</span>
-      ) : (
-        <p className="badge-pill warning w-fit">
-          参考スクショが未設定です。
-          <a href="/create/style" className="underline">
-            見た目の設定
-          </a>
-          で渡すと、その編集の感じを最優先で再現します
-        </p>
-      )}
-
-      {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(参考スクショがあればそちらが優先) */}
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-semibold">テンプレート(編集の型)</span>
-        <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-          作りたい動画に近いものを選んでください。文字の言葉やタイミングは、あなたの動画に合わせて作ります
-          {hasReference ? "。参考スクショと違う所は参考スクショに合わせます" : ""}
-        </span>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[null, ...EDIT_TEMPLATES].map((template) => {
-            const id = template?.id ?? null;
-            const selected = templateId === id;
-            return (
-              <button
-                key={id ?? "none"}
-                type="button"
-                disabled={isProcessing}
-                onClick={() => selectTemplate(id)}
-                aria-pressed={selected}
-                className="flex flex-col items-start gap-0.5 rounded-lg p-3 text-left"
-                style={{
-                  border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
-                  background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
-                }}
-              >
-                <span className="text-sm font-medium">
-                  {template ? `${template.emoji} ${template.label}` : "🎲 おまかせ"}
-                </span>
-                <span className="text-xs" style={{ color: "var(--muted)" }}>
-                  {template ? template.description : "型を決めず、動画の中身に合わせてGeminiが自由に編集します"}
-                </span>
-              </button>
-            );
-          })}
+    <>
+      <main className="flow-main">
+        <div className="panel flex flex-col gap-3 p-4">
+          <span className="text-sm font-bold">AIがまとめて決めること</span>
+          <div className="flex flex-wrap gap-1.5">
+            {AI_DECIDES.map((label) => (
+              <span key={label} className="badge-pill neutral" style={{ fontWeight: 400 }}>
+                {label}
+              </span>
+            ))}
+          </div>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            数分かかることがあります。字幕は次の編集画面で付けるか決められます。
+          </span>
         </div>
-      </div>
 
-      {autoEditState.status === "idle" || autoEditState.status === "error" ? (
-        <button type="button" onClick={handleRun} className="btn-primary self-start px-4 py-2 text-sm">
-          🪄 {autoEditState.status === "error" ? "もう一度自動編集する" : "自動編集する"}
-        </button>
-      ) : null}
+        {hasReference ? (
+          <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
+        ) : (
+          <div
+            className="flex gap-2.5 rounded-[14px] p-3.5"
+            style={{ background: "var(--warning-soft)", color: "#6b4b00" }}
+          >
+            <InfoIcon size={20} className="mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span>見た目の手本が未設定です。設定すると、その雰囲気に寄せて編集します。</span>
+              <a href="/create/style" className="btn-outline flex w-fit items-center gap-1 px-4 py-2 text-sm font-bold">
+                見た目の手本を設定する
+                <ChevronRightIcon size={16} />
+              </a>
+            </div>
+          </div>
+        )}
 
-      {autoEditState.status === "processing" ? (
-        <div className="flex flex-col gap-1">
-          <span className="badge-pill warning w-fit">Geminiが編集中...</span>
-          {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
-            <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              {autoEditState.usedStyleReferenceCount === 0
-                ? "参考スクショがサーバー上に見つからなかったため、今回は参考スクショ無しで編集しています"
-                : `参考スクショ${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
-              (見た目の設定からもう一度渡してください)
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* 終わった時に実績を記録できるよう、処理中かどうかに関わらず置いておく(処理中だけ表示される) */}
-      <WaitTime
-        task="auto-edit"
-        units={totalSeconds(keepRanges)}
-        active={isProcessing}
-        failed={autoEditState.status === "error"}
-      />
-
-      {autoEditState.status === "error" ? <p className="badge-pill danger w-fit">{autoEditState.message}</p> : null}
-
-      {autoEditState.status === "done" ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm">{autoEditState.plan.summary}</p>
-          {autoEditState.plan.referenceNotes ? (
-            <p className="text-xs" style={{ color: "var(--muted)" }}>
-              参考から読み取った編集の感じ: {autoEditState.plan.referenceNotes}
-            </p>
-          ) : null}
-          <ul className="flex flex-col gap-1 text-xs" style={{ color: "var(--muted)" }}>
-            <li>
-              ✂️ {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {autoEditState.segments.length}
-              クリップ・{totalSeconds(autoEditState.segments).toFixed(1)}秒
-            </li>
-            {autoEditState.plan.hook ? <li>🪝 冒頭の見出し: {autoEditState.plan.hook.headline}</li> : null}
-            {autoEditState.plan.cta ? <li>📣 締めの一言: {autoEditState.plan.cta.text}</li> : null}
-            {autoEditState.plan.globalOverlays.length > 0 ? (
-              <li>📌 ずっと出す文字: {autoEditState.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
-            ) : null}
-            <li>🔍 寄り(ズーム): {autoEditState.segments.filter((s) => s.zoom).length}か所</li>
-            <li>
-              💬 強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
-            </li>
-            <li>
-              🔊 効果音: {autoEditState.generatedClips.filter((c) => !c.narrationSegmentKey).length}個 / 🎙 ナレーション:{" "}
-              {autoEditState.generatedClips.filter((c) => c.narrationSegmentKey).length}個
-            </li>
-          </ul>
-          <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-            この案を使うと、クリップ構成・効果音・ナレーションが置き換わります(BGMはそのまま)。
-          </p>
-          <div className="flex gap-2">
-            <button type="button" onClick={applyPlan} className="btn-primary px-4 py-2 text-sm">
-              この案を使う →
-            </button>
-            <button type="button" onClick={handleRun} className="btn-outline px-4 py-2 text-sm">
-              別の案を作る
-            </button>
+        {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(見た目の手本があればそちらが優先) */}
+        <div className="panel flex flex-col gap-2 p-4">
+          <span className="text-sm font-bold">テンプレート(編集の型)</span>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            作りたい動画に近いものを選んでください。文字の言葉やタイミングは、あなたの動画に合わせて作ります
+            {hasReference ? "。見た目の手本と違う所は手本に合わせます" : ""}
+          </span>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {[null, ...EDIT_TEMPLATES].map((template) => {
+              const id = template?.id ?? null;
+              const selected = templateId === id;
+              return (
+                <button
+                  key={id ?? "none"}
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => selectTemplate(id)}
+                  aria-pressed={selected}
+                  className="flex flex-col items-start gap-0.5 rounded-lg p-3 text-left"
+                  style={{
+                    border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                    background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
+                  }}
+                >
+                  <span className="text-sm font-medium">
+                    {template ? `${template.emoji} ${template.label}` : "🎲 おまかせ"}
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>
+                    {template ? template.description : "型を決めず、動画の中身に合わせてAIが自由に編集します"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
-      ) : null}
 
-      <div className="mt-2 flex items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-        <button type="button" onClick={goToEditorWithoutChanges} className="btn-outline px-4 py-1.5 text-sm">
-          スキップして編集へ進む →
+        {isProcessing ? (
+          <div className="panel flex flex-col gap-1 p-4">
+            <span className="text-sm font-bold">AIが編集中…</span>
+            {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                {autoEditState.usedStyleReferenceCount === 0
+                  ? "見た目の手本がサーバー上に見つからなかったため、今回は手本無しで編集しています"
+                  : `見た目の手本${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
+                (見た目の手本の画面からもう一度選んでください)
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* 終わった時に実績を記録できるよう、処理中かどうかに関わらず置いておく(処理中だけ表示される) */}
+        <WaitTime
+          task="auto-edit"
+          units={totalSeconds(keepRanges)}
+          active={isProcessing}
+          failed={autoEditState.status === "error"}
+        />
+
+        {autoEditState.status === "error" ? <p className="badge-pill danger w-fit">{autoEditState.message}</p> : null}
+
+        {autoEditState.status === "done" ? (
+          <div className="panel flex flex-col gap-3 p-4">
+            <p className="text-sm">{autoEditState.plan.summary}</p>
+            {autoEditState.plan.referenceNotes ? (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                参考から読み取った編集の感じ: {autoEditState.plan.referenceNotes}
+              </p>
+            ) : null}
+            <ul className="flex flex-col gap-1 text-xs" style={{ color: "var(--muted)" }}>
+              <li>
+                ✂️ {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {autoEditState.segments.length}
+                クリップ・{totalSeconds(autoEditState.segments).toFixed(1)}秒
+              </li>
+              {autoEditState.plan.hook ? <li>🪝 冒頭の見出し: {autoEditState.plan.hook.headline}</li> : null}
+              {autoEditState.plan.cta ? <li>📣 締めの一言: {autoEditState.plan.cta.text}</li> : null}
+              {autoEditState.plan.globalOverlays.length > 0 ? (
+                <li>📌 ずっと出す文字: {autoEditState.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
+              ) : null}
+              <li>🔍 寄り(ズーム): {autoEditState.segments.filter((s) => s.zoom).length}か所</li>
+              <li>
+                💬 強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
+              </li>
+              <li>
+                🔊 効果音: {autoEditState.generatedClips.filter((c) => !c.narrationSegmentKey).length}個 / 🎙 ナレーション:{" "}
+                {autoEditState.generatedClips.filter((c) => c.narrationSegmentKey).length}個
+              </li>
+            </ul>
+            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+              この案を使うと、クリップ構成・効果音・ナレーションが置き換わります(BGMはそのまま)。
+            </p>
+          </div>
+        ) : null}
+      </main>
+
+      <div className="bottom-action-bar">
+        {autoEditState.status === "done" ? (
+          <>
+            <button type="button" onClick={applyPlan} className="btn-primary">
+              この案を使う
+            </button>
+            <button type="button" onClick={handleRun} className="btn-outline">
+              別の案を作る
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={handleRun}
+            disabled={isProcessing}
+            className="btn-primary"
+          >
+            <SparkleIcon size={18} />
+            {autoEditState.status === "processing"
+              ? "AIが編集中…"
+              : autoEditState.status === "error"
+                ? "もう一度自動編集する"
+                : "AIで自動編集する"}
+          </button>
+        )}
+        <button type="button" onClick={goToEditorWithoutChanges} className="btn-outline">
+          <EditIcon size={18} />
+          AIを使わず自分で編集する
         </button>
       </div>
-    </div>
+    </>
   );
 };
