@@ -36,7 +36,7 @@ import { uploadAudioFile } from "./uploadAudioFile";
 import { requestVoiceover } from "./requestVoiceover";
 import { STYLE_PRESETS, type StylePreset } from "./stylePresets";
 import { SFX_PRESETS, BGM_PRESETS, type AudioPreset } from "./audioPresets";
-import { VOICE_OPTIONS, DEFAULT_VOICE_NAME } from "@/lib/gemini/voiceOptions";
+import { VOICE_OPTIONS, DEFAULT_VOICE_NAME, isKnownVoiceName } from "@/lib/gemini/voiceOptions";
 import {
   MIN_SEGMENT_DURATION_IN_SECONDS,
   findLargestGap,
@@ -63,6 +63,7 @@ import { BgmInspectorPanel } from "./timeline/BgmInspectorPanel";
 import { PreviewDragLayer, type DragTarget } from "./PreviewDragLayer";
 import { AiRevisePanel } from "./AiRevisePanel";
 import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 /**
  * /create でアップロード・字幕生成された動画を、再生しながらトリム・並べ替え・
@@ -173,6 +174,7 @@ export const ClipEditor: React.FC = () => {
   const [sfxUploading, setSfxUploading] = useState(false);
   const [bgmUploading, setBgmUploading] = useState(false);
   const [narrationVoice, setNarrationVoice] = useState(DEFAULT_VOICE_NAME);
+  const [muteOriginalUnderNarration, setMuteOriginalUnderNarration] = useState(false);
   /** AIナレーション一括生成の進捗(nullなら未実行)。単発生成もtotal=1として同じ状態を使う。 */
   const [narrationGenerating, setNarrationGenerating] = useState<{ current: number; total: number } | null>(null);
   /** 一括生成の中断要求。生成ループは毎回このrefを見るため、stateと違い即座に伝わる。 */
@@ -208,6 +210,8 @@ export const ClipEditor: React.FC = () => {
       setFadeInOut(loaded.fadeInOut);
       setSfxClips(loaded.sfx);
       setBgm(loaded.bgm);
+      if (loaded.narrationVoice && isKnownVoiceName(loaded.narrationVoice)) setNarrationVoice(loaded.narrationVoice);
+      setMuteOriginalUnderNarration(loaded.muteOriginalUnderNarration ?? false);
     }
     setHasCheckedProject(true);
   }, []);
@@ -228,10 +232,14 @@ export const ClipEditor: React.FC = () => {
         segments: form.segments,
         sfx: sfxClips,
         bgm,
+        narrationVoice,
+        muteOriginalUnderNarration,
       });
     }, 500);
     return () => clearTimeout(timer);
   }, [
+    narrationVoice,
+    muteOriginalUnderNarration,
     project,
     primaryColor,
     captionStyle,
@@ -282,8 +290,10 @@ export const ClipEditor: React.FC = () => {
         cta: project?.cta,
         globalOverlays: project?.globalOverlays,
         globalImages: project?.globalImages,
+        muteOriginalUnderNarration,
       }),
     [
+      muteOriginalUnderNarration,
       form.segments,
       project?.videoPath,
       project?.hook,
@@ -954,7 +964,7 @@ export const ClipEditor: React.FC = () => {
         },
       ]);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "効果音のアップロードに失敗しました");
+      alert(toFriendlyErrorMessage(error, "効果音のアップロードに失敗しました"));
     } finally {
       setSfxUploading(false);
     }
@@ -999,7 +1009,9 @@ export const ClipEditor: React.FC = () => {
     segmentKey: string,
     startFromSeconds: number,
     caption: string,
-    path: string
+    path: string,
+    voiceName: string,
+    options: { keepStart?: boolean } = {}
   ) => {
     setSfxClips((prev) => {
       const next: ProjectSfxClip = {
@@ -1009,10 +1021,22 @@ export const ClipEditor: React.FC = () => {
         startFromSeconds,
         volume: DEFAULT_CLIP_VOLUME,
         narrationSegmentKey: segmentKey,
+        narrationVoice: voiceName,
+        narrationText: caption,
       };
       const existingIndex = prev.findIndex((clip) => clip.narrationSegmentKey === segmentKey);
       if (existingIndex !== -1) {
-        return prev.map((clip, i) => (i === existingIndex ? { ...next, key: clip.key, volume: clip.volume } : clip));
+        // 声をそろえるための作り直しでは、利用者が動かした開始位置はそのまま残す
+        return prev.map((clip, i) =>
+          i === existingIndex
+            ? {
+                ...next,
+                key: clip.key,
+                volume: clip.volume,
+                startFromSeconds: options.keepStart ? clip.startFromSeconds : next.startFromSeconds,
+              }
+            : clip
+        );
       }
       if (prev.length >= MAX_SFX_CLIPS) return prev;
       return [...prev, next];
@@ -1033,9 +1057,9 @@ export const ClipEditor: React.FC = () => {
     setNarrationGenerating({ current: 0, total: 1 });
     try {
       const { path } = await requestVoiceover(caption, narrationVoice);
-      upsertNarrationClip(key, segmentStartSeconds(index), caption, path);
+      upsertNarrationClip(key, segmentStartSeconds(index), caption, path, narrationVoice);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "ナレーション生成に失敗しました");
+      alert(toFriendlyErrorMessage(error, "ナレーション生成に失敗しました"));
     } finally {
       setNarrationGenerating(null);
     }
@@ -1084,18 +1108,27 @@ export const ClipEditor: React.FC = () => {
   };
 
   const handleGenerateNarrationForAll = async () => {
-    const withCaption = form.segments
-      .map((segment, index) => ({ segment, index }))
-      .filter(({ segment }) => segment.caption.trim().length > 0);
-    const alreadyGenerated = new Set(
-      sfxClips.map((clip) => clip.narrationSegmentKey).filter((key): key is string => Boolean(key))
+    // 対象は「まだナレーションが無い、字幕のあるクリップ」と「今選んでいる声と違う声で作ったナレーション」。
+    // 後者も作り直さないと、先に作った分と声が混ざってしまう(videoProject.tsのnarrationVoice参照)。
+    // 同じ文・同じ声の音声はサーバーに保存してあるため(voiceoverCache.ts)、作り直してもAPIは使わない。
+    const narrationBySegment = new Map(
+      sfxClips.flatMap((clip) => (clip.narrationSegmentKey ? [[clip.narrationSegmentKey, clip] as const] : []))
     );
-    const targets = withCaption.filter(({ segment }) => !alreadyGenerated.has(segment.key));
+    const targets = form.segments.flatMap((segment, index) => {
+      const existing = narrationBySegment.get(segment.key);
+      if (existing) {
+        if (existing.narrationVoice === narrationVoice) return [];
+        const text = (existing.narrationText ?? segment.caption).trim();
+        return text ? [{ segment, index, text, isRevoice: true }] : [];
+      }
+      const text = segment.caption.trim();
+      return text ? [{ segment, index, text, isRevoice: false }] : [];
+    });
     if (targets.length === 0) {
       alert(
-        withCaption.length > 0
-          ? "テロップのあるクリップは全てナレーション生成済みです。作り直したいクリップは、そのクリップを選んで個別に生成してください"
-          : "テロップが入っているクリップがありません"
+        form.segments.some((segment) => segment.caption.trim().length > 0)
+          ? "字幕のあるクリップは全て、今の声でナレーションを作ってあります。作り直したいクリップは、そのクリップを選んで個別に作ってください"
+          : "字幕が入っているクリップがありません"
       );
       return;
     }
@@ -1105,23 +1138,24 @@ export const ClipEditor: React.FC = () => {
     setNarrationGenerating({ current: 0, total: targets.length });
     for (let i = 0; i < targets.length; i++) {
       if (narrationCancelRef.current) break;
-      if (sfxCount >= MAX_SFX_CLIPS) {
+      if (!targets[i].isRevoice && sfxCount >= MAX_SFX_CLIPS) {
         alert(`効果音/ナレーションの上限(${MAX_SFX_CLIPS}件)に達したため、途中で停止しました`);
         break;
       }
-      const { segment, index } = targets[i];
-      const caption = segment.caption.trim();
+      const { segment, index, text: caption, isRevoice } = targets[i];
       try {
         // Gemini APIはアプリ全体で直列実行が前提(rateLimiter.ts)のため、あえて逐次待つ
         const { path } = await requestVoiceover(caption, narrationVoice);
-        upsertNarrationClip(segment.key, segmentStartSeconds(index), caption, path);
-        sfxCount += 1;
+        upsertNarrationClip(segment.key, segmentStartSeconds(index), caption, path, narrationVoice, {
+          keepStart: isRevoice,
+        });
+        if (!isRevoice) sfxCount += 1;
       } catch (error) {
         // ここまでに生成できた分はタイムラインに残るため、上限に達した場合でも
         // 翌日に「全クリップに一括生成」を押し直せば、残りの分だけが生成される。
         alert(
           `「${caption.slice(0, 10)}」のナレーション生成に失敗したため、ここで中断しました(${i}/${targets.length}件完了)。\n\n${
-            error instanceof Error ? error.message : ""
+            toFriendlyErrorMessage(error, "少し時間をおいて、もう一度お試しください")
           }`
         );
         break;
@@ -1139,7 +1173,7 @@ export const ClipEditor: React.FC = () => {
       const { path, fileName } = await uploadAudioFile(file);
       setBgm({ src: path, label: fileName, volume: 0.4, fadeInSeconds: 0, fadeOutSeconds: 0 });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "BGMのアップロードに失敗しました");
+      alert(toFriendlyErrorMessage(error, "BGMのアップロードに失敗しました"));
     } finally {
       setBgmUploading(false);
     }
@@ -1354,6 +1388,7 @@ export const ClipEditor: React.FC = () => {
             canOpenBulkEdit={form.segments.length > 0}
             onGenerateCaptionsForAll={handleGenerateCaptionsForAll}
             captionsGenerating={isTranscribingCaptions}
+            transcribeSeconds={project?.videoDurationInSeconds ?? 0}
             captionsError={transcribeState.status === "error" ? transcribeState.message : null}
             onClearCaptions={handleClearCaptions}
             hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
@@ -1396,6 +1431,9 @@ export const ClipEditor: React.FC = () => {
             voiceOptions={VOICE_OPTIONS}
             narrationVoice={narrationVoice}
             onChangeNarrationVoice={setNarrationVoice}
+            muteOriginalUnderNarration={muteOriginalUnderNarration}
+            onChangeMuteOriginalUnderNarration={setMuteOriginalUnderNarration}
+            onChangeSegmentVolume={(key, volume) => updateSegment(key, { volume })}
             narrationGenerating={narrationGenerating}
             onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
             onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}

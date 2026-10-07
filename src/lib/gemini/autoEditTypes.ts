@@ -1,3 +1,4 @@
+import { Type } from "@google/genai";
 import { z } from "zod";
 import {
   CAPTION_ANIMATION_OPTIONS,
@@ -90,3 +91,117 @@ export const rawAutoEditPlanSchema = z.object({
 
 export type RawAutoEditPlan = z.infer<typeof rawAutoEditPlanSchema>;
 export type RawAutoEditClip = z.infer<typeof rawClipSchema>;
+
+const nullableString = { type: Type.STRING, nullable: true } as const;
+const nullableNumber = { type: Type.NUMBER, nullable: true } as const;
+
+const overlayItemSchema = {
+  type: Type.OBJECT,
+  properties: {
+    text: { type: Type.STRING },
+    startOffsetSeconds: nullableNumber,
+    durationInSeconds: nullableNumber,
+    xPercent: nullableNumber,
+    yPercent: nullableNumber,
+    fontSizePx: nullableNumber,
+    color: nullableString,
+    strokeColor: nullableString,
+    backgroundColor: nullableString,
+    rotationDeg: nullableNumber,
+    animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
+  },
+  required: ["text"],
+} as const;
+
+/**
+ * Geminiに返させるJSONの形(Gemini APIのresponseSchema)。自動編集(autoEditPlan.ts)と、
+ * 学習データの正解動画の書き起こし(editExampleBreakdown.ts)の両方で同じ形を使う
+ * (書き起こしを自動編集にそのままお手本の答えとして見せるため、形がずれないよう1か所にまとめる)。
+ */
+export const autoEditResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    referenceNotes: nullableString,
+    summary: { type: Type.STRING },
+    theme: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: {
+        primaryColor: { type: Type.STRING, description: "#RRGGBB形式" },
+        fontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES },
+        captionPosition: { type: Type.STRING, format: "enum", enum: CAPTION_POSITION_VALUES },
+        captionStyle: { type: Type.STRING, format: "enum", enum: CAPTION_STYLE_VALUES },
+      },
+    },
+    hook: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: { headline: { type: Type.STRING }, subline: nullableString },
+      required: ["headline"],
+    },
+    cta: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: { text: { type: Type.STRING } },
+      required: ["text"],
+    },
+    globalOverlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
+    clips: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          sourceStartSeconds: { type: Type.NUMBER },
+          sourceEndSeconds: { type: Type.NUMBER },
+          speech: nullableString,
+          captionAnimation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
+          emphasisWords: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+          emphasisColor: nullableString,
+          zoom: {
+            type: Type.OBJECT,
+            nullable: true,
+            properties: {
+              scale: { type: Type.NUMBER },
+              style: { type: Type.STRING, format: "enum", enum: ["punch", "slow"] },
+              focusXPercent: { type: Type.NUMBER },
+              focusYPercent: { type: Type.NUMBER },
+            },
+            required: ["scale"],
+          },
+          overlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
+          sfx: {
+            type: Type.ARRAY,
+            nullable: true,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                presetId: { type: Type.STRING, format: "enum", enum: SFX_PRESET_IDS },
+                offsetSeconds: nullableNumber,
+              },
+              required: ["presetId"],
+            },
+          },
+          narration: nullableString,
+        },
+        // Geminiは書いた順に考えるので、クリップの中もプロンプトの手順(①カット・物→②テロップ→
+        // ③強調→④寄り→仕上げ)の順に出力させる。指定しないとアルファベット順になってしまう。
+        propertyOrdering: [
+          "sourceStartSeconds",
+          "sourceEndSeconds",
+          "speech",
+          "captionAnimation",
+          "emphasisWords",
+          "emphasisColor",
+          "overlays",
+          "zoom",
+          "sfx",
+          "narration",
+        ],
+        required: ["sourceStartSeconds", "sourceEndSeconds"],
+      },
+    },
+  },
+  // 参考スクショの読み取り→ずっと置く物→テーマ(テロップの見た目)→クリップ→仕上げ、の順。
+  propertyOrdering: ["referenceNotes", "globalOverlays", "theme", "clips", "hook", "cta", "summary"],
+  required: ["summary", "clips"],
+} as const;

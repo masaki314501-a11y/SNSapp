@@ -5,6 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { NextResponse } from "next/server";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
   } catch (error) {
     await unlink(outputPath).catch(() => {});
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "アップロードに失敗しました" },
+      { error: toFriendlyErrorMessage(error, "アップロードに失敗しました") },
       { status: 400 }
     );
   }

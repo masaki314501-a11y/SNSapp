@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { PartMediaResolutionLevel, type Content, type GoogleGenAI, type Part } from "@google/genai";
 import { waitForGeminiFileActive } from "./geminiFiles";
+import { rawAutoEditPlanSchema, type RawAutoEditPlan } from "./autoEditTypes";
 
 /**
  * 自動編集(バズる動画)機能のfew-shot例として使う「編集の正解データ」を保存する場所。
@@ -63,6 +64,13 @@ const editExampleSchema = z.object({
    * 見せ直すと重いので、今回の動画に近い手本を選ぶときはこの文章だけを見比べさせる。
    */
   profile: z.string().optional(),
+  /**
+   * 正解動画の「書き起こし」。正解動画を、学習動画(素材)に対する自動編集の答えと同じ形
+   * (素材のどこを使い、どの位置に何色・何pxの文字を出し、どこで寄ったか)に起こしたもの
+   * (editExampleBreakdown.ts)。動画を見比べさせるだけだと細かい数値まで真似できず、
+   * 正解動画に近づかなかったため、「この素材ならこう答える」という答えの実例として見せる。
+   */
+  breakdown: rawAutoEditPlanSchema.optional(),
   createdAt: z.string(),
 });
 
@@ -140,6 +148,16 @@ export const updateEditExampleProfile = async (id: string, profile: string): Pro
   return target;
 };
 
+/** 正解動画の書き起こしを保存する。 */
+export const updateEditExampleBreakdown = async (id: string, breakdown: RawAutoEditPlan): Promise<EditExample | null> => {
+  const examples = await readMetadata();
+  const target = examples.find((example) => example.id === id);
+  if (!target) return null;
+  target.breakdown = breakdown;
+  await writeMetadata(examples);
+  return target;
+};
+
 export const editExampleMediaPath = (example: EditExample, which: "correct" | "raw"): string | null => {
   if (which === "raw") {
     return example.rawMediaFilename ? path.join(RAW_MEDIA_DIR, example.rawMediaFilename) : null;
@@ -198,7 +216,8 @@ export const uploadExampleVideo = async (
   ai: GoogleGenAI,
   mediaPath: string,
   mimeType: string,
-  uploadedFileNames: string[]
+  uploadedFileNames: string[],
+  resolution: "low" | "detailed" = "low"
 ): Promise<Part> => {
   const tempPath = path.join(os.tmpdir(), `edit-example-${randomUUID()}${path.extname(mediaPath)}`);
   try {
@@ -209,12 +228,15 @@ export const uploadExampleVideo = async (
     }
     uploadedFileNames.push(uploaded.name);
     await waitForGeminiFileActive(ai, uploaded.name);
-    // 編集例から読み取りたいのは切り方・効果音・強調のタイミングやテンポで、細部の画質ではない。
-    // 低解像度にすると動画のトークン数が約1/3になり、最大6本送ってもコストを抑えられる。
-    return {
-      fileData: { fileUri: uploaded.uri, mimeType },
-      mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW },
-    };
+    // 素材(学習動画)から読み取りたいのは話の中身とタイミングなので、低解像度でトークン数を約1/3に抑える。
+    // 正解動画は、テロップの色・縁取り・大きさ・位置といった細部が読めないと真似できない
+    // (以前は正解動画も低解像度で渡しており、見た目が正解動画に近づかなかった)ので、既定の解像度で渡す。
+    return resolution === "low"
+      ? {
+          fileData: { fileUri: uploaded.uri, mimeType },
+          mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW },
+        }
+      : { fileData: { fileUri: uploaded.uri, mimeType } };
   } finally {
     await unlink(tempPath).catch(() => {});
   }
@@ -259,14 +281,26 @@ export const loadEditFewShotContext = async (
           ai,
           path.join(CORRECT_MEDIA_DIR, example.correctMediaFilename),
           example.correctMimeType,
-          uploadedFileNames
+          uploadedFileNames,
+          "detailed"
         )
       );
-      parts.push({
-        text: example.rawMediaFilename
-          ? "上の2本を見比べ、編集前の素材に対して何が足されたか(フックの作り方、効果音を入れた瞬間と種類、テロップの強調・演出、声で押している箇所、テンポ)を読み取って、これから依頼する編集の手本にしてください。"
-          : "この完成版の編集(フックの作り方、効果音を入れた瞬間と種類、テロップの強調・演出、声で押している箇所、テンポ)を読み取って、これから依頼する編集の手本にしてください。",
-      });
+      if (example.rawMediaFilename && example.breakdown) {
+        // 「この素材ならこう答える」という答えの実例。今回の依頼と同じJSONの形なので、文字の位置・色・大きさ、
+        // 寄りの倍率、効果音の位置といった数値の付け方まで、そのまま真似できる。
+        parts.push({
+          text: `この正解動画を、上の学習動画(素材)に対する今回と同じ形のJSONに書き起こすと次のとおりです(秒数は学習動画上の秒数)。
+今回の依頼でも、この書き起こしと同じくらいの細かさ・量・見た目の値で答えてください。
+
+${JSON.stringify(example.breakdown)}`,
+        });
+      } else {
+        parts.push({
+          text: example.rawMediaFilename
+            ? "上の2本を見比べ、編集前の素材に対して何が足されたか(フックの作り方、効果音を入れた瞬間と種類、テロップの強調・演出、声で押している箇所、テンポ)を読み取って、これから依頼する編集の手本にしてください。"
+            : "この完成版の編集(フックの作り方、効果音を入れた瞬間と種類、テロップの強調・演出、声で押している箇所、テンポ)を読み取って、これから依頼する編集の手本にしてください。",
+        });
+      }
       contents.push({ role: "user", parts });
     } catch (error) {
       console.warn(`[editExamplesStore] few-shot例(${example.id})の読み込みに失敗したためスキップします`, error);

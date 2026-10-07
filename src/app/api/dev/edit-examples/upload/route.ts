@@ -8,6 +8,7 @@ import {
   isSupportedEditExampleVideoMimeType,
   reserveEditExampleMediaPath,
 } from "@/lib/gemini/editExamplesStore";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
   } catch (error) {
     await unlink(absolutePath).catch(() => {});
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "アップロードに失敗しました" },
+      { error: toFriendlyErrorMessage(error, "アップロードに失敗しました") },
       { status: 400 }
     );
   }

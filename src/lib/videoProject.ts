@@ -73,6 +73,15 @@ export type ProjectSfxClip = {
    * 手動で追加したSEには無い。
    */
   narrationSegmentKey?: string;
+  /**
+   * AIナレーションを作った声と、読み上げた文。一括生成で「今選んでいる声と違うもの」を見つけて
+   * 同じ声で作り直すのに使う(以前は作ってあるものを飛ばしていたため、先に作った分と後から別の声で
+   * 作った分が混ざり、男性っぽい声と女性っぽい声が交互に出ることがあった)。
+   * 読み上げた文は字幕と違うことがある(自動編集のナレーション)ので、作り直しで同じ内容を読めるよう残す。
+   * どちらもこの仕組みより前に作ったナレーションには無い。
+   */
+  narrationVoice?: string;
+  narrationText?: string;
 };
 
 export type ProjectBgm = {
@@ -101,7 +110,15 @@ export type VideoProject = {
   /** 参考画像/動画からスタイル抽出が成功したか。自動編集(/create/auto-edit)が
    *  配色・フォント等を自分で決めてよいか(=参考が無かった場合のみ)を判断するのに使う。 */
   styleReferenceApplied?: boolean;
+  /**
+   * 自動編集が手本にする参考スクショ/動画(複数枚)。1枚だけだとその1枚の偶然の配置まで真似るため、
+   * 複数枚渡して共通する編集の癖を読ませる。
+   */
+  styleReferences?: ProjectStyleReference[];
+  /** @deprecated 参考が1枚だけだった頃の保存形式。読み込み時にstyleReferencesへ移す。 */
   styleReference?: ProjectStyleReference | null;
+  /** 自動編集で選んだテンプレート(editTemplates.tsのid)。nullならおまかせ。 */
+  editTemplateId?: string | null;
   /**
    * カット画面で残した範囲(再生順)。自動編集はこの中から切り出す。自動編集の後はsegmentsが
    * Geminiの切ったクリップに置き換わるため、やり直すたびに範囲が縮んでいかないよう別に持つ。
@@ -115,6 +132,10 @@ export type VideoProject = {
   globalOverlays?: TextOverlay[] | null;
   /** 動画全体に重ね続ける画像(ロゴ等)。 */
   globalImages?: ImageOverlay[] | null;
+  /** AIナレーションに使う声。画面を開き直しても選んだ声に揃えられるよう保存しておく。 */
+  narrationVoice?: string;
+  /** ONなら、AIナレーションを入れたクリップの元の音(話し声など)を消す。ナレーションと声が重ならないように。 */
+  muteOriginalUnderNarration?: boolean;
 };
 
 const PROJECT_STORAGE_KEY = "sns-app:video-project:v1";
@@ -157,12 +178,16 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
       }
     : null,
   styleReferenceApplied: raw.styleReferenceApplied ?? false,
-  styleReference: raw.styleReference ?? null,
+  styleReferences: raw.styleReferences ?? (raw.styleReference ? [raw.styleReference] : []),
+  styleReference: undefined,
+  editTemplateId: raw.editTemplateId ?? null,
   cutKeepRanges: raw.cutKeepRanges ?? null,
   hook: raw.hook ?? null,
   cta: raw.cta ?? null,
   globalOverlays: raw.globalOverlays ?? null,
   globalImages: raw.globalImages ?? null,
+  narrationVoice: raw.narrationVoice,
+  muteOriginalUnderNarration: raw.muteOriginalUnderNarration ?? false,
 });
 
 /** 保存されているプロジェクトを読み込む。無ければnull(SSR/壊れたデータの場合もnull)。 */
@@ -227,49 +252,57 @@ export const buildStandardVideoProps = (params: {
   cta?: VideoProject["cta"];
   globalOverlays?: VideoProject["globalOverlays"];
   globalImages?: VideoProject["globalImages"];
-}): StandardVideoProps => ({
-  globalImages: params.globalImages && params.globalImages.length > 0 ? params.globalImages : undefined,
-  globalOverlays: params.globalOverlays && params.globalOverlays.length > 0 ? params.globalOverlays : undefined,
-  hook: params.hook ?? undefined,
-  cta: params.cta ?? undefined,
-  // segmentsの配列順=再生順(並べ替え機能でユーザーが変更できる)。
-  // 元動画上の時刻順とは独立しているため、ここでは絶対にソートし直さない。
-  clips: params.segments.map((segment) => ({
-    src: params.videoPath,
-    caption: segment.caption,
-    // スキーマ側の下限(clip.durationInSeconds >= 0.3)を下回るクリップが
-    // (文字起こし結果をkeepRangeで切り詰めた際の細切れ等で)保存されていると、
-    // ここで弾かれないまま送信され書き出し時に検証エラーになるため、念のため底上げする。
-    durationInSeconds: Math.max(segment.durationInSeconds, 0.3),
-    startFromSeconds: segment.startFromSeconds,
-    captionAnimation: segment.captionAnimation,
-    volume: segment.volume,
-    emphasisWords: segment.emphasisWords,
-    emphasisColor: segment.emphasisColor,
-    zoom: segment.zoom,
-    overlays: segment.overlays,
-    images: segment.images,
-  })),
-  theme: {
-    primaryColor: params.primaryColor,
-    fontFamily: params.fontFamily,
-    captionPosition: params.captionPosition,
-    captionStyle: params.captionStyle,
-    fontSize: params.fontSize,
-    fadeInOut: params.fadeInOut,
-  },
-  sfx: params.sfxClips.map((clip) => ({
-    src: clip.src,
-    label: clip.label,
-    startFromSeconds: clip.startFromSeconds,
-    volume: clip.volume,
-  })),
-  bgm: params.bgm
-    ? {
-        src: params.bgm.src,
-        volume: params.bgm.volume,
-        fadeInSeconds: params.bgm.fadeInSeconds,
-        fadeOutSeconds: params.bgm.fadeOutSeconds,
-      }
-    : undefined,
-});
+  muteOriginalUnderNarration?: boolean;
+}): StandardVideoProps => {
+  // 元の音を消すスイッチがONのとき、AIナレーションが付いているクリップだけ元の音量を0にする。
+  // クリップの音量設定そのものは書き換えない(スイッチをOFFに戻せば元の音量に戻るように)。
+  const narratedSegmentKeys = params.muteOriginalUnderNarration
+    ? new Set(params.sfxClips.flatMap((clip) => (clip.narrationSegmentKey ? [clip.narrationSegmentKey] : [])))
+    : new Set<string>();
+  return {
+    globalImages: params.globalImages && params.globalImages.length > 0 ? params.globalImages : undefined,
+    globalOverlays: params.globalOverlays && params.globalOverlays.length > 0 ? params.globalOverlays : undefined,
+    hook: params.hook ?? undefined,
+    cta: params.cta ?? undefined,
+    // segmentsの配列順=再生順(並べ替え機能でユーザーが変更できる)。
+    // 元動画上の時刻順とは独立しているため、ここでは絶対にソートし直さない。
+    clips: params.segments.map((segment) => ({
+      src: params.videoPath,
+      caption: segment.caption,
+      // スキーマ側の下限(clip.durationInSeconds >= 0.3)を下回るクリップが
+      // (文字起こし結果をkeepRangeで切り詰めた際の細切れ等で)保存されていると、
+      // ここで弾かれないまま送信され書き出し時に検証エラーになるため、念のため底上げする。
+      durationInSeconds: Math.max(segment.durationInSeconds, 0.3),
+      startFromSeconds: segment.startFromSeconds,
+      captionAnimation: segment.captionAnimation,
+      volume: narratedSegmentKeys.has(segment.key) ? 0 : segment.volume,
+      emphasisWords: segment.emphasisWords,
+      emphasisColor: segment.emphasisColor,
+      zoom: segment.zoom,
+      overlays: segment.overlays,
+      images: segment.images,
+    })),
+    theme: {
+      primaryColor: params.primaryColor,
+      fontFamily: params.fontFamily,
+      captionPosition: params.captionPosition,
+      captionStyle: params.captionStyle,
+      fontSize: params.fontSize,
+      fadeInOut: params.fadeInOut,
+    },
+    sfx: params.sfxClips.map((clip) => ({
+      src: clip.src,
+      label: clip.label,
+      startFromSeconds: clip.startFromSeconds,
+      volume: clip.volume,
+    })),
+    bgm: params.bgm
+      ? {
+          src: params.bgm.src,
+          volume: params.bgm.volume,
+          fadeInSeconds: params.bgm.fadeInSeconds,
+          fadeOutSeconds: params.bgm.fadeOutSeconds,
+        }
+      : undefined,
+  };
+};

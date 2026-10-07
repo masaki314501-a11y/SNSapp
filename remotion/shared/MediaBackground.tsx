@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Html5Video, interpolate, useCurrentFrame, useRemotionEnvironment, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Html5Video, interpolate, useCurrentFrame, useRemotionEnvironment, useVideoConfig } from "remotion";
 // <OffthreadVideo>はサーバー側のフレーム抽出(compositor)が前提で、ブラウザ内での書き出し
 // (@remotion/web-renderer)に対応していない。書き出しを利用者のブラウザで行うようにしたため
 // (サーバーのメモリ512MBでは落ちていた。useWebRender.ts参照)、どちらでも動く<Video>を使う。
@@ -21,7 +21,7 @@ type Props = {
 /**
  * カット/ランキングアイテム共通の背景メディア表示。
  * src 未指定時はプレースホルダー背景を表示し、実素材が無くてもプレビュー・レンダーが成立するようにする。
- * カット頭のパンチインズームも共通化。
+ * カットごとの寄り(ズーム)も共通化。
  */
 export const MediaBackground: React.FC<Props> = ({
   src,
@@ -35,17 +35,20 @@ export const MediaBackground: React.FC<Props> = ({
   const { fps, durationInFrames } = useVideoConfig();
   const { isPlayer } = useRemotionEnvironment();
 
-  // 寄りの指定が無いカットは従来通り、カット頭でわずかに引く小さなパンチインだけ入れる。
-  // punchはカット頭で目標倍率より少し大きい所から一瞬で落ち着かせ「ドンッ」と寄った印象に、
-  // slowはカットの長さいっぱいを使ってじわじわ寄る。
+  // 寄りの指定が無いカットは等倍のまま動かさない。以前はカット頭ごとに1.06倍から引く小さな動きを
+  // 入れていたが、1〜4秒で細かく切るとカットのたびに画面が揺れて見え、違和感の元になっていた。
+  // punchはカット頭から目標倍率でそのまま映す(切り替わりで寄ったように見える、よくある「寄りカット」)。
+  // 以前は目標より5%大きい所から戻していたが、その戻りがカクッとした揺れに見えたのでやめた。
+  // slowはカットの長さいっぱいを使って、急に動き出さないよう緩やかに寄る。
   const scale = !zoom
-    ? interpolate(frame, [0, 10], [1.06, 1], { extrapolateRight: "clamp" })
+    ? 1
     : zoom.style === "slow"
       ? interpolate(frame, [0, Math.max(1, durationInFrames - 1)], [1, zoom.scale], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
+          easing: Easing.inOut(Easing.quad),
         })
-      : interpolate(frame, [0, 5], [zoom.scale * 1.05, zoom.scale], { extrapolateRight: "clamp" });
+      : zoom.scale;
   const transformOrigin = zoom ? `${zoom.focusXPercent}% ${zoom.focusYPercent}%` : "50% 50%";
 
   return (

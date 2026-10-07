@@ -1,8 +1,9 @@
 "use client";
 
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
+import { WaitTime } from "@/components/WaitTime";
 import type { AudioSelection } from "./TimelineRoot";
-import type { VoiceOption } from "@/lib/gemini/voiceOptions";
+import { voiceLabel, type VoiceOption } from "@/lib/gemini/voiceOptions";
 
 type Props = {
   segments: ProjectSegment[];
@@ -18,6 +19,10 @@ type Props = {
   voiceOptions: VoiceOption[];
   narrationVoice: string;
   onChangeNarrationVoice: (voiceName: string) => void;
+  muteOriginalUnderNarration: boolean;
+  onChangeMuteOriginalUnderNarration: (value: boolean) => void;
+  /** 選んだクリップだけ本人の声を消す/戻す(クリップ自体の音量を0/1にする)。 */
+  onChangeSegmentVolume: (key: string, volume: number) => void;
   /** AIナレーション生成中の進捗(単発生成もtotal=1として同じ状態を使う)。nullなら非実行中。 */
   narrationGenerating: { current: number; total: number } | null;
   onGenerateNarrationForSegment: (key: string) => void;
@@ -43,6 +48,9 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
   voiceOptions,
   narrationVoice,
   onChangeNarrationVoice,
+  muteOriginalUnderNarration,
+  onChangeMuteOriginalUnderNarration,
+  onChangeSegmentVolume,
   narrationGenerating,
   onGenerateNarrationForSegment,
   onGenerateNarrationForAll,
@@ -55,13 +63,23 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
     : -1;
   const selectedSegment = selectedSegmentIndex >= 0 ? segments[selectedSegmentIndex] : null;
 
-  // 生成済みのクリップは一括生成の対象外になる(ClipEditor側で同じ判定をしている)。
-  // 「あと何件ぶんAPIを使うのか」が押す前に分かるよう、残り件数として見せる。
+  // 一括生成の対象は「まだ無い分」と「今の声と違う声で作った分」(ClipEditor側で同じ判定をしている)。
+  // 押す前に何件作るのか分かるよう、件数として見せる。
   const generatedSegmentKeys = new Set(
     narrationClips.map((clip) => clip.narrationSegmentKey).filter((key): key is string => Boolean(key))
   );
   const captionedSegments = segments.filter((segment) => segment.caption.trim().length > 0);
-  const pendingCount = captionedSegments.filter((segment) => !generatedSegmentKeys.has(segment.key)).length;
+  const missingCount = captionedSegments.filter((segment) => !generatedSegmentKeys.has(segment.key)).length;
+  const mismatchedCount = narrationClips.filter(
+    (clip) => clip.narrationSegmentKey && clip.narrationVoice !== narrationVoice
+  ).length;
+  const pendingCount = missingCount + mismatchedCount;
+  const bulkLabel =
+    missingCount > 0 && mismatchedCount > 0
+      ? `🎙 未生成の${missingCount}件を作り、${mismatchedCount}件をこの声にそろえる`
+      : mismatchedCount > 0
+        ? `🎙 ${mismatchedCount}件をこの声にそろえる`
+        : `🎙 未生成の${missingCount}件を一括生成`;
   const selectedHasNarration = selectedSegment ? generatedSegmentKeys.has(selectedSegment.key) : false;
 
   return (
@@ -70,6 +88,9 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
         {selected ? (
           <div className="editor-inspector-fields">
             <h3>ナレーション: {selected.label}</h3>
+            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+              声: {voiceLabel(selected.narrationVoice)}
+            </p>
             <label className="editor-field">
               <span>開始(秒)</span>
               <input
@@ -132,6 +153,21 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
                   ? "🎙 このクリップのナレーションを作り直す"
                   : "🎙 このクリップのナレーション生成"}
             </button>
+            {/* 全体のスイッチ(下)とは別に、このクリップだけ話し声を消したい時のため。生成した場所ですぐ切り替えられるようにする */}
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selectedSegment.volume === 0 || (muteOriginalUnderNarration && selectedHasNarration)}
+                disabled={muteOriginalUnderNarration && selectedHasNarration}
+                onChange={(e) => onChangeSegmentVolume(selectedSegment.key, e.target.checked ? 0 : 1)}
+              />
+              <span className="field-label">このクリップの話し声を消す</span>
+            </label>
+            {muteOriginalUnderNarration && selectedHasNarration ? (
+              <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+                下の「ナレーションを入れたクリップは、元の音を消す」がONなので、このクリップの話し声は消えています
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="editor-inspector-empty">
@@ -169,12 +205,33 @@ export const NarrationInspectorPanel: React.FC<Props> = ({
                 ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
                 : pendingCount === 0
                   ? "テロップのあるクリップは全て生成済みです"
-                  : `まだナレーションが無い${pendingCount}件だけを、順番に生成して追加します(生成済みの分はAPIを使いません)`
+                  : "まだ無い分を作り、違う声で作ってある分は今の声で作り直して、声をそろえます"
             }
           >
-            🎙 未生成の{pendingCount}件を一括生成
+            {bulkLabel}
           </button>
         )}
+        <WaitTime
+          className="basis-full"
+          task="narration"
+          units={narrationGenerating?.total ?? 1}
+          active={narrationGenerating !== null}
+          progress={narrationGenerating ? (narrationGenerating.current - 1) / narrationGenerating.total : null}
+        />
+        {mismatchedCount > 0 && !narrationGenerating ? (
+          <p className="editor-toolbar-hint">
+            今の声と違う声のナレーションが{mismatchedCount}件あります。上のボタンで今の声にそろえられます
+          </p>
+        ) : null}
+        {/* ナレーションと本人の話し声が重なって聞き取りにくくならないよう、元の音を消せるようにする */}
+        <label className="flex basis-full items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={muteOriginalUnderNarration}
+            onChange={(e) => onChangeMuteOriginalUnderNarration(e.target.checked)}
+          />
+          ナレーションを入れたクリップは、元の音(話し声など)を消す
+        </label>
       </div>
     </div>
   );

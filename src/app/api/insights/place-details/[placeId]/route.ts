@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPlaceDetails } from "@/lib/googleMaps/places";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,7 @@ export async function GET(
   } catch (error) {
     console.error("[insights/place-details] 取得に失敗しました", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "店舗情報の取得に失敗しました" },
+      { error: toFriendlyErrorMessage(error, "店舗情報の取得に失敗しました") },
       { status: 500 }
     );
   }

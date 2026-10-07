@@ -3,6 +3,7 @@ import { z } from "zod";
 import { extractStyle } from "@/lib/gemini/extractStyle";
 import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extractStyleJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
       console.error("[extract-style-from-video] スタイル抽出に失敗しました", error);
       updateExtractStyleJob(jobId, {
         status: "error",
-        message: error instanceof Error ? error.message : "スタイル抽出に失敗しました",
+        message: toFriendlyErrorMessage(error, "スタイル抽出に失敗しました"),
       });
     }
   });

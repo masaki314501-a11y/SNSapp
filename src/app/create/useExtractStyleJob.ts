@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CaptionAnimation, CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -42,30 +43,32 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
         clearInterval(timer);
         setExtractStyleState({
           status: "error",
-          message: error instanceof Error ? error.message : "状態取得に失敗しました",
+          message: toFriendlyErrorMessage(error, "状態取得に失敗しました"),
         });
       }
     }, POLL_INTERVAL_MS);
   };
 
   /**
-   * 参考画像からスタイルを抽出する。サーバーに保存された画像のパス(自動編集で手本として
-   * 使う)を返す。開始に失敗した場合はnull。
+   * 参考画像(複数枚)からまとめてスタイルを抽出する。新しく選んだ画像(newFiles)と、前に保存済みの
+   * 画像のパス(savedPaths)を一緒に送り、全部を見て判定させる。サーバーに保存された全画像のパス
+   * (自動編集で手本として使う。savedPaths→newFilesの順)を返す。開始に失敗した場合はnull。
    */
-  const handleExtractStyle = async (file: File): Promise<string | null> => {
+  const handleExtractStyle = async (newFiles: File[], savedPaths: string[]): Promise<string[] | null> => {
     setExtractStyleState({ status: "processing" });
     try {
       const body = new FormData();
-      body.set("image", file);
+      for (const savedPath of savedPaths) body.append("referencePath", savedPath);
+      for (const file of newFiles) body.append("image", file);
       const res = await fetch("/api/extract-style", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "スタイル抽出の開始に失敗しました");
       pollJob(data.jobId);
-      return typeof data.referencePath === "string" ? data.referencePath : null;
+      return Array.isArray(data.referencePaths) ? (data.referencePaths as string[]) : null;
     } catch (error) {
       setExtractStyleState({
         status: "error",
-        message: error instanceof Error ? error.message : "スタイル抽出の開始に失敗しました",
+        message: toFriendlyErrorMessage(error, "スタイル抽出の開始に失敗しました"),
       });
       return null;
     }
@@ -89,7 +92,7 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
     } catch (error) {
       setExtractStyleState({
         status: "error",
-        message: error instanceof Error ? error.message : "スタイル抽出の開始に失敗しました",
+        message: toFriendlyErrorMessage(error, "スタイル抽出の開始に失敗しました"),
       });
     }
   };

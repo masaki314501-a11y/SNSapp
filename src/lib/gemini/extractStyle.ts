@@ -1,4 +1,4 @@
-import { GoogleGenAI, MediaResolution, Type, type Content } from "@google/genai";
+import { GoogleGenAI, MediaResolution, Type, type Content, type Part } from "@google/genai";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
@@ -27,7 +27,7 @@ const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 
 export type ExtractStyleInput =
-  | { kind: "image"; imageBase64: string; mimeType: string }
+  | { kind: "image"; images: { base64: string; mimeType: string }[] }
   | { kind: "video"; absoluteVideoPath: string; mimeType: string };
 
 const FONT_FAMILY_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value);
@@ -47,8 +47,18 @@ const captionAnimationHints = CAPTION_ANIMATION_OPTIONS.map(
   (option) => `- ${option.value}: ${option.label}`
 ).join("\n");
 
-const buildPrompt = (kind: "image" | "video"): string => {
-  const subject = kind === "video" ? "動画" : "画像(動画のスクリーンショットや参考画像)";
+const buildPrompt = (kind: "image" | "video", imageCount: number): string => {
+  const subject =
+    kind === "video"
+      ? "動画"
+      : imageCount > 1
+        ? `画像${imageCount}枚(同じ投稿者・同じ系統の動画のスクリーンショットや参考画像)`
+        : "画像(動画のスクリーンショットや参考画像)";
+  // 複数枚あるときは、1枚にたまたま映っていた色や配置ではなく、どの画像にも共通する癖を答えさせる。
+  const multiImageNote =
+    kind === "image" && imageCount > 1
+      ? "\n画像が複数あるので、1枚だけに出てくる特徴ではなく、複数の画像に共通して出てくる癖を優先して判定してください。"
+      : "";
   const animationNote =
     kind === "video"
       ? "動画内でテロップが最初に表示される瞬間の動き(スライド・拡大・フェード等)をよく観察して判断してください。"
@@ -56,7 +66,7 @@ const buildPrompt = (kind: "image" | "video"): string => {
 
   return `
 あなたはショート動画の編集者です。添付した${subject}を見て、この投稿者の「編集の感じ」
-(テロップのデザインの癖)をできるだけ忠実に再現できるよう、テロップ(字幕)のスタイルを5つ判定してください。
+(テロップのデザインの癖)をできるだけ忠実に再現できるよう、テロップ(字幕)のスタイルを5つ判定してください。${multiImageNote}
 
 判定の前に、次の点をよく観察してください(観察内容は出力に含めない)。
 - テロップの文字そのもの: 太さ(極太/太/普通)、角ばっているか丸みがあるか、手書き・ポップ体・明朝のような癖があるか
@@ -138,12 +148,12 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
 
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.GEMINI_STYLE_MODEL || DEFAULT_MODEL;
-  const prompt = buildPrompt(input.kind);
+  const prompt = buildPrompt(input.kind, input.kind === "image" ? input.images.length : 1);
 
   let uploadedFileName: string | undefined;
-  const buildContentPart = async (): Promise<{ inlineData: { mimeType: string; data: string } } | { fileData: { fileUri: string; mimeType: string } }> => {
+  const buildContentParts = async (): Promise<Part[]> => {
     if (input.kind === "image") {
-      return { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } };
+      return input.images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.base64 } }));
     }
     const uploaded = await ai.files.upload({
       file: input.absoluteVideoPath,
@@ -154,19 +164,19 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
     }
     uploadedFileName = uploaded.name;
     await waitForGeminiFileActive(ai, uploaded.name);
-    return { fileData: { fileUri: uploaded.uri, mimeType: input.mimeType } };
+    return [{ fileData: { fileUri: uploaded.uri, mimeType: input.mimeType } }];
   };
 
   let fewShotUploadedFileNames: string[] = [];
   try {
-    const contentPart = await buildContentPart();
+    const contentParts = await buildContentParts();
     // 登録済みの正解データ(styleExamplesStore)をfew-shot例として先頭に付け、
     // 実際の抽出対象を最後のユーザーターンとして渡す。登録が無ければ従来通り単発の依頼になる。
     const fewShot = await loadStyleFewShotContext(ai);
     fewShotUploadedFileNames = fewShot.uploadedFileNames;
     const contents: Content[] = [
       ...fewShot.contents,
-      { role: "user", parts: [contentPart, { text: prompt }] },
+      { role: "user", parts: [...contentParts, { text: prompt }] },
     ];
 
     let lastError: unknown;

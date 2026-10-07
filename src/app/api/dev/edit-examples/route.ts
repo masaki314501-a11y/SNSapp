@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { listEditExamples, registerEditExample } from "@/lib/gemini/editExamplesStore";
 import { describeEditExample } from "@/lib/gemini/editExampleSelection";
+import { breakdownEditExample } from "@/lib/gemini/editExampleBreakdown";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,13 @@ export async function POST(request: Request) {
   const described = await describeEditExample(example).catch((error) => {
     console.warn("[edit-examples] 手本の説明の作成に失敗しました", error);
     return null;
+  });
+  // 正解動画の書き起こし(自動編集のお手本の答え)は数分かかるので、裏で作る。間に合わなくても
+  // 自動編集の直前に無い分は作るので、ここで失敗しても問題ない(editExampleBreakdown.ts)。
+  after(async () => {
+    await breakdownEditExample(described ?? example).catch((error) => {
+      console.warn("[edit-examples] 正解動画の書き起こしに失敗しました", error);
+    });
   });
   return NextResponse.json({ example: described ?? example });
 }

@@ -19,7 +19,7 @@ const exportFileName = (project: VideoProject): string =>
 export const ExportScreen: React.FC = () => {
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const { renderState, result, logs, elapsedSeconds, handleRender } = useWebRender();
+  const { renderState, result, logs, handleRender } = useWebRender();
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -48,6 +48,7 @@ export const ExportScreen: React.FC = () => {
         cta: current.cta,
         globalOverlays: current.globalOverlays,
         globalImages: current.globalImages,
+        muteOriginalUnderNarration: current.muteOriginalUnderNarration,
       }),
       exportFileName(current)
     );
@@ -108,7 +109,7 @@ export const ExportScreen: React.FC = () => {
         canRender={canRender}
         renderState={renderState}
         logs={logs}
-        elapsedSeconds={elapsedSeconds}
+        videoSeconds={project.segments.reduce((sum, segment) => sum + segment.durationInSeconds, 0)}
         onRender={() => startRender(project)}
         result={result}
       />

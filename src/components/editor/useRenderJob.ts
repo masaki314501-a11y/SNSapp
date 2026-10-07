@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TemplateId } from "@video/templates/registry";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -84,7 +85,7 @@ export const useRenderJob = () => {
         }
       } catch (error) {
         clearInterval(timer);
-        const message = error instanceof Error ? error.message : "状態取得に失敗しました";
+        const message = toFriendlyErrorMessage(error, "状態取得に失敗しました");
         pushLog(`エラー: ${message}`);
         setRenderState({ status: "error", message });
       }
@@ -119,7 +120,7 @@ export const useRenderJob = () => {
       if (!data.jobId) throw new Error("レンダーの開始に失敗しました");
       pollJob(data.jobId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "レンダーの開始に失敗しました";
+      const message = toFriendlyErrorMessage(error, "レンダーの開始に失敗しました");
       pushLog(`エラー: ${message}`);
       setRenderState({ status: "error", message });
     }

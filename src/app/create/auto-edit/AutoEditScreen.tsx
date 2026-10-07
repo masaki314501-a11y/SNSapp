@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import { useAutoEditJob } from "../useAutoEditJob";
+import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
+import { WaitTime } from "@/components/WaitTime";
 
 const EmptyState: React.FC = () => (
   <div className="panel flex flex-col items-center gap-3 p-10 text-center">
@@ -22,7 +24,8 @@ const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
 
 /**
  * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
- * 参考スクショ・編集例を見せ、切り方から強調テキスト・効果音まで編集をすべて任せる。
+ * 参考スクショ・編集例・選んだテンプレート(よく見るバズ編集の型)を見せ、切り方から強調テキスト・
+ * 効果音まで編集をすべて任せる。
  * 生成結果は「この案を使う」を押すまでプロジェクトに一切書き込まない。ジョブが未完了・
  * 失敗していても「スキップして編集へ」は常に押せる(自動編集がパイプラインを詰まらせない)。
  */
@@ -30,22 +33,17 @@ export const AutoEditScreen: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const { autoEditState, handleStart } = useAutoEditJob();
+  /** 選んだテンプレート。nullならおまかせ。次に開いた時も同じ型を使えるようプロジェクトに保存する。 */
+  const [templateId, setTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     const loaded = loadProject();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
     setProject(loaded);
+    setTemplateId(findEditTemplate(loaded?.editTemplateId)?.id ?? null);
     setHasCheckedProject(true);
   }, []);
-
-  useEffect(() => {
-    if (autoEditState.status !== "processing" || startedAt === null) return;
-    const timer = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
-    return () => clearInterval(timer);
-  }, [autoEditState.status, startedAt]);
 
   const keepRanges = project
     ? (project.cutKeepRanges ?? project.segments).map((s) => ({
@@ -58,13 +56,12 @@ export const AutoEditScreen: React.FC = () => {
 
   const handleRun = () => {
     if (!project) return;
-    setElapsedSeconds(0);
-    setStartedAt(Date.now());
     void handleStart({
       videoPath: project.videoPath,
       videoDurationInSeconds: project.videoDurationInSeconds,
       keepRanges,
-      styleReferencePath: project.styleReference?.path ?? null,
+      styleReferencePaths: (project.styleReferences ?? []).map((reference) => reference.path),
+      templateId,
     });
   };
 
@@ -73,6 +70,7 @@ export const AutoEditScreen: React.FC = () => {
     const { plan, segments, generatedClips } = autoEditState;
     saveProject({
       ...project,
+      editTemplateId: templateId,
       // 次に自動編集をやり直すときも、カット画面で残した元の範囲から切り直せるようにする。
       cutKeepRanges: keepRanges,
       segments,
@@ -92,7 +90,17 @@ export const AutoEditScreen: React.FC = () => {
   if (!hasCheckedProject) return null;
   if (!project || keepRanges.length === 0) return <EmptyState />;
 
-  const hasReference = Boolean(project.styleReference);
+  const referenceCount = project.styleReferences?.length ?? 0;
+  const hasReference = referenceCount > 0;
+  const isProcessing = autoEditState.status === "processing";
+
+  const selectTemplate = (id: string | null) => {
+    setTemplateId(id);
+    // 案を使わずにやり直す場合も選んだ型を覚えておけるよう、選んだ時点で保存する。
+    const next = { ...project, editTemplateId: id };
+    setProject(next);
+    saveProject(next);
+  };
 
   return (
     <div className="panel flex flex-col gap-4 p-5">
@@ -102,7 +110,7 @@ export const AutoEditScreen: React.FC = () => {
       </p>
 
       {hasReference ? (
-        <span className="badge-pill success w-fit">参考スクショ/動画を最優先の手本にします</span>
+        <span className="badge-pill success w-fit">参考スクショ/動画({referenceCount}個)を最優先の手本にします</span>
       ) : (
         <p className="badge-pill warning w-fit">
           参考スクショが未設定です。
@@ -113,6 +121,42 @@ export const AutoEditScreen: React.FC = () => {
         </p>
       )}
 
+      {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(参考スクショがあればそちらが優先) */}
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-semibold">テンプレート(編集の型)</span>
+        <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+          作りたい動画に近いものを選んでください。文字の言葉やタイミングは、あなたの動画に合わせて作ります
+          {hasReference ? "。参考スクショと違う所は参考スクショに合わせます" : ""}
+        </span>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {[null, ...EDIT_TEMPLATES].map((template) => {
+            const id = template?.id ?? null;
+            const selected = templateId === id;
+            return (
+              <button
+                key={id ?? "none"}
+                type="button"
+                disabled={isProcessing}
+                onClick={() => selectTemplate(id)}
+                aria-pressed={selected}
+                className="flex flex-col items-start gap-0.5 rounded-lg p-3 text-left"
+                style={{
+                  border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                  background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
+                }}
+              >
+                <span className="text-sm font-medium">
+                  {template ? `${template.emoji} ${template.label}` : "🎲 おまかせ"}
+                </span>
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  {template ? template.description : "型を決めず、動画の中身に合わせてGeminiが自由に編集します"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {autoEditState.status === "idle" || autoEditState.status === "error" ? (
         <button type="button" onClick={handleRun} className="btn-primary self-start px-4 py-2 text-sm">
           🪄 {autoEditState.status === "error" ? "もう一度自動編集する" : "自動編集する"}
@@ -121,14 +165,25 @@ export const AutoEditScreen: React.FC = () => {
 
       {autoEditState.status === "processing" ? (
         <div className="flex flex-col gap-1">
-          <span className="badge-pill warning w-fit">Geminiが編集中...({elapsedSeconds}秒経過)</span>
-          {hasReference && !autoEditState.usedStyleReference ? (
+          <span className="badge-pill warning w-fit">Geminiが編集中...</span>
+          {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
             <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              参考スクショがサーバー上に見つからなかったため、今回は手本無しで編集しています(見た目の設定からもう一度渡してください)
+              {autoEditState.usedStyleReferenceCount === 0
+                ? "参考スクショがサーバー上に見つからなかったため、今回は参考スクショ無しで編集しています"
+                : `参考スクショ${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
+              (見た目の設定からもう一度渡してください)
             </span>
           ) : null}
         </div>
       ) : null}
+
+      {/* 終わった時に実績を記録できるよう、処理中かどうかに関わらず置いておく(処理中だけ表示される) */}
+      <WaitTime
+        task="auto-edit"
+        units={totalSeconds(keepRanges)}
+        active={isProcessing}
+        failed={autoEditState.status === "error"}
+      />
 
       {autoEditState.status === "error" ? <p className="badge-pill danger w-fit">{autoEditState.message}</p> : null}
 

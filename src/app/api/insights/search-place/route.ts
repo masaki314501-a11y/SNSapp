@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { searchPlacesByText } from "@/lib/googleMaps/places";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[insights/search-place] 検索に失敗しました", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "検索に失敗しました" },
+      { error: toFriendlyErrorMessage(error, "検索に失敗しました") },
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
 import type { ProjectSegment, ProjectSfxClip, VideoProject } from "@/lib/videoProject";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -23,7 +24,8 @@ export type AutoEditPlanSummary = {
 
 export type AutoEditJobState =
   | { status: "idle" }
-  | { status: "processing"; usedStyleReference: boolean }
+  /** usedStyleReferenceCount: サーバー上に見つかって手本にできた参考の数(渡した数より少なければ消えていた分がある)。 */
+  | { status: "processing"; usedStyleReferenceCount: number | null }
   | { status: "done"; plan: AutoEditPlanSummary; segments: ProjectSegment[]; generatedClips: ProjectSfxClip[] }
   | { status: "error"; message: string };
 
@@ -31,7 +33,9 @@ export type AutoEditRequest = {
   videoPath: string;
   videoDurationInSeconds: number;
   keepRanges: { startFromSeconds: number; durationInSeconds: number }[];
-  styleReferencePath: string | null;
+  styleReferencePaths: string[];
+  /** editTemplates.tsのid。nullならテンプレート無し(おまかせ)。 */
+  templateId: string | null;
 };
 
 /** 自動編集(Geminiに編集をすべて任せる)ジョブの開始+ポーリング。 */
@@ -53,14 +57,14 @@ export const useAutoEditJob = () => {
         clearInterval(timer);
         setAutoEditState({
           status: "error",
-          message: error instanceof Error ? error.message : "状態取得に失敗しました",
+          message: toFriendlyErrorMessage(error, "状態取得に失敗しました"),
         });
       }
     }, POLL_INTERVAL_MS);
   };
 
   const handleStart = async (request: AutoEditRequest) => {
-    setAutoEditState({ status: "processing", usedStyleReference: request.styleReferencePath !== null });
+    setAutoEditState({ status: "processing", usedStyleReferenceCount: null });
     try {
       const res = await fetch("/api/auto-edit", {
         method: "POST",
@@ -70,12 +74,12 @@ export const useAutoEditJob = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "自動編集の開始に失敗しました");
       // 参考スクショがサーバー側で見つからなかった(再起動で消えた等)場合は、手本無しで進んでいることを表示する。
-      setAutoEditState({ status: "processing", usedStyleReference: Boolean(data.usedStyleReference) });
+      setAutoEditState({ status: "processing", usedStyleReferenceCount: Number(data.usedStyleReferenceCount ?? 0) });
       pollJob(data.jobId);
     } catch (error) {
       setAutoEditState({
         status: "error",
-        message: error instanceof Error ? error.message : "自動編集の開始に失敗しました",
+        message: toFriendlyErrorMessage(error, "自動編集の開始に失敗しました"),
       });
     }
   };

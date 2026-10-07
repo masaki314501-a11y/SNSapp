@@ -64,5 +64,15 @@ export const toFriendlyGeminiError = (error: unknown): Error => {
       );
     }
   }
-  return error instanceof Error ? error : new Error("Gemini APIの呼び出しに失敗しました");
+  // ここから下は、こちらで用意した日本語のメッセージ以外(英語の生のエラーや、スキーマ検証の詳細)を
+  // 画面に出さないための言い換え。元のエラーは呼び出し元のconsole.errorでサーバーログに残る。
+  const message = error instanceof Error ? error.message : "";
+  if (/timeout/i.test(message)) {
+    return new Error("AIの返事に時間がかかりすぎたため中断しました。少し時間をおいて、もう一度お試しください");
+  }
+  if (/スキーマ検証に失敗|Unexpected token|JSON/i.test(message)) {
+    return new Error("AIの返事の形が崩れていて読み取れませんでした。もう一度お試しください");
+  }
+  if (message && /[\u3040-\u30ff\u4e00-\u9fff]/.test(message)) return error as Error;
+  return new Error("AIの呼び出しに失敗しました。少し時間をおいて、もう一度お試しください");
 };

@@ -18,6 +18,8 @@ import {
 } from "@/lib/videoProject";
 import { prepareVideoFile } from "./prepareVideoFile";
 import { uploadVideoFile } from "./uploadVideoFile";
+import { WaitTime } from "@/components/WaitTime";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 /**
  * 動画をアップロードする画面(/create)。アップロードが終わると、動画全体を1つの
@@ -74,6 +76,8 @@ export const UploadGenerator: React.FC = () => {
   const [videoDurationInSeconds, setVideoDurationInSeconds] = useState<number | null>(null);
   const [durationError, setDurationError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  /** 目安の待ち時間用。変換中は元の動画、アップロード中は変換後の動画の大きさ(MB)。 */
+  const [videoMegabytes, setVideoMegabytes] = useState(0);
 
   const canProceed = Boolean(videoPath) && videoDurationInSeconds !== null && !videoUploading;
 
@@ -83,12 +87,13 @@ export const UploadGenerator: React.FC = () => {
       .then((duration) => setVideoDurationInSeconds(duration))
       .catch((error) => {
         setVideoDurationInSeconds(null);
-        setDurationError(error instanceof Error ? error.message : "動画の長さを取得できませんでした");
+        setDurationError(toFriendlyErrorMessage(error, "動画の長さを取得できませんでした"));
       });
   };
 
   const handleVideoFileChange = async (file: File | null) => {
     if (!file) return;
+    setVideoMegabytes(file.size / 1024 / 1024);
     setVideoUploading(true);
     setVideoUploadPercent(0);
     setVideoFileName(file.name);
@@ -101,12 +106,13 @@ export const UploadGenerator: React.FC = () => {
       const prepared = await prepareVideoFile(file, setVideoConvertPercent);
       setVideoConvertPercent(null);
       setPendingFile(prepared);
+      setVideoMegabytes(prepared.size / 1024 / 1024);
       detectDuration(prepared);
       const path = await uploadVideoFile(prepared, setVideoUploadPercent);
       setVideoPath(path);
     } catch (error) {
       setVideoFileName(null);
-      alert(error instanceof Error ? error.message : "アップロードに失敗しました");
+      alert(toFriendlyErrorMessage(error, "アップロードに失敗しました"));
     } finally {
       setVideoConvertPercent(null);
       setVideoUploading(false);
@@ -200,7 +206,21 @@ export const UploadGenerator: React.FC = () => {
                 />
               </div>
             </div>
-          ) : videoFileName ? (
+          ) : null}
+          {/* 変換→アップロードで段階が変わるたびに計り直す。終わった時に実績を記録できるよう常に置いておく */}
+          <WaitTime
+            task={videoConvertPercent !== null ? "video-convert" : "video-upload"}
+            units={videoMegabytes}
+            active={videoUploading}
+            progress={
+              videoConvertPercent !== null
+                ? videoConvertPercent / 100
+                : videoUploadPercent < 100
+                  ? videoUploadPercent / 100
+                  : null
+            }
+          />
+          {videoUploading ? null : videoFileName ? (
             <div className="flex flex-col gap-1.5">
               <span className="badge-pill success w-fit">
                 {videoFileName}

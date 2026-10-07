@@ -238,8 +238,8 @@ export const mediaItemBaseSchema = z.object({
   emphasisWords: z.array(z.string()).optional(),
   emphasisColor: zColor().optional(),
   zoom: clipZoomSchema.optional(),
-  overlays: z.array(textOverlaySchema).max(8).optional(),
-  images: z.array(imageOverlaySchema).max(8).optional(),
+  overlays: z.array(textOverlaySchema).max(20).optional(),
+  images: z.array(imageOverlaySchema).max(20).optional(),
 });
 
 export const sfxClipSchema = z.object({

@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { editableStateSchema, reviseEdit } from "@/lib/gemini/reviseEdit";
 import { createReviseEditJob, updateReviseEditJob } from "@/lib/gemini/reviseEditJobs";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
       console.error("[revise-edit] AI修正に失敗しました", error);
       updateReviseEditJob(jobId, {
         status: "error",
-        message: error instanceof Error ? error.message : "AI修正に失敗しました",
+        message: toFriendlyErrorMessage(error, "AI修正に失敗しました"),
       });
     }
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProjectSfxClip } from "@/lib/videoProject";
+import { WaitTime } from "@/components/WaitTime";
 import type { AudioSelection } from "./TimelineRoot";
 import type { AudioPreset } from "../audioPresets";
 
@@ -107,6 +108,7 @@ export const SfxInspectorPanel: React.FC<Props> = ({
             }}
           />
         </label>
+        <WaitTime task="file-upload" units={1} active={sfxUploading} />
       </div>
     </div>
   );

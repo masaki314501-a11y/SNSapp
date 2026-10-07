@@ -1,4 +1,5 @@
 import React from "react";
+import { JAPANESE_WRAP_STYLE } from "./textWrap";
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
 
 type Props = {
@@ -40,7 +41,9 @@ export const CTA: React.FC<Props> = ({ text, accentColor }) => {
             fontSize: 48,
             fontWeight: 800,
             whiteSpace: "pre-wrap",
+            ...JAPANESE_WRAP_STYLE,
           }}
+          lang="ja"
         >
           {text}
         </div>

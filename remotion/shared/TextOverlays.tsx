@@ -2,6 +2,11 @@ import React from "react";
 import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
 import { getCaptionAnimationStyle } from "./captionAnimations";
 import type { TextOverlay } from "./schema";
+import { VIDEO_WIDTH } from "./constants";
+import { JAPANESE_WRAP_STYLE, fitFontSizeToWidth } from "./textWrap";
+
+/** 強調テキストの最大幅(画面の9割)。 */
+const MAX_OVERLAY_WIDTH_PX = VIDEO_WIDTH * 0.9;
 
 type Props = {
   overlays: TextOverlay[];
@@ -12,6 +17,10 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(overlay.animation, frame, fps);
+  // 指定の大きさのままだと1行が画面に収まらず言葉の途中で折り返されるため、1行ずつ収まる大きさまで縮める
+  // (帯を付ける時は左右の余白0.8文字ぶんも見込む)。
+  const paddingEm = overlay.backgroundColor ? 0.8 : 0;
+  const fontSizePx = fitFontSizeToWidth(overlay.text, overlay.fontSizePx, MAX_OVERLAY_WIDTH_PX - overlay.fontSizePx * paddingEm, 40);
 
   return (
     <div
@@ -28,17 +37,19 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
     >
       <div style={{ transform, opacity, filter }}>
         <span
+          lang="ja"
           style={{
+            ...JAPANESE_WRAP_STYLE,
             display: "inline-block",
             clipPath,
             color: overlay.color,
             backgroundColor: overlay.backgroundColor,
             padding: overlay.backgroundColor ? "0.12em 0.4em" : undefined,
             borderRadius: overlay.backgroundColor ? "0.2em" : undefined,
-            WebkitTextStroke: overlay.strokeColor ? `${Math.max(2, overlay.fontSizePx / 18)}px ${overlay.strokeColor}` : undefined,
+            WebkitTextStroke: overlay.strokeColor ? `${Math.max(2, fontSizePx / 18)}px ${overlay.strokeColor}` : undefined,
             paintOrder: "stroke fill",
             fontFamily: fontFamilyStack,
-            fontSize: overlay.fontSizePx,
+            fontSize: fontSizePx,
             fontWeight: 900,
             lineHeight: 1.2,
             whiteSpace: "pre-wrap",

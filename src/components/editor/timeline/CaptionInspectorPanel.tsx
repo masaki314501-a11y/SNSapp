@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProjectSegment } from "@/lib/videoProject";
+import { WaitTime } from "@/components/WaitTime";
 import {
   CAPTION_ANIMATION_OPTIONS,
   type CaptionAnimation,
@@ -25,6 +26,8 @@ type Props = {
   onGenerateCaptionsForAll: () => void;
   captionsGenerating: boolean;
   captionsError: string | null;
+  /** 字幕の一括生成で文字起こしする動画の長さ(秒)。目安の待ち時間に使う。 */
+  transcribeSeconds: number;
   onClearCaptions: () => void;
   hasAnyCaption: boolean;
 };
@@ -48,6 +51,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   canOpenBulkEdit,
   onGenerateCaptionsForAll,
   captionsGenerating,
+  transcribeSeconds,
   captionsError,
   onClearCaptions,
   hasAnyCaption,
@@ -106,6 +110,12 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
             >
               {narrationGenerating ? "生成中..." : "🎙 このクリップのナレーション生成"}
             </button>
+            <WaitTime
+              task="narration"
+              units={narrationGenerating?.total ?? 1}
+              active={narrationGenerating !== null}
+              progress={narrationGenerating ? (narrationGenerating.current - 1) / narrationGenerating.total : null}
+            />
           </div>
         ) : (
           <div className="editor-inspector-empty">
@@ -116,6 +126,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
 
       <div className="editor-inspector-footer flex flex-col gap-2">
         {captionsError ? <p className="badge-pill danger w-fit">{captionsError}</p> : null}
+        <WaitTime task="transcribe" units={transcribeSeconds} active={captionsGenerating} failed={captionsError !== null} />
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

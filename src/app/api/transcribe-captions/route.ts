@@ -4,6 +4,7 @@ import { transcribeCaptions } from "@/lib/gemini/transcribeCaptions";
 import { createTranscribeJob, updateTranscribeJob } from "@/lib/gemini/transcribeJobs";
 import { MIN_CLIPS, MAX_CLIPS } from "@video/templates/standard/schema";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       console.error("[transcribe-captions] 文字起こしに失敗しました", error);
       updateTranscribeJob(jobId, {
         status: "error",
-        message: error instanceof Error ? error.message : "文字起こしに失敗しました",
+        message: toFriendlyErrorMessage(error, "文字起こしに失敗しました"),
       });
     }
   });

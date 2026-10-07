@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PlaceDetails, PlaceSearchResult } from "@/lib/googleMaps/places";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 /**
  * Google Places API(APIキーのみ・OAuth不要)で、自社・競合を問わず店舗の評価・口コミ
@@ -50,7 +51,7 @@ export const InsightsExplorer: React.FC = () => {
         setSearchError("該当する場所が見つかりませんでした");
       }
     } catch (error) {
-      setSearchError(error instanceof Error ? error.message : "検索に失敗しました");
+      setSearchError(toFriendlyErrorMessage(error, "検索に失敗しました"));
     } finally {
       setSearching(false);
     }
@@ -67,7 +68,7 @@ export const InsightsExplorer: React.FC = () => {
       if (!res.ok) throw new Error(data.error ?? "店舗情報の取得に失敗しました");
       setDetails(data as PlaceDetails);
     } catch (error) {
-      setDetailsError(error instanceof Error ? error.message : "店舗情報の取得に失敗しました");
+      setDetailsError(toFriendlyErrorMessage(error, "店舗情報の取得に失敗しました"));
     } finally {
       setDetailsLoading(false);
     }

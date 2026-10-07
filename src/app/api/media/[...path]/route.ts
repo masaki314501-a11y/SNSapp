@@ -10,7 +10,8 @@ export const runtime = "nodejs";
  * 起動後に増えたファイルは本番ビルドで404になる(next dev では気づけない)ため、
  * これらのディレクトリだけはリクエスト都度ファイルシステムを見て直接配信する。
  */
-const ALLOWED_DIRS = new Set(["videos", "audio", "renders", "images"]);
+// references は参考スクショ(styleReference.ts)。見た目設定の画面で、前に渡した参考を一覧に表示するのに使う。
+const ALLOWED_DIRS = new Set(["videos", "audio", "renders", "images", "references"]);
 const SAFE_SEGMENT = /^[0-9a-zA-Z_.-]+$/;
 /**
  * audio/generated/<file> (2階層)だけでなく audio/presets/sfx/<file> (3階層、

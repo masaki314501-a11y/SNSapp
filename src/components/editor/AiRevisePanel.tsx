@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { WaitTime } from "@/components/WaitTime";
 import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -50,7 +52,7 @@ export const AiRevisePanel: React.FC<Props> = ({
         setState(data as ReviseState);
       } catch (error) {
         clearInterval(timer);
-        setState({ status: "error", message: error instanceof Error ? error.message : "状態の取得に失敗しました" });
+        setState({ status: "error", message: toFriendlyErrorMessage(error, "状態の取得に失敗しました") });
       }
     }, POLL_INTERVAL_MS);
   };
@@ -73,7 +75,7 @@ export const AiRevisePanel: React.FC<Props> = ({
       if (!res.ok || !data?.jobId) throw new Error(data?.error ?? "AIへの依頼に失敗しました");
       poll(data.jobId);
     } catch (error) {
-      setState({ status: "error", message: error instanceof Error ? error.message : "AIへの依頼に失敗しました" });
+      setState({ status: "error", message: toFriendlyErrorMessage(error, "AIへの依頼に失敗しました") });
     }
   };
 
@@ -111,6 +113,8 @@ export const AiRevisePanel: React.FC<Props> = ({
           {state.status === "processing" ? "AIが修正中..." : "頼む"}
         </button>
       </div>
+
+      <WaitTime task="revise-edit" units={1} active={state.status === "processing"} failed={state.status === "error"} />
 
       {state.status === "error" ? <p className="badge-pill danger w-fit">{state.message}</p> : null}
 

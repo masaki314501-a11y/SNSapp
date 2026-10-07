@@ -7,6 +7,7 @@ import {
   isSupportedStyleExampleMimeType,
   styleExampleKindForMimeType,
 } from "@/lib/gemini/styleExamplesStore";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -52,8 +53,7 @@ export async function POST(request: Request) {
     if (kind === "image") {
       const style = await extractStyle({
         kind: "image",
-        imageBase64: buffer.toString("base64"),
-        mimeType: file.type,
+        images: [{ base64: buffer.toString("base64"), mimeType: file.type }],
       });
       return NextResponse.json({ style });
     }
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[dev/style-examples/suggest] スタイル抽出に失敗しました", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "スタイル抽出に失敗しました" },
+      { error: toFriendlyErrorMessage(error, "スタイル抽出に失敗しました") },
       { status: 500 }
     );
   } finally {

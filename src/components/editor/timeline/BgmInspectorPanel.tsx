@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProjectBgm } from "@/lib/videoProject";
+import { WaitTime } from "@/components/WaitTime";
 import type { AudioSelection } from "./TimelineRoot";
 import type { AudioPreset } from "../audioPresets";
 
@@ -114,6 +115,7 @@ export const BgmInspectorPanel: React.FC<Props> = ({
             }}
           />
         </label>
+        <WaitTime task="file-upload" units={1} active={bgmUploading} />
       </div>
     </div>
   );

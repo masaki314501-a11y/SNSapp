@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { uploadEditExampleMedia } from "./uploadEditExampleMedia";
+import { WaitTime } from "@/components/WaitTime";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 type EditExampleListItem = {
   id: string;
@@ -11,8 +13,17 @@ type EditExampleListItem = {
   rawMediaFilename?: string;
   /** AIが書いた「どんな動画か」の説明。自動編集で近い手本を選ぶときに使う。 */
   profile?: string;
+  /** 正解動画の書き起こし(自動編集のお手本の答え)。ここでは中身の量だけ表示する。 */
+  breakdown?: {
+    clips: { overlays?: unknown[] | null; zoom?: unknown | null; sfx?: unknown[] | null }[];
+    referenceNotes?: string | null;
+  };
   createdAt: string;
 };
+
+/** 書き起こしの作成を待つ間、一覧を読み直す間隔と、待つのをやめるまでの時間。 */
+const BREAKDOWN_POLL_INTERVAL_MS = 5000;
+const BREAKDOWN_POLL_LIMIT_MS = 15 * 60 * 1000;
 
 type Props = {
   /** 初期一覧はサーバー側(page.tsx)でファイルシステムから直接読んで渡す(マウント時fetch不要)。 */
@@ -30,6 +41,8 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
   const [submitStage, setSubmitStage] = useState<"correct" | "raw" | "registering" | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [describing, setDescribing] = useState(false);
+  /** 書き起こしを作り直している学習データのid(終わるまでボタンを押せなくする)。 */
+  const [breakingDownIds, setBreakingDownIds] = useState<string[]>([]);
   const missingProfileCount = examples.filter((example) => !example.profile).length;
 
   const correctPreviewUrl = useMemo(() => (correctFile ? URL.createObjectURL(correctFile) : null), [correctFile]);
@@ -83,7 +96,7 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
       setCorrectFile(null);
       setRawFile(null);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "登録に失敗しました");
+      setSubmitError(toFriendlyErrorMessage(error, "登録に失敗しました"));
     } finally {
       setSubmitting(false);
       setSubmitStage(null);
@@ -108,9 +121,35 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
       setExamples(data.examples as EditExampleListItem[]);
       if (data.failed > 0) alert(`${data.failed}件は説明を作れませんでした。時間をおいてもう一度お試しください`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "説明の作成に失敗しました");
+      alert(toFriendlyErrorMessage(error, "説明の作成に失敗しました"));
     } finally {
       setDescribing(false);
+    }
+  };
+
+  /** 正解動画の書き起こしを作り直す。裏で作るので、一覧を読み直して書き起こしが新しくなるのを待つ。 */
+  const handleBreakdown = async (example: EditExampleListItem) => {
+    setBreakingDownIds((prev) => [...prev, example.id]);
+    const before = JSON.stringify(example.breakdown ?? null);
+    try {
+      const res = await fetch(`/api/dev/edit-examples/${example.id}/breakdown`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "書き起こしを始められませんでした");
+      for (let waited = 0; waited < BREAKDOWN_POLL_LIMIT_MS; waited += BREAKDOWN_POLL_INTERVAL_MS) {
+        await new Promise((resolve) => setTimeout(resolve, BREAKDOWN_POLL_INTERVAL_MS));
+        const listRes = await fetch("/api/dev/edit-examples");
+        const list = (await listRes.json()).examples as EditExampleListItem[];
+        const updated = list.find((item) => item.id === example.id);
+        if (updated && JSON.stringify(updated.breakdown ?? null) !== before) {
+          setExamples(list);
+          return;
+        }
+      }
+      alert("書き起こしが時間内に終わりませんでした。サーバーのログを確認してください");
+    } catch (error) {
+      alert(toFriendlyErrorMessage(error, "書き起こしに失敗しました"));
+    } finally {
+      setBreakingDownIds((prev) => prev.filter((id) => id !== example.id));
     }
   };
 
@@ -122,7 +161,7 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
       if (!res.ok) throw new Error(data.error ?? "削除に失敗しました");
       setExamples((prev) => prev.filter((example) => example.id !== id));
     } catch (error) {
-      alert(error instanceof Error ? error.message : "削除に失敗しました");
+      alert(toFriendlyErrorMessage(error, "削除に失敗しました"));
     }
   };
 
@@ -277,6 +316,34 @@ export const EditExamplesManager: React.FC<Props> = ({ initialExamples }) => {
                 <p className="text-xs" style={{ color: "var(--muted-2)" }}>
                   {example.profile ? `AIが読み取った特徴: ${example.profile}` : "特徴の説明: まだありません"}
                 </p>
+                {example.rawMediaFilename ? (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+                      {example.breakdown
+                        ? `正解動画の書き起こし: あり(カット${example.breakdown.clips.length}個・文字${example.breakdown.clips.reduce(
+                            (sum, clip) => sum + (clip.overlays?.length ?? 0),
+                            0
+                          )}個・寄り${example.breakdown.clips.filter((clip) => clip.zoom).length}か所・効果音${example.breakdown.clips.reduce(
+                            (sum, clip) => sum + (clip.sfx?.length ?? 0),
+                            0
+                          )}個)${example.breakdown.referenceNotes ? ` / ${example.breakdown.referenceNotes}` : ""}`
+                        : "正解動画の書き起こし: まだありません(次の自動編集のときに自動で作ります)"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleBreakdown(example)}
+                      disabled={breakingDownIds.includes(example.id)}
+                      className="btn-outline w-fit px-3 py-1 text-xs"
+                    >
+                      {breakingDownIds.includes(example.id)
+                        ? "書き起こし中...(数分かかります)"
+                        : example.breakdown
+                          ? "書き起こしを作り直す"
+                          : "書き起こしを今作る"}
+                    </button>
+                    <WaitTime task="example-breakdown" units={1} active={breakingDownIds.includes(example.id)} />
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void handleDelete(example.id)}

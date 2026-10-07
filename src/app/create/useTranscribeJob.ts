@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -43,7 +44,7 @@ export const useTranscribeJob = (options?: {
         clearInterval(timer);
         setTranscribeState({
           status: "error",
-          message: error instanceof Error ? error.message : "状態取得に失敗しました",
+          message: toFriendlyErrorMessage(error, "状態取得に失敗しました"),
         });
       }
     }, POLL_INTERVAL_MS);
@@ -67,7 +68,7 @@ export const useTranscribeJob = (options?: {
       setTranscribeState({
         status: "error",
         message:
-          error instanceof Error ? error.message : "文字起こしの開始に失敗しました",
+          toFriendlyErrorMessage(error, "文字起こしの開始に失敗しました"),
       });
     }
   };

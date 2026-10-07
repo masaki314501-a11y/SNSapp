@@ -11,6 +11,9 @@ import { getOrGenerateVoiceover } from "@/lib/gemini/voiceoverCache";
 import { createAutoEditJob, updateAutoEditJob } from "@/lib/gemini/autoEditJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { isStyleReferencePath, resolveStyleReference } from "@/lib/styleReference";
+import { MAX_STYLE_REFERENCES } from "@/lib/styleReferenceLimits";
+import { findEditTemplate } from "@/lib/editTemplates";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -27,7 +30,8 @@ const requestSchema = z.object({
   keepRanges: z
     .array(z.object({ startFromSeconds: z.number().min(0), durationInSeconds: z.number().positive() }))
     .min(1),
-  styleReferencePath: z.string().refine(isStyleReferencePath).nullable().optional(),
+  styleReferencePaths: z.array(z.string().refine(isStyleReferencePath)).max(MAX_STYLE_REFERENCES).default([]),
+  templateId: z.string().nullable().optional(),
 });
 
 /**
@@ -52,10 +56,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "動画が見つかりません。アップロードからやり直してください" }, { status: 400 });
   }
   // 参考スクショはサーバー再起動等で消えていることがある(本番の無料プランは実行時に保存した
-  // ファイルを永続化しない)。無くても自動編集自体は進められるので、手本無しとして続行する。
-  const styleReference = parsed.data.styleReferencePath
-    ? await resolveStyleReference(parsed.data.styleReferencePath)
-    : null;
+  // ファイルを永続化しない)。無くても自動編集自体は進められるので、見つかった分だけを手本にして続行する。
+  const styleReferences = (
+    await Promise.all(parsed.data.styleReferencePaths.map((referencePath) => resolveStyleReference(referencePath)))
+  ).filter((reference) => reference !== null);
+  // 知らないid(古い画面から送られた等)はテンプレート無しとして扱う。
+  const template = findEditTemplate(parsed.data.templateId);
 
   const jobId = createAutoEditJob();
 
@@ -64,7 +70,8 @@ export async function POST(request: Request) {
       const plan = await generateAutoEditPlan({
         video: { ...video, durationInSeconds: parsed.data.videoDurationInSeconds },
         keepRanges: parsed.data.keepRanges,
-        styleReference,
+        styleReferences,
+        template,
       });
 
       // 効果音・ナレーションの配置は、書き出し後の動画上での累積開始秒(クリップ尺の合計)を使う。
@@ -111,6 +118,8 @@ export async function POST(request: Request) {
             startFromSeconds: cumulativeStart,
             volume: DEFAULT_CLIP_VOLUME,
             narrationSegmentKey: key,
+            narrationVoice: DEFAULT_VOICE_NAME,
+            narrationText: clip.narration,
           });
         }
 
@@ -134,10 +143,10 @@ export async function POST(request: Request) {
       console.error("[auto-edit] 自動編集の生成に失敗しました", error);
       updateAutoEditJob(jobId, {
         status: "error",
-        message: error instanceof Error ? error.message : "自動編集の生成に失敗しました",
+        message: toFriendlyErrorMessage(error, "自動編集の生成に失敗しました"),
       });
     }
   });
 
-  return NextResponse.json({ jobId, usedStyleReference: styleReference !== null });
+  return NextResponse.json({ jobId, usedStyleReferenceCount: styleReferences.length });
 }

@@ -2,12 +2,14 @@
 
 import type { RenderState } from "./useRenderJob";
 import type { WebRenderResult } from "./useWebRender";
+import { WaitTime } from "@/components/WaitTime";
 
 type Props = {
   canRender: boolean;
   renderState: RenderState;
   logs: string[];
-  elapsedSeconds: number;
+  /** 書き出す動画の長さ(秒)。進み具合が出るまでの目安の待ち時間に使う。 */
+  videoSeconds: number;
   onRender: () => void;
   /** ブラウザ内で書き出した場合の動画本体。iPhoneの共有シートに渡して写真に保存できるようにする。 */
   result?: WebRenderResult | null;
@@ -38,7 +40,7 @@ export const RenderPanel: React.FC<Props> = ({
   canRender,
   renderState,
   logs,
-  elapsedSeconds,
+  videoSeconds,
   onRender,
   result,
 }) => {
@@ -50,11 +52,6 @@ export const RenderPanel: React.FC<Props> = ({
       : renderState.status === "rendering"
         ? renderState.message
         : null;
-  // 進捗が数%進むまでは経過時間からの推定が暴れやすいため、ある程度進んでから表示する。
-  const etaSeconds =
-    renderState.status === "rendering" && progress > 0.05 && elapsedSeconds > 0
-      ? Math.max(0, Math.round((elapsedSeconds / progress) * (1 - progress)))
-      : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -81,9 +78,7 @@ export const RenderPanel: React.FC<Props> = ({
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--muted)" }}>
             <span>{stageMessage}</span>
-            <span className="tabular-nums">
-              {elapsedSeconds}秒経過{etaSeconds !== null ? `・残り約${etaSeconds}秒` : ""}
-            </span>
+
           </div>
           {logs.length > 0 ? (
             <div className="log-panel">
@@ -96,6 +91,16 @@ export const RenderPanel: React.FC<Props> = ({
           ) : null}
         </div>
       ) : null}
+
+      {/* 進み具合が出るまでは目安(動画の長さと過去の実績から)、出てからは実際の進み方から残り時間を出す。
+          終わった時に実績を記録できるよう、書き出し中かどうかに関わらず置いておく(書き出し中だけ表示される) */}
+      <WaitTime
+        task="render"
+        units={videoSeconds}
+        active={isRunning}
+        failed={renderState.status === "error"}
+        progress={renderState.status === "rendering" ? progress : null}
+      />
 
       {renderState.status === "error" ? (
         <div className="flex flex-col gap-2">

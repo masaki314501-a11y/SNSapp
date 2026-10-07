@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { WaitTime } from "@/components/WaitTime";
 import type { ImageOverlay, TextOverlay } from "@video/shared/schema";
 import type { ProjectSegment, VideoProject } from "@/lib/videoProject";
 import { uploadImageFile } from "../uploadImageFile";
 import { TextOverlayFields, createDefaultTextOverlay } from "./TextOverlayFields";
 import { ImageOverlayFields, createDefaultImageOverlay } from "./ImageOverlayFields";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export type SegmentEffectsPatch = Partial<
   Pick<ProjectSegment, "zoom" | "overlays" | "images" | "emphasisWords" | "emphasisColor">
@@ -70,7 +72,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
       const { path } = await uploadImageFile(file);
       onAdded(createDefaultImageOverlay(path));
     } catch (error) {
-      alert(error instanceof Error ? error.message : "画像のアップロードに失敗しました");
+      alert(toFriendlyErrorMessage(error, "画像のアップロードに失敗しました"));
     } finally {
       setUploading(false);
     }
@@ -234,6 +236,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                 }}
               />
             </label>
+            <WaitTime task="file-upload" units={1} active={uploading} />
           </div>
         ) : (
           <div className="editor-inspector-empty">
@@ -319,6 +322,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
               }}
             />
           </label>
+          <WaitTime task="file-upload" units={1} active={uploading} />
         </div>
       </div>
     </div>

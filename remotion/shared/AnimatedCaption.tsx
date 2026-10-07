@@ -4,6 +4,7 @@ import { getCaptionAnimationStyle } from "./captionAnimations";
 import { ensureCaptionFontLoaded } from "./font";
 import type { CaptionAnimation, CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "./schema";
 import { CAPTION_FONT_SIZE_SCALE, resolveFontFamilyStack } from "./schema";
+import { JAPANESE_WRAP_STYLE } from "./textWrap";
 
 type Props = {
   text: string;
@@ -110,7 +111,7 @@ export const AnimatedCaption: React.FC<Props> = ({
       }}
     >
       <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
-        <span style={{ ...textStyle, clipPath }}>
+        <span lang="ja" style={{ ...textStyle, ...JAPANESE_WRAP_STYLE, clipPath }}>
           {splitByEmphasis(text, emphasisWords ?? []).map((part, i) =>
             part.emphasized ? (
               <span key={i} style={{ color: emphasisColor, fontSize: "1.25em" }}>

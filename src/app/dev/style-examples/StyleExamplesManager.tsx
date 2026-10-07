@@ -11,6 +11,7 @@ import {
   type CaptionPosition,
   type CaptionStyle,
 } from "@video/shared/schema";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 type CorrectStyle = {
   primaryColor: string;
@@ -98,7 +99,7 @@ export const StyleExamplesManager: React.FC<Props> = ({ initialExamples, initial
       setSuggested(style);
       setCorrectStyle(style);
     } catch (error) {
-      setSuggestError(error instanceof Error ? error.message : "抽出に失敗しました");
+      setSuggestError(toFriendlyErrorMessage(error, "抽出に失敗しました"));
     } finally {
       setSuggesting(false);
     }
@@ -135,7 +136,7 @@ export const StyleExamplesManager: React.FC<Props> = ({ initialExamples, initial
       setLabel("");
       setCorrectStyle(DEFAULT_CORRECT_STYLE);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "登録に失敗しました");
+      setSubmitError(toFriendlyErrorMessage(error, "登録に失敗しました"));
     } finally {
       setSubmitting(false);
     }
@@ -149,7 +150,7 @@ export const StyleExamplesManager: React.FC<Props> = ({ initialExamples, initial
       if (!res.ok) throw new Error(data.error ?? "削除に失敗しました");
       setExamples((prev) => prev.filter((example) => example.id !== id));
     } catch (error) {
-      alert(error instanceof Error ? error.message : "削除に失敗しました");
+      alert(toFriendlyErrorMessage(error, "削除に失敗しました"));
     }
   };
 
@@ -172,7 +173,7 @@ export const StyleExamplesManager: React.FC<Props> = ({ initialExamples, initial
             : "")
       );
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : "取り込みに失敗しました");
+      setImportMessage(toFriendlyErrorMessage(error, "取り込みに失敗しました"));
     } finally {
       setImporting(false);
     }

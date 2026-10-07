@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOrGenerateVoiceover } from "@/lib/gemini/voiceoverCache";
 import { DEFAULT_VOICE_NAME, isKnownVoiceName } from "@/lib/gemini/voiceOptions";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[generate-voiceover] 音声生成に失敗しました", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "音声生成に失敗しました" },
+      { error: toFriendlyErrorMessage(error, "音声生成に失敗しました") },
       { status: 500 }
     );
   }

@@ -1,4 +1,5 @@
 import React from "react";
+import { JAPANESE_WRAP_STYLE } from "./textWrap";
 import {
   AbsoluteFill,
   interpolate,
@@ -56,12 +57,14 @@ export const Hook: React.FC<Props> = ({ headline, subline, accentColor, captionP
       <AbsoluteFill style={{ backgroundColor: accentColor, opacity: flashOpacity * 0.6 }} />
       <div style={{ transform: `scale(${scale})`, opacity, textAlign: "center" }}>
         <div
+          lang="ja"
           style={{
             color: "white",
             fontSize: headlineFontSize,
             fontWeight: 900,
             lineHeight: 1.25,
             whiteSpace: "pre-wrap",
+            ...JAPANESE_WRAP_STYLE,
             WebkitTextStroke: "3px #000",
             paintOrder: "stroke fill",
             textShadow: "0 6px 24px rgba(0,0,0,0.55)",

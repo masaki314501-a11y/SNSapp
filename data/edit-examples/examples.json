@@ -7,6 +7,412 @@
     "rawMediaFilename": "日本と韓国の矯正治療の違い-4bef6187.mp4",
     "rawMimeType": "video/mp4",
     "profile": "【題材・ジャンル】歯科矯正・医療美容（日本と韓国の比較）\n【動画の型】2者比較・解説型（価格・スピード・仕上がり・保証・技術の項目別に比較判定）\n【話し手の映り方】歯科医師が椅子に座り、正面のカメラに向かって一人で語りかける形式（固定画角）\n【尺とテンポ】約1分20秒。ジャンプカットで言い淀みを除去し、スムーズなテンポ感で進行\n【編集の特徴】上部に動画テーマを固定表示。画面中央下に「日本」「韓国」の国旗カードを常時設置し、勝敗判定の赤丸アイコンを付与して視覚的に比較を強調。要点テロップを白文字黒フチ（一部黄・赤強調）でテンポよく表示。各項目の切り替わり時に効果音とともにテーマテロップを提示し、視聴者を飽きさせない工夫がされている。",
+    "breakdown": {
+      "referenceNotes": "質問ごとにズームインと効果音（ポップ音）、画面中央へのラベル表示を行い、話題の切り替わりを明確にしている。テロップは縁取りのある丸ゴシック体を使用し、キーワードの色を変えて視認性を高めている。画面上部には常に動画のテーマを、下部には比較対象である日本と韓国のラベルを配置し、対比構造を分かりやすく示している。",
+      "summary": "日本と韓国の矯正治療の比較について、「価格」「スピード」「仕上がり」「保証」「技術」の5項目でテンポよく答える構成。質問ごとにズームと効果音を入れて明確に場面を切り替え、言い淀みをカットして間を詰めている。",
+      "theme": {
+        "primaryColor": "#00BFFF",
+        "fontFamily": "M PLUS Rounded 1c",
+        "captionPosition": "middle",
+        "captionStyle": "outline"
+      },
+      "hook": null,
+      "cta": {
+        "text": "ご予約をお願いします！"
+      },
+      "globalOverlays": [
+        {
+          "text": "日本vs韓国\n矯正治療どっちがいい？",
+          "xPercent": 50,
+          "yPercent": 20,
+          "fontSizePx": 80,
+          "animation": "pop"
+        },
+        {
+          "text": "日本",
+          "xPercent": 25,
+          "yPercent": 85,
+          "fontSizePx": 50
+        },
+        {
+          "text": "韓国",
+          "xPercent": 75,
+          "yPercent": 85,
+          "fontSizePx": 50
+        }
+      ],
+      "clips": [
+        {
+          "sourceStartSeconds": 0,
+          "sourceEndSeconds": 2,
+          "speech": "日本と韓国の矯正治療を教えてください"
+        },
+        {
+          "sourceStartSeconds": 2,
+          "sourceEndSeconds": 2.5,
+          "speech": "価格",
+          "zoom": {
+            "scale": 1.2,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "価格",
+              "xPercent": 50,
+              "yPercent": 50,
+              "fontSizePx": 60,
+              "color": "#FFFFFF",
+              "backgroundColor": "#333333"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "pop",
+              "offsetSeconds": 0
+            }
+          ]
+        },
+        {
+          "sourceStartSeconds": 2.5,
+          "sourceEndSeconds": 3.5,
+          "speech": "韓国の方が安いです",
+          "emphasisWords": [
+            "韓国",
+            "安い"
+          ],
+          "emphasisColor": "#00BFFF"
+        },
+        {
+          "sourceStartSeconds": 3.5,
+          "sourceEndSeconds": 4.5,
+          "speech": "大学時代の友達で"
+        },
+        {
+          "sourceStartSeconds": 4.5,
+          "sourceEndSeconds": 5.5,
+          "speech": "韓国の方が多くて"
+        },
+        {
+          "sourceStartSeconds": 5.5,
+          "sourceEndSeconds": 6.5,
+          "speech": "友達の歯医者も遊びに行きますが"
+        },
+        {
+          "sourceStartSeconds": 6.5,
+          "sourceEndSeconds": 8,
+          "speech": "韓国の方が全然安いです",
+          "emphasisWords": [
+            "韓国",
+            "安い"
+          ],
+          "emphasisColor": "#00BFFF"
+        },
+        {
+          "sourceStartSeconds": 8,
+          "sourceEndSeconds": 10,
+          "speech": "日本より3分の1ぐらい安い",
+          "emphasisWords": [
+            "3分の1"
+          ],
+          "emphasisColor": "#FFD700"
+        },
+        {
+          "sourceStartSeconds": 10,
+          "sourceEndSeconds": 12,
+          "speech": "マウスピース矯正で"
+        },
+        {
+          "sourceStartSeconds": 12,
+          "sourceEndSeconds": 14,
+          "speech": "日本で全体矯正しようと思うと"
+        },
+        {
+          "sourceStartSeconds": 14,
+          "sourceEndSeconds": 16,
+          "speech": "60万円から100万円ぐらいするけど",
+          "emphasisWords": [
+            "60万",
+            "100万円"
+          ],
+          "emphasisColor": "#00BFFF"
+        },
+        {
+          "sourceStartSeconds": 16,
+          "sourceEndSeconds": 20,
+          "speech": "韓国だったら高いところでも60万円ぐらい、安いところだと40万円ぐらい",
+          "emphasisWords": [
+            "40万",
+            "60万円"
+          ],
+          "emphasisColor": "#00BFFF"
+        },
+        {
+          "sourceStartSeconds": 20,
+          "sourceEndSeconds": 22,
+          "speech": "20万円から30万円ぐらい安そうな感じがしますね",
+          "emphasisWords": [
+            "20〜30万円"
+          ],
+          "emphasisColor": "#FFD700"
+        },
+        {
+          "sourceStartSeconds": 23,
+          "sourceEndSeconds": 24,
+          "speech": "スピード",
+          "zoom": {
+            "scale": 1.2,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "スピード",
+              "xPercent": 50,
+              "yPercent": 50,
+              "fontSizePx": 60,
+              "color": "#FFFFFF",
+              "backgroundColor": "#333333"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "pop",
+              "offsetSeconds": 0
+            }
+          ]
+        },
+        {
+          "sourceStartSeconds": 24,
+          "sourceEndSeconds": 25,
+          "speech": "矯正は通わないといけない"
+        },
+        {
+          "sourceStartSeconds": 25,
+          "sourceEndSeconds": 27,
+          "speech": "ワイヤーは月1回は通院が必須"
+        },
+        {
+          "sourceStartSeconds": 27,
+          "sourceEndSeconds": 29,
+          "speech": "毎月韓国に行く予定があるなら"
+        },
+        {
+          "sourceStartSeconds": 30,
+          "sourceEndSeconds": 31,
+          "speech": "期間は変わらない"
+        },
+        {
+          "sourceStartSeconds": 32,
+          "sourceEndSeconds": 34,
+          "speech": "行き来を考えると"
+        },
+        {
+          "sourceStartSeconds": 34,
+          "sourceEndSeconds": 36,
+          "speech": "日本の方が通いやすい",
+          "emphasisWords": [
+            "日本",
+            "通いやすい"
+          ],
+          "emphasisColor": "#FFD700"
+        },
+        {
+          "sourceStartSeconds": 37,
+          "sourceEndSeconds": 38,
+          "speech": "仕上がり",
+          "zoom": {
+            "scale": 1.2,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "仕上がり",
+              "xPercent": 50,
+              "yPercent": 50,
+              "fontSizePx": 60,
+              "color": "#FFFFFF",
+              "backgroundColor": "#333333"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "pop",
+              "offsetSeconds": 0
+            }
+          ]
+        },
+        {
+          "sourceStartSeconds": 38,
+          "sourceEndSeconds": 39,
+          "speech": "仕上がりは難しいですが"
+        },
+        {
+          "sourceStartSeconds": 39,
+          "sourceEndSeconds": 43,
+          "speech": "韓国で有名な知り合いの矯正歯科医"
+        },
+        {
+          "sourceStartSeconds": 43,
+          "sourceEndSeconds": 44,
+          "speech": "その先生がやっていて驚いたことは"
+        },
+        {
+          "sourceStartSeconds": 44,
+          "sourceEndSeconds": 46,
+          "speech": "韓国は歯だけじゃなく"
+        },
+        {
+          "sourceStartSeconds": 46,
+          "sourceEndSeconds": 49,
+          "speech": "美容クリニックと連携",
+          "emphasisWords": [
+            "美容クリニック",
+            "連携"
+          ],
+          "emphasisColor": "#00BFFF"
+        },
+        {
+          "sourceStartSeconds": 49,
+          "sourceEndSeconds": 51,
+          "speech": "トータルで診てくれるので"
+        },
+        {
+          "sourceStartSeconds": 51,
+          "sourceEndSeconds": 52,
+          "speech": "そういう意味では"
+        },
+        {
+          "sourceStartSeconds": 52,
+          "sourceEndSeconds": 54,
+          "speech": "日本はまだまだ"
+        },
+        {
+          "sourceStartSeconds": 54,
+          "sourceEndSeconds": 56,
+          "speech": "当院もそういった形態を目指して"
+        },
+        {
+          "sourceStartSeconds": 56,
+          "sourceEndSeconds": 59,
+          "speech": "様々なクリニックと提携をする予定"
+        },
+        {
+          "sourceStartSeconds": 60,
+          "sourceEndSeconds": 63,
+          "speech": "正直、韓国は進んでいてすごいなと思う"
+        },
+        {
+          "sourceStartSeconds": 63,
+          "sourceEndSeconds": 64,
+          "speech": "保証",
+          "zoom": {
+            "scale": 1.2,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "保証",
+              "xPercent": 50,
+              "yPercent": 50,
+              "fontSizePx": 60,
+              "color": "#FFFFFF",
+              "backgroundColor": "#333333"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "pop",
+              "offsetSeconds": 0
+            }
+          ]
+        },
+        {
+          "sourceStartSeconds": 64,
+          "sourceEndSeconds": 65,
+          "speech": "基本的に韓国は保証なし"
+        },
+        {
+          "sourceStartSeconds": 65,
+          "sourceEndSeconds": 67,
+          "speech": "保証は日本が安心",
+          "emphasisWords": [
+            "日本",
+            "安心"
+          ],
+          "emphasisColor": "#FFD700"
+        },
+        {
+          "sourceStartSeconds": 67,
+          "sourceEndSeconds": 68,
+          "speech": "当院では保証期間が5年"
+        },
+        {
+          "sourceStartSeconds": 68,
+          "sourceEndSeconds": 69,
+          "speech": "技術はどうですか",
+          "zoom": {
+            "scale": 1.2,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "技術",
+              "xPercent": 50,
+              "yPercent": 50,
+              "fontSizePx": 60,
+              "color": "#FFFFFF",
+              "backgroundColor": "#333333"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "pop",
+              "offsetSeconds": 0
+            }
+          ]
+        },
+        {
+          "sourceStartSeconds": 69,
+          "sourceEndSeconds": 71,
+          "speech": "韓国の先生を全員知っているわけじゃないから"
+        },
+        {
+          "sourceStartSeconds": 71,
+          "sourceEndSeconds": 72,
+          "speech": "難しいけど"
+        },
+        {
+          "sourceStartSeconds": 72,
+          "sourceEndSeconds": 73,
+          "speech": "日本であってほしい"
+        },
+        {
+          "sourceStartSeconds": 73,
+          "sourceEndSeconds": 75,
+          "speech": "頑張ります！",
+          "zoom": {
+            "scale": 1.3,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          }
+        },
+        {
+          "sourceStartSeconds": 75,
+          "sourceEndSeconds": 79,
+          "speech": "歯のお悩みがある方はプロフィールのリンクからご予約をお願いします！"
+        }
+      ]
+    },
     "createdAt": "2026-09-17T14:59:59.690Z"
   },
   {
@@ -16,7 +422,823 @@
     "correctMimeType": "video/mp4",
     "rawMediaFilename": "矯正した方がいい症状ランキング動画-0826d3dd.mp4",
     "rawMimeType": "video/mp4",
+    "profile": "【歯科矯正・歯の症状解説×ランキング型ショート動画】\n■題材：歯科医療（矯正が必要な歯の症状・重要度）\n■動画の型：ランキング解説型。質問者が提示した症状（八重歯、出っ歯等）に対し、歯科医師が順位と理由を答えていく。\n■話し手の映り方：スクラブ姿の男性歯科医師が椅子に座り、顔出しでカメラに向かって語る構図（画面右側に配置）。\n■尺とテンポ：約1分11秒。不要な間をジャンプカットでテンポよくカット。\n■編集の特徴：画面左に1位〜6位の空枠リストと上部見出しを常時配置し、回答ごとに写真付きで枠が埋まるゲーミフィケーション的演出を採用。右下に症例写真と症状名を表示。要所要所で要約テロップを白字＋黒枠＋アクセント色で表示し、順位決定時や強調フレーズに合わせてズームインや効果音（決定音・強調音）を付与して離脱を防いでいる。",
     "createdAt": "2026-09-17T15:01:45.555Z",
-    "profile": "【歯科矯正・歯の症状解説×ランキング型ショート動画】\n■題材：歯科医療（矯正が必要な歯の症状・重要度）\n■動画の型：ランキング解説型。質問者が提示した症状（八重歯、出っ歯等）に対し、歯科医師が順位と理由を答えていく。\n■話し手の映り方：スクラブ姿の男性歯科医師が椅子に座り、顔出しでカメラに向かって語る構図（画面右側に配置）。\n■尺とテンポ：約1分11秒。不要な間をジャンプカットでテンポよくカット。\n■編集の特徴：画面左に1位〜6位の空枠リストと上部見出しを常時配置し、回答ごとに写真付きで枠が埋まるゲーミフィケーション的演出を採用。右下に症例写真と症状名を表示。要所要所で要約テロップを白字＋黒枠＋アクセント色で表示し、順位決定時や強調フレーズに合わせてズームインや効果音（決定音・強調音）を付与して離脱を防いでいる。"
+    "breakdown": {
+      "referenceNotes": "ジャンプカットとズームイン・アウトを多用してテンポを作っている。画面左側にランキングの枠を常時配置し、右側の空きスペースに発言を要約した大きなテキストをポップアニメーションで表示するスタイル。",
+      "summary": "無言や言い淀みを細かくカットし、ランキング形式でテンポよく進行。右側のスペースに要約テキストを大きく表示して視認性を高めている。",
+      "theme": {
+        "primaryColor": "#00BFFF",
+        "fontFamily": "Noto Sans JP",
+        "captionPosition": "bottom",
+        "captionStyle": "outline"
+      },
+      "hook": {
+        "headline": "どの症状が最悪？矯正した方がいい歯の症状",
+        "subline": null
+      },
+      "cta": {
+        "text": "プロフィールの予約リンクへ！"
+      },
+      "globalOverlays": [
+        {
+          "text": "どの症状が最悪？\n矯正した方がいい\n歯の症状",
+          "xPercent": 25,
+          "yPercent": 10
+        },
+        {
+          "text": "1位",
+          "xPercent": 15,
+          "yPercent": 25
+        },
+        {
+          "text": "2位",
+          "xPercent": 15,
+          "yPercent": 38
+        },
+        {
+          "text": "3位",
+          "xPercent": 15,
+          "yPercent": 51
+        },
+        {
+          "text": "4位",
+          "xPercent": 15,
+          "yPercent": 64
+        },
+        {
+          "text": "5位",
+          "xPercent": 15,
+          "yPercent": 77
+        },
+        {
+          "text": "6位",
+          "xPercent": 15,
+          "yPercent": 90
+        }
+      ],
+      "clips": [
+        {
+          "sourceStartSeconds": 0,
+          "sourceEndSeconds": 2,
+          "speech": "",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": null,
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 2,
+          "sourceEndSeconds": 3,
+          "speech": "八重歯",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "八重歯",
+              "xPercent": 75,
+              "yPercent": 80,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 3,
+          "sourceEndSeconds": 4.5,
+          "speech": "八重歯は2位です",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "八重歯は2位です",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "decide",
+              "offsetSeconds": 0
+            }
+          ],
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 4.5,
+          "sourceEndSeconds": 6,
+          "speech": "とにかく歯磨きしづらいでしょ",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "歯磨きが\nしづらい",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 6,
+          "sourceEndSeconds": 9,
+          "speech": "そこ汚れ溜まって虫歯とかになりやすいんで八重歯は2位",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "汚れが溜まって\n虫歯になりやすい",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            },
+            {
+              "text": "八重歯は2位",
+              "xPercent": 75,
+              "yPercent": 75,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 9,
+          "sourceEndSeconds": 10,
+          "speech": "出っ歯",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "いわゆる口ゴボ",
+              "xPercent": 75,
+              "yPercent": 30,
+              "animation": "pop"
+            },
+            {
+              "text": "出っ歯",
+              "xPercent": 75,
+              "yPercent": 80,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 10,
+          "sourceEndSeconds": 12.5,
+          "speech": "いわゆる口ゴボとかって言って口元出ちゃってる方は",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "口元が出ている",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 12.5,
+          "sourceEndSeconds": 15.5,
+          "speech": "見た目的にも口元下げた方が横顔すっきりするんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "見た目的にも\n口元を下げた方が",
+              "xPercent": 75,
+              "yPercent": 30,
+              "animation": "pop"
+            },
+            {
+              "text": "横顔がスッキリ",
+              "xPercent": 75,
+              "yPercent": 65,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 15.5,
+          "sourceEndSeconds": 17.5,
+          "speech": "すごい綺麗になりますし",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "綺麗に治る",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 18,
+          "sourceEndSeconds": 20,
+          "speech": "あとまぁそもそも口元出ちゃってる出っ歯の方って",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "そもそも\n口元が出ている\n出っ歯の方は",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 20,
+          "sourceEndSeconds": 22,
+          "speech": "口閉じにくいんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "口が閉じにくい",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 22,
+          "sourceEndSeconds": 24,
+          "speech": "それこそ口呼吸になっちゃうんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.2,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "口呼吸になるので",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 24,
+          "sourceEndSeconds": 26,
+          "speech": "お口の中の環境あんま良くないんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "口内環境が\n悪くなる",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 26,
+          "sourceEndSeconds": 27.5,
+          "speech": "うーん3位",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "3位",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "decide",
+              "offsetSeconds": 0.5
+            }
+          ],
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 27.5,
+          "sourceEndSeconds": 28.5,
+          "speech": "バニーティース",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "バニーティース",
+              "xPercent": 75,
+              "yPercent": 80,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 28.5,
+          "sourceEndSeconds": 30,
+          "speech": "チャーミングでもあるもんね。可愛いし。",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "チャーミング",
+              "xPercent": 75,
+              "yPercent": 30,
+              "animation": "pop"
+            },
+            {
+              "text": "可愛いし",
+              "xPercent": 75,
+              "yPercent": 60,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 30,
+          "sourceEndSeconds": 32.5,
+          "speech": "まぁ5位にしますか",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "5位にします",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "decide",
+              "offsetSeconds": 0
+            }
+          ],
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 32.5,
+          "sourceEndSeconds": 33.5,
+          "speech": "ガミースマイル",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "ガミースマイル",
+              "xPercent": 75,
+              "yPercent": 80,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 33.5,
+          "sourceEndSeconds": 38,
+          "speech": "基本的にさっき言った口元出てる口ゴボの人が結構ガミースマイルの人多いんですけど",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "基本的に\n口ゴボの人が",
+              "xPercent": 75,
+              "yPercent": 30,
+              "animation": "pop"
+            },
+            {
+              "text": "ガミースマイルの\n方が多い",
+              "xPercent": 75,
+              "yPercent": 65,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 38,
+          "sourceEndSeconds": 40,
+          "speech": "まぁ4位ですね",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "4位ですね",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "decide",
+              "offsetSeconds": 0
+            }
+          ],
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 40,
+          "sourceEndSeconds": 41,
+          "speech": "開咬",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "開咬",
+              "xPercent": 75,
+              "yPercent": 80,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 41,
+          "sourceEndSeconds": 43,
+          "speech": "開咬はね、これ圧倒的に1位です",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "開咬は\n圧倒的に1位",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "decide",
+              "offsetSeconds": 0
+            }
+          ],
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 43,
+          "sourceEndSeconds": 48,
+          "speech": "開咬の方はちなみに、さっき言った口ゴボも併用することも多いし出っ歯も併用することも多いし",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "口ゴボや出っ歯の\n併用が多い",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 48,
+          "sourceEndSeconds": 50,
+          "speech": "なおかつ前歯で全く物が噛めてないっていう状態なんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "前歯で物が\n噛めてない状態",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 50,
+          "sourceEndSeconds": 52,
+          "speech": "奥歯でしか噛んでないんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "奥歯でしか\n噛めないので",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 52,
+          "sourceEndSeconds": 54,
+          "speech": "奥歯にかかる負担が強すぎて",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "奥歯にかかる\n負担が大きい",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 54,
+          "sourceEndSeconds": 57,
+          "speech": "将来的に奥歯がダメになっちゃうケースがすごく多いんで",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "将来的に\n奥歯がダメに...",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 57,
+          "sourceEndSeconds": 60,
+          "speech": "基本的に開咬はね絶対治した方がいい噛み合わせになります",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "開咬は絶対に\n治した方がいい",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 60,
+          "sourceEndSeconds": 61,
+          "speech": "小さい歯",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "小さい歯",
+              "xPercent": 75,
+              "yPercent": 80,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 61,
+          "sourceEndSeconds": 63,
+          "speech": "これたぶん矯正というよりかは",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "矯正というより",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 63,
+          "sourceEndSeconds": 67,
+          "speech": "それこそベニアとか被せ物みたいな話になってくるから",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "ベニアや被せ物の\n審美治療が適応",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 67,
+          "sourceEndSeconds": 68.5,
+          "speech": "矯正ではないから6位",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": {
+            "scale": 1.15,
+            "style": "punch",
+            "focusXPercent": 50,
+            "focusYPercent": 40
+          },
+          "overlays": [
+            {
+              "text": "矯正では\nないから6位",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": [
+            {
+              "presetId": "decide",
+              "offsetSeconds": 0
+            }
+          ],
+          "narration": null
+        },
+        {
+          "sourceStartSeconds": 68.5,
+          "sourceEndSeconds": 71,
+          "speech": "プロフィールの予約リンクあるので、カウンセリング是非ご来院ください",
+          "captionAnimation": null,
+          "emphasisWords": null,
+          "emphasisColor": null,
+          "zoom": null,
+          "overlays": [
+            {
+              "text": "歯に関して\n気になる方は\nプロフィールの予約リンクへ！",
+              "xPercent": 75,
+              "yPercent": 50,
+              "animation": "pop"
+            }
+          ],
+          "sfx": null,
+          "narration": null
+        }
+      ]
+    }
   }
 ]
