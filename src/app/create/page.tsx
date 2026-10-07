@@ -1,18 +1,11 @@
+import { AppTopBar } from "@/components/AppTopBar";
 import { UploadGenerator } from "./UploadGenerator";
 
 export default function CreatePage() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
-      <div className="flex flex-col gap-2">
-        <h1 className="font-display text-2xl tracking-tight sm:text-3xl">
-          動画をアップロード
-        </h1>
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          アップロード後、使う範囲を選ぶ(カット)→参考スクショ→自動編集→編集の順に進みます。
-        </p>
-      </div>
-
+    <div className="flow-page">
+      <AppTopBar backHref="/" backLabel="トップへ戻る" backIcon="home" title="動画を選ぶ" step={{ current: 1, total: 6 }} />
       <UploadGenerator />
-    </main>
+    </div>
   );
 }

@@ -55,17 +55,14 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div className="flex w-full flex-col items-center gap-2">
           <Link
             href="/create"
-            className="btn-primary flex h-12 items-center justify-center px-7 text-sm"
+            className="btn-primary flex h-12 w-full max-w-xs items-center justify-center px-7 text-base"
           >
             動画を作成する →
           </Link>
-          <Link
-            href="/dev/edit-examples"
-            className="btn-outline flex h-12 items-center justify-center px-7 text-sm"
-          >
+          <Link href="/dev/edit-examples" className="btn-outline flex h-10 items-center justify-center px-5 text-xs">
             学習・正解動画をアップロード(開発者用)
           </Link>
         </div>

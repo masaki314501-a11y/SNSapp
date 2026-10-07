@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
 
 const POLL_INTERVAL_MS = 1000;
@@ -38,8 +38,14 @@ export const AiRevisePanel: React.FC<Props> = ({
   const [instruction, setInstruction] = useState("");
   const [aboutSelected, setAboutSelected] = useState(true);
   const [state, setState] = useState<ReviseState>({ status: "idle" });
+  // 画面を離れた後も問い合わせ続けないよう、動いているタイマーを覚えておいて外れる時に止める。
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+  }, []);
 
   const poll = (jobId: string) => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     const timer = setInterval(async () => {
       try {
         const res = await fetch(`/api/revise-edit/${jobId}`);
@@ -53,6 +59,7 @@ export const AiRevisePanel: React.FC<Props> = ({
         setState({ status: "error", message: error instanceof Error ? error.message : "状態の取得に失敗しました" });
       }
     }, POLL_INTERVAL_MS);
+    pollTimerRef.current = timer;
   };
 
   const submit = async () => {
@@ -78,9 +85,11 @@ export const AiRevisePanel: React.FC<Props> = ({
   };
 
   return (
-    <div className="panel flex flex-col gap-2 p-4">
+    <div className="flex flex-col gap-2 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">🤖 AIに頼む(演出を足す・直す)</h2>
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          演出を足す・直すお願いを、文章で書いてください
+        </p>
         {canUndo ? (
           <button type="button" className="editor-toolbar-btn" onClick={onUndo}>
             直前のAI修正を元に戻す

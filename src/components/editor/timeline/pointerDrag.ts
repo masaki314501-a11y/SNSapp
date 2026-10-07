@@ -12,6 +12,19 @@ type DragHandlers = {
   /** この閾値(px)未満の移動はクリック扱いにしたい呼び出し側向けに、確定した総移動量を渡す。 */
   onClick?: () => void;
   clickThresholdPixels?: number;
+  /** cancelActivePointerDrags で取り消された時に呼ぶ(onEnd・onClickは呼ばない)。 */
+  onCancel?: () => void;
+};
+
+/** 進行中のドラッグの取り消し処理。2本指のピンチが始まった時にまとめて取り消すために持っておく。 */
+const activeDragCancels = new Set<() => void>();
+
+/**
+ * 進行中のドラッグをすべて取り消す。タイムラインで2本指のピンチ(拡大縮小)が始まった時に呼び、
+ * 1本目の指で始まっていた並べ替え・トリム・再生位置の移動を、確定させずに開始時の位置へ戻す。
+ */
+export const cancelActivePointerDrags = (): void => {
+  for (const cancel of [...activeDragCancels]) cancel();
 };
 
 export const beginPointerDrag = (event: React.PointerEvent<HTMLElement>, handlers: DragHandlers): void => {
@@ -43,12 +56,27 @@ export const beginPointerDrag = (event: React.PointerEvent<HTMLElement>, handler
     if (rafId === null) rafId = requestAnimationFrame(flush);
   };
 
-  const handleUp = (e: PointerEvent) => {
-    if (e.pointerId !== pointerId) return;
+  const detach = () => {
+    activeDragCancels.delete(cancel);
     target.removeEventListener("pointermove", handleMove);
     target.removeEventListener("pointerup", handleUp);
     target.removeEventListener("pointercancel", handleUp);
     if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+  };
+
+  const cancel = () => {
+    detach();
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    handlers.onMove(0);
+    handlers.onCancel?.();
+  };
+
+  const handleUp = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return;
+    detach();
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
       rafId = null;
@@ -58,6 +86,7 @@ export const beginPointerDrag = (event: React.PointerEvent<HTMLElement>, handler
     if (!moved) handlers.onClick?.();
   };
 
+  activeDragCancels.add(cancel);
   target.addEventListener("pointermove", handleMove);
   target.addEventListener("pointerup", handleUp);
   target.addEventListener("pointercancel", handleUp);

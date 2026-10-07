@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProjectBgm } from "@/lib/videoProject";
+import { EditIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import type { AudioSelection } from "./TimelineRoot";
 import type { AudioPreset } from "../audioPresets";
 
@@ -69,8 +70,9 @@ export const BgmInspectorPanel: React.FC<Props> = ({
                 />
               </label>
             </div>
-            <button type="button" className="editor-toolbar-btn danger" onClick={onRemoveBgm}>
-              削除
+            <button type="button" className="editor-toolbar-btn danger self-start" onClick={onRemoveBgm}>
+              <TrashIcon size={14} />
+              BGMを削除
             </button>
           </div>
         ) : (
@@ -92,7 +94,7 @@ export const BgmInspectorPanel: React.FC<Props> = ({
             }}
           >
             <option value="" disabled>
-              + BGM(無料素材)
+              {bgm ? "BGMを変更(プリセットから選ぶ)" : "＋ BGMを追加(プリセットから選ぶ)"}
             </option>
             {bgmPresets.map((preset) => (
               <option key={preset.id} value={preset.id}>
@@ -102,7 +104,8 @@ export const BgmInspectorPanel: React.FC<Props> = ({
           </select>
         ) : null}
         <label className="editor-toolbar-btn cursor-pointer">
-          {bgmUploading ? "アップロード中..." : bgm ? "BGMを差し替え" : "+ BGMをアップロード"}
+          {bgm ? <EditIcon size={14} /> : <PlusIcon size={14} />}
+          {bgmUploading ? "アップロード中..." : bgm ? "BGMを変更(ファイルから)" : "BGMを追加(ファイルから)"}
           <input
             type="file"
             accept="audio/*"

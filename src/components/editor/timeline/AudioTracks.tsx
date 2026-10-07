@@ -28,9 +28,12 @@ type SfxTrackProps = {
   selectedKey: string | null;
   onSelect: (key: string) => void;
   onMove: (key: string, desiredStartSeconds: number) => void;
+  /** 段の名前(効果音タブでは「効果音」、字幕タブではAIナレーションだけを出すので「AI音声」)。 */
+  label?: string;
 };
 
 export const SfxTrack: React.FC<SfxTrackProps> = ({
+  label = "効果音",
   clips,
   totalDurationSeconds,
   pixelsPerSecond,
@@ -48,7 +51,7 @@ export const SfxTrack: React.FC<SfxTrackProps> = ({
 
   return (
     <div className="editor-track editor-track-sfx">
-      <div className="editor-track-label">効果音</div>
+      <div className="editor-track-label">{label}</div>
       <div className="editor-lane" style={{ width: secondsToPixels(totalDurationSeconds, pixelsPerSecond) }}>
         {clips.map((clip) => {
           // SE単体の尺は不明(元ファイルの長さ)なので、波形が読み込まれるまでは既定幅で描画する。

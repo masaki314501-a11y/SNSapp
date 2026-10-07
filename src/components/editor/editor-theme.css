@@ -6,40 +6,913 @@
  * 色味はアプリ既存のブランドを維持する"というフィードバックに合わせた構成)。
  */
 
-/* --- レイアウト --- */
-.editor-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+/* トラック名の列幅と映像レーンの高さ。スマホでは狭く・低くして、タイムラインに幅を回す */
+:root {
+  --track-label-width: 36px;
+  --video-lane-height: 56px;
 }
-
-.editor-top-row {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-@media (min-width: 900px) {
-  .editor-top-row {
-    flex-direction: row;
-    align-items: stretch;
+@media (min-width: 1024px) {
+  :root {
+    --track-label-width: 64px;
+    --video-lane-height: 64px;
   }
 }
 
-.editor-preview-col {
+/* --- レイアウト: 編集画面(.editor-app)・カット画面(.cut-app) ---
+ * 画面の高さいっぱいを使い、ページ全体はスクロールさせない「アプリ型」。
+ * 1つのDOMのまま、grid-template-areasを画面幅ごとに切り替えて配置を変える。
+ *   768px未満     : 上に動画、下端にタブ。設定は下からせり上がるシート
+ *   768〜1023px   : スマホと同じ並びで、設定はタイムラインの下に常に表示
+ *   1024px以上    : 左にタブ、中央に動画、右に設定、下にタイムライン
+ * 高さは100vhではなく100dvh(iPhoneのアドレスバーの伸び縮みで下端が隠れないように)。
+ */
+.editor-app {
+  --editor-topbar-h: 53px;
+  --editor-tabbar-h: calc(64px + env(safe-area-inset-bottom));
+  --editor-sheet-stage-h: 34dvh;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-areas:
+    "topbar"
+    "stage"
+    "playback"
+    "timeline"
+    "tools"
+    "tabs";
+  overflow: hidden;
+  background: var(--background);
+}
+/* シートを開いた時は動画を縮める。余った高さはシートの下に隠れる操作ボタンの行に回し、
+   上部バーや下端のタブが引き伸ばされないようにする */
+.editor-app.sheet-open {
+  grid-template-rows: auto var(--editor-sheet-stage-h) auto auto minmax(0, 1fr) auto;
+}
+.editor-area-topbar { grid-area: topbar; }
+.editor-area-tabs { grid-area: tabs; }
+.editor-area-stage { grid-area: stage; }
+.editor-area-playback { grid-area: playback; }
+.editor-area-timeline { grid-area: timeline; min-width: 0; }
+.editor-area-tools { grid-area: tools; min-height: 0; overflow: hidden; }
+.editor-area-settings { grid-area: settings; }
+
+/* 動画の置き場。暗い地に、縦長の動画を高さいっぱいで中央に置く */
+.editor-stage {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--stage-background);
+}
+.editor-stage-frame {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.editor-stage-empty {
+  height: 100%;
+  aspect-ratio: 9 / 16;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 再生バー(PlaybackBar.tsx) */
+.playback-bar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  background: var(--background-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.playback-play {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.playback-time {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.playback-time span {
+  color: var(--muted);
+}
+.playback-tools {
+  display: none;
+}
+.playback-spacer {
   flex: 1;
+}
+
+/* タブ(EditorTabBar.tsx)。スマホ・タブレット縦向きは下端に7等分 */
+.editor-tabbar {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  height: var(--editor-tabbar-h);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--background-elevated);
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 45;
+}
+.editor-tabbar-btn {
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.editor-tabbar-btn span {
+  white-space: nowrap;
+}
+.editor-tabbar-btn.active {
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+/* 書き出し画面へ進む「編集完了」。タブではなく最後に押すボタンなので、赤く塗って区別する */
+.editor-tabbar-btn.finish {
+  margin: 6px 4px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+}
+.editor-tabbar-btn.finish:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.editor-tabbar-btn.finish:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* カット以外のタブで、操作ボタンの代わりに出す「〜の設定を開く」(スマホのみ) */
+.editor-open-settings-btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 10px;
+  background: var(--background-elevated-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+.editor-tools-single {
+  padding: 8px 12px;
   background: var(--background-elevated);
-  border: 1.5px solid var(--foreground);
-  border-radius: 16px;
-  box-shadow: var(--shadow-pop);
-  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* 設定パネル(SettingsPanel.tsx)。スマホでは下からせり上がるシート */
+.editor-settings {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--background-elevated);
+}
+.editor-app .editor-settings {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(var(--editor-topbar-h) + var(--editor-sheet-stage-h) - 8px);
+  bottom: var(--editor-tabbar-h);
+  z-index: 40;
+  border-radius: 16px 16px 0 0;
+  box-shadow: var(--shadow-sheet);
+}
+.editor-app.sheet-open .editor-settings {
+  display: flex;
+}
+.editor-settings-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  margin: 8px auto 0;
+}
+.editor-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.editor-settings-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.editor-settings-title h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.editor-settings-title span {
+  font-size: 11px;
+  color: var(--muted);
+}
+/* シートを閉じる「閉じる」。赤は「編集完了」(書き出しへ進む)に使うので、文字の色で塗って目立たせる */
+.editor-settings-close {
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--foreground);
+  color: var(--background-elevated);
+  font-size: 13px;
+  font-weight: 700;
+}
+.editor-settings-close:hover {
+  opacity: 0.85;
+}
+.editor-settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+/* 各パネルの下部の操作(.editor-inspector-footer)をパネルの下端に置く */
+.editor-settings-body > .editor-inspector:only-child {
+  flex: 1;
+}
+/* 字幕タブのように複数の欄を縦に重ねる時は、間を線で区切り、空の欄の高さを詰める */
+.editor-settings-body > .editor-inspector + .editor-inspector {
+  border-top: 1px solid var(--border);
+}
+.editor-settings-body > .editor-inspector:not(:only-child) .editor-inspector-body {
+  min-height: 0;
+}
+
+/* 設定パネルの見出しの「‹ クリップN / M ›」(SettingsPanel.tsx) */
+.clip-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.clip-nav button {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--background-elevated);
+  color: var(--foreground);
+}
+.clip-nav button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 小見出し付きのまとまり(SettingsSection.tsx)。左の縦線で見出しを、上の線でまとまりの境目を示す */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.settings-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.settings-section-title,
+.editor-inspector-fields h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+.settings-section-title svg {
+  color: var(--accent);
+}
+.settings-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 押すと開く折りたたみ(SettingsSection.tsx の Collapsible) */
+.collapsible {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background-elevated);
+}
+.collapsible > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+.collapsible > summary > svg:first-child {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.collapsible-summary-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collapsible-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.collapsible[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+.collapsible[open] > summary .collapsible-chevron {
+  transform: rotate(180deg);
+}
+.collapsible-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+/* 文字色・縁取り・帯。チェックボックスは文言のすぐ横、チェックが無い時は色を選べない */
+.color-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+.color-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.color-option-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--foreground);
+}
+.color-option-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.color-option input[type="color"] {
+  width: 40px;
+  height: 32px;
+}
+.color-option input[type="color"]:disabled {
+  opacity: 0.3;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
+/* 出現開始〜終了の範囲スライダー(TimeRangeField.tsx)。つまみ2つを同じ線の上に重ねる */
+.time-range {
+  position: relative;
+  height: 32px;
+}
+.time-range-track {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--border) var(--range-start),
+    var(--accent) var(--range-start),
+    var(--accent) var(--range-end),
+    var(--border) var(--range-end)
+  );
+}
+.editor-field .time-range input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.time-range input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.time-range input[type="range"]::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--background-elevated);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(31, 27, 23, 0.2);
+  cursor: grab;
+}
+.time-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--background-elevated);
+  border: 2px solid var(--accent);
+  cursor: grab;
+}
+
+/* 字幕タブの一番上に置く、全クリップへの操作 */
+.caption-bulk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 「全クリップの字幕」欄の中で、字幕の一括操作と段を分けて置くAIナレーションの一括生成 */
+.bulk-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.bulk-sublabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* 小見出しの下に添える説明(どこに出るか・空にするとどうなるか) */
+.settings-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* 冒頭の見出しと補足は2つで1組。枠で囲み、見え方(見出しの下に補足が小さく)を上に添える */
+.hook-set,
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background-elevated-2);
+}
+.hook-set .editor-field input,
+.field-group .editor-field input {
+  background: var(--background-elevated);
+}
+.hook-set-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 10px;
+  border-radius: 8px;
+  background: var(--stage-background);
+  color: #ffffff;
+  text-align: center;
+}
+.hook-set-preview strong {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.hook-set-preview small {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+/* 演出タブの「クリップごと ｜ 動画全体」の切り替え */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--background-elevated-2);
+}
+.segmented button {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.segmented button.active {
+  background: var(--background-elevated);
+  color: var(--foreground);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(31, 27, 23, 0.15);
+}
+
+/* 「…」メニュー(EditorMenu.tsx) */
+.editor-menu {
+  position: relative;
+}
+.editor-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: transparent;
+}
+.editor-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 61;
+  width: min(280px, calc(100vw - 24px));
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--background-elevated);
+  box-shadow: 0 12px 40px rgba(31, 27, 23, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+.editor-menu-item {
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-menu-item.danger {
+  color: var(--danger);
+}
+.editor-menu-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-elevated-2);
+  color: var(--foreground);
+}
+.editor-menu-item.danger .editor-menu-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.editor-menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.editor-menu-label {
+  font-weight: 700;
+}
+.editor-menu-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.editor-menu-handle,
+.editor-menu-cancel {
+  display: none;
+}
+/* スマホでは画面の下からせり上がるシートにする(ボタンの下に出すと画面の左外にはみ出すため) */
+@media (max-width: 767px) {
+  .editor-menu-backdrop {
+    background: rgba(31, 27, 23, 0.45);
+  }
+  .editor-menu-popover {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 85dvh;
+    overflow-y: auto;
+    padding: 6px 12px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
+  }
+  .editor-menu-handle {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 4px auto 8px;
+    border-radius: 2px;
+    background: var(--border-strong);
+  }
+  .editor-menu-cancel {
+    display: block;
+    width: 100%;
+    height: 48px;
+    margin-top: 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--background-elevated);
+    font-size: 15px;
+    font-weight: 700;
+  }
+}
+.editor-menu-item:hover {
+  background: var(--background-elevated-2);
+}
+.editor-menu-footer {
+  margin-top: 6px;
+  padding: 10px 12px 6px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* カット画面。可視化バー・操作ボタン・次へボタンを .cut-side にまとめ、スマホでは
+   display: contents で中身を直接グリッドに並べる */
+/* .editor-app の画面幅ごとの指定より優先させるため、2クラスで指定する */
+.editor-app.cut-app {
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto auto auto;
+  grid-template-areas:
+    "topbar"
+    "stage"
+    "playback"
+    "coverage"
+    "timeline"
+    "tools"
+    "action";
+}
+.cut-side {
+  display: contents;
+}
+.editor-area-coverage {
+  grid-area: coverage;
+  padding: 10px 12px 8px;
+  background: var(--background-elevated);
+}
+.editor-area-action {
+  grid-area: action;
+  padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
+  background: var(--background-elevated);
+}
+.editor-area-action .btn-primary {
+  width: 100%;
+  height: 50px;
+  font-size: 15px;
+}
+
+/* スマホの効果音・BGMタブ: 設定をシートにせず、タイムラインの下に常に出す(音の位置を見ながら直せるように)。
+   動画は残りの高さに縮め、設定は高さを抑えて中だけスクロールさせる */
+@media (max-width: 767px) {
+  .editor-app.settings-inline {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas:
+      "topbar"
+      "stage"
+      "playback"
+      "timeline"
+      "settings"
+      "tabs";
+  }
+  .editor-app.settings-inline .editor-area-tools {
+    display: none;
+  }
+  .editor-app.settings-inline .editor-settings {
+    position: static;
+    display: flex;
+    max-height: 38dvh;
+    border-radius: 0;
+    box-shadow: none;
+    border-top: 1px solid var(--border);
+  }
+  .editor-app.settings-inline .editor-settings-handle,
+  .editor-app.settings-inline .editor-settings-close {
+    display: none;
+  }
+  .editor-app.settings-inline .editor-settings-header {
+    padding-top: 10px;
+  }
+}
+
+/* タブレット縦向き以上では設定が常に見えているので、設定を開くためだけのボタンは出さない */
+@media (min-width: 768px) {
+  .tool-only-sheet {
+    display: none;
+  }
+  .tool-grid:has(.tool-only-sheet) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* タブレット縦向き: 設定はシートにせず、タイムラインの下に常に表示 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .editor-app {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto minmax(0, 32dvh) auto;
+    grid-template-areas:
+      "topbar"
+      "stage"
+      "playback"
+      "timeline"
+      "tools"
+      "settings"
+      "tabs";
+  }
+  .editor-app.sheet-open {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto minmax(0, 32dvh) auto;
+  }
+  .editor-app .editor-settings {
+    position: static;
+    display: flex;
+    border-radius: 0;
+    box-shadow: none;
+    border-top: 1px solid var(--border);
+  }
+  .editor-settings-handle,
+  .editor-settings-close,
+  .editor-tools-single {
+    display: none;
+  }
+  .editor-tabbar-btn {
+    font-size: 12px;
+  }
+  .editor-app.cut-app {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto auto auto;
+    grid-template-areas:
+      "topbar"
+      "stage"
+      "playback"
+      "coverage"
+      "timeline"
+      "tools"
+      "action";
+  }
+}
+
+/* タブレット横向き・PC: 左にタブ、中央に動画、右に設定、下にタイムライン */
+@media (min-width: 1024px) {
+  .editor-app,
+  .editor-app.sheet-open {
+    --editor-tabbar-h: auto;
+    grid-template-columns: 84px minmax(0, 1fr) 360px;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "topbar topbar topbar"
+      "tabs stage settings"
+      "playback playback playback"
+      "timeline timeline timeline";
+  }
+  .editor-app .editor-settings {
+    position: static;
+    display: flex;
+    border-radius: 0;
+    box-shadow: none;
+    border-left: 1px solid var(--border);
+  }
+  .editor-settings-handle,
+  .editor-settings-close,
+  .editor-area-tools {
+    display: none;
+  }
+  .editor-tabbar {
+    grid-template-columns: none;
+    grid-auto-rows: 62px;
+    align-content: start;
+    height: auto;
+    padding: 8px 0;
+    border-top: none;
+    border-right: 1px solid var(--border);
+  }
+  .editor-tabbar-btn {
+    font-size: 12px;
+  }
+  .editor-tabbar-btn.active {
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .editor-tabbar-btn.finish {
+    margin: 8px 6px 0;
+  }
+  .playback-bar {
+    height: 54px;
+    padding: 0 20px;
+    border-top: 1px solid var(--border);
+  }
+  .playback-tools {
+    display: flex;
+    margin-left: 12px;
+  }
+  .editor-app.cut-app {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "topbar topbar"
+      "stage side"
+      "playback playback"
+      "timeline timeline";
+  }
+  .cut-side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--background-elevated);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+  }
+  .cut-side .editor-area-tools {
+    display: block;
+  }
+  /* 右側の列は幅が狭いので、5個の操作を3列に折り返す(列数はToolGridが要素に直接指定するため上書きする) */
+  .cut-side .tool-grid {
+    border-top: none;
+    padding: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .cut-side .editor-area-coverage,
+  .cut-side .editor-area-action {
+    padding: 0;
+  }
+  .cut-side .editor-area-action {
+    margin-top: auto;
+  }
 }
 
 /* --- 元動画のうち使う範囲の可視化バー(カット画面) --- */
+/* 選んだ範囲への操作(削除・だけ残す・解除)は折り返さず1行に並べる */
+.coverage-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.coverage-actions .editor-toolbar-btn {
+  white-space: nowrap;
+}
 .editor-coverage-wrap {
   display: flex;
   flex-direction: column;
@@ -51,7 +924,7 @@
   touch-action: none;
   border-radius: 6px;
   overflow: hidden;
-  border: 1.5px solid var(--foreground);
+  border: none;
   background: repeating-linear-gradient(
     135deg,
     var(--background-elevated-2),
@@ -92,28 +965,6 @@
   display: flex;
   flex-direction: column;
   background: var(--background-elevated);
-  border: 1.5px solid var(--foreground);
-  border-radius: 16px;
-  box-shadow: var(--shadow-pop);
-  overflow: hidden;
-}
-
-.editor-timeline-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--background-elevated-2);
-  border-bottom: 1.5px solid var(--foreground);
-  flex-wrap: wrap;
-}
-
-.editor-toolbar-hint {
-  order: 99;
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 11px;
-  color: var(--muted-2);
 }
 
 .editor-toolbar-btn {
@@ -124,20 +975,22 @@
   font-size: 12px;
   font-weight: 700;
   color: var(--foreground);
-  background: var(--background);
-  border: 2px solid var(--foreground);
-  border-radius: 10px;
-  box-shadow: var(--shadow-pop-sm);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  background: var(--background-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  transition: background-color 0.12s ease;
 }
 .editor-toolbar-btn:hover:not(:disabled) {
-  background: var(--accent-soft);
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-pop-hover);
+  background: var(--background-elevated-2);
 }
-.editor-toolbar-btn:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: var(--shadow-pop-active);
+/* 基本となる操作(AIナレーションの一括生成など)。赤く塗って、補助の操作と見分ける */
+.editor-toolbar-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.editor-toolbar-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .editor-toolbar-btn:disabled {
   opacity: 0.4;
@@ -154,25 +1007,57 @@
   cursor: pointer;
 }
 
-.editor-timeline-spacer {
-  flex: 1;
-}
-
-.editor-timecode {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.editor-zoom-control {
+/* 拡大縮小の行(タイムラインの下) */
+.editor-timeline-zoom {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  padding: 4px 12px 8px;
 }
-.editor-zoom-control input[type="range"] {
-  width: 100px;
+.editor-timeline-zoom-label {
+  margin-right: auto;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor-timeline-zoom-hint {
+  color: var(--muted-2);
+}
+.editor-zoom-btn {
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background-elevated);
+  color: var(--foreground);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.editor-zoom-btn svg {
+  color: var(--muted);
+}
+.editor-zoom-range {
+  display: none;
+  width: 120px;
   accent-color: var(--accent);
+}
+@media (min-width: 1024px) {
+  .editor-zoom-range {
+    display: block;
+  }
+}
+/* マウス操作の端末ではピンチの案内は不要 */
+@media (hover: hover) and (pointer: fine) {
+  .editor-timeline-zoom-hint {
+    display: none;
+  }
 }
 
 /* --- タイムライン本体 --- */
@@ -180,6 +1065,8 @@
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--background);
+  /* ページ全体の拡大ではなく、TimelineRootのピンチ処理に2本指の動きを渡す */
+  touch-action: pan-x;
 }
 
 .editor-timeline-content {
@@ -189,7 +1076,9 @@
 
 .editor-ruler {
   position: relative;
-  background: var(--background-elevated-2);
+  margin-left: var(--track-label-width);
+  overflow: hidden;
+  background: var(--background);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
@@ -198,7 +1087,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border);
   padding-left: 4px;
   display: flex;
   align-items: center;
@@ -224,7 +1113,7 @@
   position: sticky;
   left: 0;
   z-index: 5;
-  width: 64px;
+  width: var(--track-label-width);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -240,7 +1129,7 @@
   background: var(--background);
 }
 .editor-track-video .editor-lane {
-  height: 76px;
+  height: var(--video-lane-height);
 }
 .editor-track-sfx .editor-lane,
 .editor-track-bgm .editor-lane {
@@ -263,7 +1152,7 @@
 }
 .editor-clip-block.video {
   background: var(--background-elevated-2);
-  border-color: var(--foreground);
+  border-color: var(--border-strong);
 }
 .editor-clip-block.video.selected {
   outline: 2px solid var(--accent);
@@ -397,17 +1286,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--background-elevated);
-  border: 1.5px solid var(--foreground);
-  border-radius: 16px;
-  box-shadow: var(--shadow-pop);
-  overflow: hidden;
-}
-@media (min-width: 900px) {
-  .editor-inspector {
-    width: 300px;
-    flex-shrink: 0;
-  }
+  background: transparent;
 }
 .editor-inspector-body {
   padding: 14px;
@@ -448,8 +1327,8 @@
 .editor-field input,
 .editor-field select,
 .editor-field textarea {
-  background: var(--background-elevated-2);
-  border: 1.5px solid var(--border-strong);
+  background: var(--background);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
   font-size: 13px;
@@ -489,9 +1368,11 @@
 }
 .editor-inspector-footer {
   display: flex;
+  /* 幅の狭いスマホでは、2つ目のボタンを次の行へ送る(はみ出して見えなくならないように) */
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1.5px solid var(--foreground);
+  border-top: 1px solid var(--border);
   background: var(--background-elevated-2);
 }
 .editor-inspector-footer input[type="file"] {

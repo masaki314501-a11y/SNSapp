@@ -52,16 +52,36 @@ import { ClipInspectorPanel } from "./timeline/ClipInspectorPanel";
 import { CaptionInspectorPanel } from "./timeline/CaptionInspectorPanel";
 import {
   EffectsInspectorPanel,
+  type EffectsScope,
   type ProjectEffectsPatch,
   type SegmentEffectsPatch,
 } from "./timeline/EffectsInspectorPanel";
 import { useTranscribeJob } from "@/app/create/useTranscribeJob";
 import { assignTranscriptToSegments } from "./timelineUtils";
 import { SfxInspectorPanel } from "./timeline/SfxInspectorPanel";
-import { NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
+import { NarrationBulkGenerate, NarrationInspectorPanel } from "./timeline/NarrationInspectorPanel";
 import { BgmInspectorPanel } from "./timeline/BgmInspectorPanel";
 import { PreviewDragLayer, type DragTarget } from "./PreviewDragLayer";
 import { AiRevisePanel } from "./AiRevisePanel";
+import { AppTopBar } from "@/components/AppTopBar";
+import {
+  CopyIcon,
+  FolderOpenIcon,
+  RestoreClipIcon,
+  RestartIcon,
+  SaveIcon,
+  ScissorsIcon,
+  SettingsIcon,
+  SparkleIcon,
+  TrimEndIcon,
+  TrimStartIcon,
+} from "@/components/icons";
+import { EditorMenu } from "./EditorMenu";
+import { EDITOR_TAB_LABELS, EditorTabBar, type EditorTab } from "./EditorTabBar";
+import { PlaybackBar } from "./PlaybackBar";
+import { SettingsPanel, type ClipNav } from "./SettingsPanel";
+import { Collapsible } from "./SettingsSection";
+import { ToolGrid, ToolInline, type ToolItem } from "./ToolButtons";
 import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
 
 /**
@@ -120,14 +140,19 @@ const applySegmentPatch = (
 };
 
 const EmptyState: React.FC = () => (
-  <div className="panel flex flex-col items-center gap-3 p-10 text-center">
-    <p className="text-sm font-medium">編集する動画がありません</p>
-    <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-      まずは動画をアップロードして字幕を生成してください
-    </p>
-    <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
-      動画をアップロードする →
-    </a>
+  <div className="flow-page">
+    <AppTopBar backHref="/" backLabel="トップへ戻る" backIcon="home" title="編集" />
+    <main className="flow-main">
+      <div className="panel flex flex-col items-center gap-3 p-10 text-center">
+        <p className="text-sm font-medium">編集する動画がありません</p>
+        <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+          まずは動画をアップロードして字幕を生成してください
+        </p>
+        <a href="/create" className="btn-primary px-4 py-2 text-sm">
+          動画をアップロードする →
+        </a>
+      </div>
+    </main>
   </div>
 );
 
@@ -183,7 +208,15 @@ export const ClipEditor: React.FC = () => {
    * プレビュー・書き出しは常時表示。タイムラインは残すが、タブごとに
    * 今やりたいことに関係あるトラックだけを表示する(TimelineRootのtracks props)。
    */
-  const [activeTab, setActiveTab] = useState<"cut" | "caption" | "effects" | "se" | "narration" | "bgm" | "style">("cut");
+  const [activeTab, setActiveTab] = useState<EditorTab>("cut");
+  // スマホで設定シートを開いているか(1024px以上・タブレット縦向きではCSSで常時表示になり、この値は見た目に効かない)。
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // 設定パネルに出すもの。「AIに頼む」を押した時だけAIの依頼欄にする。
+  const [settingsView, setSettingsView] = useState<"tab" | "ai">("tab");
+  // 演出タブで「クリップごと」と「動画全体」のどちらを編集しているか。
+  const [effectsScope, setEffectsScope] = useState<EffectsScope>("clip");
+  // Remotion標準のコントロールをやめたので、音のオン/オフは再生バーのボタンで切り替える。
+  const [isMuted, setIsMuted] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditText, setBulkEditText] = useState("");
 
@@ -208,6 +241,12 @@ export const ClipEditor: React.FC = () => {
       setFadeInOut(loaded.fadeInOut);
       setSfxClips(loaded.sfx);
       setBgm(loaded.bgm);
+      // 最初はクリップ1を選んだ状態にする(「クリップ未選択」から始めると、設定を開いても何も編集できないため)
+      const first = loaded.segments[0];
+      if (first) {
+        setSelectedSegmentKey(first.key);
+        setSelectedKeys(new Set([first.key]));
+      }
     }
     setHasCheckedProject(true);
   }, []);
@@ -628,7 +667,7 @@ export const ClipEditor: React.FC = () => {
   const canRedo = future.length > 0;
 
   const handleStartOver = () => {
-    if (!window.confirm("現在の編集内容を破棄して、新しい動画のアップロードからやり直しますか?")) {
+    if (!window.confirm("現在の編集内容を削除して、新しい動画のアップロードからやり直しますか?")) {
       return;
     }
     clearProject();
@@ -640,8 +679,9 @@ export const ClipEditor: React.FC = () => {
    * 遷移直前の編集内容を確実に引き継げるよう、ここで同期的にlocalStorageへ書き戻してから
    * 遷移する。
    */
-  const handleGoToExport = () => {
-    if (!project || !canRender) return;
+  /** 自動保存は少し待ってから書き込むため、画面を離れる直前は同期的にlocalStorageへ書き戻す。 */
+  const saveCurrentProjectNow = () => {
+    if (!project) return;
     saveProject({
       ...project,
       primaryColor,
@@ -654,7 +694,18 @@ export const ClipEditor: React.FC = () => {
       sfx: sfxClips,
       bgm,
     });
+  };
+
+  const handleGoToExport = () => {
+    if (!project || !canRender) return;
+    saveCurrentProjectNow();
     router.push("/edit/export");
+  };
+
+  /** 上部バーの戻る。handleGoToExportと同じ理由で、離れる前に書き戻す。 */
+  const handleBackToTop = () => {
+    saveCurrentProjectNow();
+    router.push("/");
   };
 
   /**
@@ -943,16 +994,19 @@ export const ClipEditor: React.FC = () => {
         stats.totalSeconds,
         Math.max(0, (playerRef.current?.getCurrentFrame() ?? 0) / VIDEO_FPS)
       );
+      const key = crypto.randomUUID();
       setSfxClips((prev) => [
         ...prev,
         {
-          key: crypto.randomUUID(),
+          key,
           src: path,
           label: fileName,
           startFromSeconds: currentSeconds,
           volume: DEFAULT_CLIP_VOLUME,
         },
       ]);
+      // 追加した効果音を選び、そのまま開始(秒)を決められるようにする
+      selectSfx(key);
     } catch (error) {
       alert(error instanceof Error ? error.message : "効果音のアップロードに失敗しました");
     } finally {
@@ -967,16 +1021,19 @@ export const ClipEditor: React.FC = () => {
       stats.totalSeconds,
       Math.max(0, (playerRef.current?.getCurrentFrame() ?? 0) / VIDEO_FPS)
     );
+    const key = crypto.randomUUID();
     setSfxClips((prev) => [
       ...prev,
       {
-        key: crypto.randomUUID(),
+        key,
         src: preset.src,
         label: preset.label,
         startFromSeconds: currentSeconds,
         volume: DEFAULT_CLIP_VOLUME,
       },
     ]);
+    // 追加した効果音を選び、そのまま開始(秒)を決められるようにする
+    selectSfx(key);
   };
 
   const updateSfxClip = (key: string, patch: Partial<Pick<ProjectSfxClip, "startFromSeconds" | "volume">>) => {
@@ -1079,6 +1136,8 @@ export const ClipEditor: React.FC = () => {
   };
 
   const handleClearCaptions = () => {
+    // 1回押すだけで全クリップの字幕が消えてしまうため、確認を挟む(元に戻すでも戻せる)。
+    if (!window.confirm("全クリップの字幕を削除します。よろしいですか?")) return;
     pushHistory();
     setForm((prev) => ({ ...prev, segments: prev.segments.map((segment) => ({ ...segment, caption: "" })) }));
   };
@@ -1138,6 +1197,8 @@ export const ClipEditor: React.FC = () => {
     try {
       const { path, fileName } = await uploadAudioFile(file);
       setBgm({ src: path, label: fileName, volume: 0.4, fadeInSeconds: 0, fadeOutSeconds: 0 });
+      // 追加・変更したBGMを選び、そのまま音量やフェードを決められるようにする
+      selectBgm();
     } catch (error) {
       alert(error instanceof Error ? error.message : "BGMのアップロードに失敗しました");
     } finally {
@@ -1145,9 +1206,10 @@ export const ClipEditor: React.FC = () => {
     }
   };
 
-  /** アップロードなしで、同梱プリセット(著作権フリー)のBGMに差し替える。 */
+  /** アップロードなしで、同梱プリセット(著作権フリー)のBGMに変更する。 */
   const handleSetBgmPreset = (preset: AudioPreset) => {
     setBgm({ src: preset.src, label: preset.label, volume: 0.4, fadeInSeconds: 0, fadeOutSeconds: 0 });
+    selectBgm();
   };
 
   const handleCopyCaptions = async () => {
@@ -1212,6 +1274,62 @@ export const ClipEditor: React.FC = () => {
     saveProject(imported);
   };
 
+  /**
+   * タブを押した時。字幕・音声と演出は設定シートも開く。カットはタイムラインの下の操作ボタンが主役、
+   * 効果音・BGMは設定をタイムラインの下に常に出す(settingsInline)ので、どちらもシートは開かない。
+   * クリップを押しただけではシートを開かない: 押した瞬間にシートが出ると、ドラッグ中のタイムラインが隠れるため。
+   */
+  // 効果音・BGMは動画全体の時刻で置く音なので、スマホでもタイムラインと設定を同時に見られるよう、
+  // 設定をシートにせずタイムラインの下に常に出す(「AIに頼む」を開いた時だけは、これまでどおりシート)。
+  const settingsInline = (activeTab === "se" || activeTab === "bgm") && !sheetOpen;
+  const handleSelectTab = (tab: EditorTab) => {
+    setActiveTab(tab);
+    // クリップごとに設定するタブで何も選んでいなければ(効果音を選んだ後など)、再生位置のクリップを選ぶ
+    if ((tab === "cut" || tab === "caption" || tab === "effects") && selectedKeys.size === 0) {
+      const key = activeSegmentKey ?? form.segments[0]?.key ?? null;
+      if (key) selectOnly(key);
+    }
+    setSettingsView("tab");
+    setSheetOpen(tab === "caption" || tab === "effects");
+  };
+  const openSettings = () => {
+    setSettingsView("tab");
+    setSheetOpen(true);
+  };
+  const openAiPanel = () => {
+    setSettingsView("ai");
+    setSheetOpen(true);
+  };
+  const closeSettings = () => {
+    setSheetOpen(false);
+    setSettingsView("tab");
+  };
+  const togglePlay = () => playerRef.current?.toggle();
+  const toggleMute = () => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (player.isMuted()) player.unmute();
+    else player.mute();
+    setIsMuted(player.isMuted());
+  };
+  const showFullscreen = () => playerRef.current?.requestFullscreen();
+  /** 動画の先頭からの秒数の位置を、プレビューに映す。 */
+  const previewAtSeconds = (seconds: number) => playerRef.current?.seekTo(Math.max(0, Math.round(seconds * VIDEO_FPS)));
+  /** クリップ内の秒数の位置を、プレビューに映す(強調テキスト等の表示時間を動かした時)。 */
+  const previewInClip = (segmentKey: string, offsetSeconds: number) => {
+    const range = segmentFrameRanges.find((r) => r.key === segmentKey);
+    if (!range) return;
+    playerRef.current?.seekTo(Math.min(range.endFrame - 1, range.startFrame + Math.round(offsetSeconds * VIDEO_FPS)));
+  };
+  /** 設定パネルの「‹ クリップN ›」。そのクリップを選び、動画もクリップの頭へ移す。 */
+  const goToClip = (index: number) => {
+    const target = form.segments[Math.max(0, Math.min(form.segments.length - 1, index))];
+    if (!target) return;
+    selectOnly(target.key);
+    const range = segmentFrameRanges.find((r) => r.key === target.key);
+    if (range) playerRef.current?.seekTo(range.startFrame);
+  };
+
   if (!hasCheckedProject) {
     return null;
   }
@@ -1220,390 +1338,421 @@ export const ClipEditor: React.FC = () => {
     return <EmptyState />;
   }
 
-  return (
-    <div className="flex flex-1 flex-col gap-4">
-      {/* スマホ幅でボタンの文字が縦に潰れないよう、ボタンは折り返さず、並び全体を折り返す */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" onClick={handleStartOver} className="btn-ghost whitespace-nowrap text-xs">
-          ← 別の動画からやり直す
-        </button>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <button type="button" onClick={handleGoToAutoEdit} className="btn-ghost whitespace-nowrap text-xs">
-            ✨ 自動編集を試す
-          </button>
-          <button type="button" onClick={handleExportProject} className="btn-ghost whitespace-nowrap text-xs">
-            💾 編集データを保存
-          </button>
-          <label className="btn-ghost cursor-pointer whitespace-nowrap text-xs">
-            📂 保存した編集データを開く
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={(e) => {
-                void handleImportProjectFile(e.target.files?.[0] ?? null);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        </div>
-      </div>
-      {/*
-        「プロジェクトを書き出す/読み込む」は「動画を書き出す」と紛らわしく、何が保存されるのかも
-        分からないと言われたため、名前を変えたうえで常に見える説明を付けている(マウスを乗せて出る説明は
-        スマホでは見えない)。
-      */}
-      <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-        「編集データを保存」は、今の編集の状態(カット・字幕・演出など)をファイルに残します。動画そのものは入りません。
-        あとで「保存した編集データを開く」でそのファイルを選ぶと、保存した時の状態に戻せます。
-      </p>
+  const selectedSegmentIndex = selectedSegmentKey
+    ? form.segments.findIndex((segment) => segment.key === selectedSegmentKey)
+    : -1;
+  const selectionLabel =
+    selectedKeys.size > 1
+      ? `${selectedKeys.size}件のクリップ`
+      : selectedSegmentIndex >= 0
+        ? `クリップ${selectedSegmentIndex + 1}`
+        : audioSelection?.kind === "bgm"
+          ? "BGM"
+          : audioSelection?.kind === "sfx"
+            ? "選んだ音"
+            : undefined;
+  // 演出タブの「動画全体」はクリップに関係ない設定なので、選択中のクリップ名は出さない。
+  // 効果音・BGMタブも、パネルの中に選んだ音の名前が出るため、見出しの横の補足(「選んだ音」「BGM」)は出さない。
+  const settingsTargetLabel =
+    (activeTab === "effects" && effectsScope === "global") || activeTab === "se" || activeTab === "bgm"
+      ? undefined
+      : selectionLabel;
 
-      {/* プログラムモニター(再生しながら編集できる中心のプレビュー)+ 選択中クリップのインスペクター */}
-      <div className="editor-top-row">
-        <div className="editor-preview-col">
-          {form.segments.length > 0 ? (
-            <div
-              style={{
-                height: "min(58vh, 620px)",
-                aspectRatio: `${VIDEO_WIDTH} / ${VIDEO_HEIGHT}`,
-                position: "relative",
-                borderRadius: 8,
-                overflow: "hidden",
-                border: "1px solid var(--border-strong)",
-              }}
+  const cutTools: ToolItem[] = [
+    {
+      key: "split",
+      label: "クリップ分割",
+      icon: <ScissorsIcon />,
+      onClick: splitAtPlayhead,
+      disabled: !canSplitAtPlayhead,
+      shortcut: "S",
+    },
+    {
+      key: "trim-start",
+      label: "ここから使う",
+      icon: <TrimStartIcon />,
+      onClick: trimStartToPlayhead,
+      disabled: activeSegmentKey === null,
+      shortcut: "I",
+    },
+    {
+      key: "trim-end",
+      label: "ここまで使う",
+      icon: <TrimEndIcon />,
+      onClick: trimEndToPlayhead,
+      disabled: activeSegmentKey === null,
+      shortcut: "O",
+    },
+    {
+      key: "add",
+      label: "削除部分を復元",
+      // 選んだクリップの複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
+      title: "削除した部分のうち一番長い所から、最大5秒を動画の最後に戻します",
+      icon: <RestoreClipIcon />,
+      onClick: addSegment,
+      disabled: !canAddSegment,
+    },
+  ];
+  // スマホでは選択中クリップの設定(複製・結合・削除・音量)を開くボタンも並べる
+  const cutToolsWithSettings: ToolItem[] = [
+    ...cutTools,
+    // タブレット縦向き以上では設定が常に見えているので出さない(.tool-only-sheet)
+    { key: "settings", label: "設定", icon: <SettingsIcon />, onClick: openSettings, className: "tool-only-sheet" },
+  ];
+
+  // AIナレーションは、一括生成(「全クリップの字幕」欄)とクリップごとの欄(字幕の見た目の次)に分けて置く。
+  // どちらも同じ声の設定・生成中の状態を使うので、同じ値を渡す。
+  const narrationProps = {
+    segments: form.segments,
+    selectedSegmentKey,
+    audioSelection,
+    narrationClips: narrationOnlyClips,
+    totalSfxCount: sfxClips.length,
+    maxSfxClips: MAX_SFX_CLIPS,
+    onUpdateSfx: updateSfxClip,
+    onRemoveSfx: removeSfxClip,
+    voiceOptions: VOICE_OPTIONS,
+    narrationVoice,
+    onChangeNarrationVoice: setNarrationVoice,
+    narrationGenerating,
+    onGenerateNarrationForSegment: (key: string) => void handleGenerateNarrationForSegment(key),
+    onGenerateNarrationForAll: () => void handleGenerateNarrationForAll(),
+    onCancelNarrationGeneration: () => {
+      narrationCancelRef.current = true;
+    },
+  };
+  const narrationPanel = <NarrationInspectorPanel {...narrationProps} />;
+  const narrationBulkAction = <NarrationBulkGenerate {...narrationProps} />;
+
+  // 字幕の見た目(旧「見た目」タブ)のうち全クリップ共通の設定。普段は畳んでおき、押すと開く。
+  // 字幕タブの「字幕の見た目」欄に、強調する単語と一緒に並べる。全体のフェードは演出タブの「動画全体」に移した。
+  const captionLookSettings = (
+    <Collapsible summary="プリセットから選ぶ">
+      <div className="flex flex-col gap-2">
+        <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+          プリセットを押すと、配色・フォント・位置・見た目・演出をまとめて適用します
+        </span>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {STYLE_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => applyStylePreset(preset, true)}
+              className="preset-card flex flex-col gap-1 p-3"
+              title={preset.description}
             >
-              <Player
-                ref={playerRef}
-                component={StandardVideo}
-                inputProps={props}
-                durationInFrames={Math.max(durationInFrames, 1)}
-                fps={VIDEO_FPS}
-                compositionWidth={VIDEO_WIDTH}
-                compositionHeight={VIDEO_HEIGHT}
-                style={{ width: "100%", height: "100%" }}
-                controls
-                loop
-              />
-              {!isPreviewPlaying ? (
-                <PreviewDragLayer
-                  segments={form.segments}
-                  globalOverlays={project?.globalOverlays}
-                  globalImages={project?.globalImages}
-                  frame={previewFrame}
-                  fontFamilyStack={resolveFontFamilyStack(fontFamily)}
-                  onMove={moveOverlayOnPreview}
+              <span className="flex items-center gap-2">
+                <span
+                  className="h-4 w-4 shrink-0 rounded-full"
+                  style={{ background: preset.primaryColor, border: "1px solid var(--border-strong)" }}
                 />
-              ) : null}
-            </div>
-          ) : (
-            <div
-              style={{
-                height: "min(58vh, 620px)",
-                aspectRatio: `${VIDEO_WIDTH} / ${VIDEO_HEIGHT}`,
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                padding: 24,
-                color: "var(--muted-2)",
-                fontSize: 13,
-                border: "1px dashed var(--border-strong)",
-                background: "var(--background-elevated-2)",
-              }}
-            >
-              クリップを追加するとここで再生確認できます
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-center gap-3 text-xs" style={{ color: "var(--muted-2)" }}>
-            <span>総尺 {stats.totalSeconds.toFixed(1)}秒</span>
-            <span>クリップ {stats.clipCount}個</span>
-            <span>文字数 {stats.charCount}字</span>
-            <button type="button" onClick={handleCopyCaptions} className="btn-ghost px-2 py-1 text-xs">
-              {copyStatus === "done" ? "✓ コピーしました" : "字幕をコピー"}
+                <span className="text-xs font-semibold">{preset.label}</span>
+              </span>
+              <span className="text-[11px]" style={{ color: "var(--muted-2)" }}>
+                {preset.description}
+              </span>
             </button>
-          </div>
-          <p className="keyboard-hint text-xs" style={{ color: "var(--muted-2)" }}>
-            キーボード操作: Space=再生/一時停止・←→=1コマ送り・S=分割・I=ここから使う・O=ここまで使う
-          </p>
+          ))}
         </div>
-
-        {activeTab === "cut" ? (
-          <ClipInspectorPanel
-            segments={form.segments}
-            selectedSegmentKey={selectedSegmentKey}
-            selectedCount={selectedKeys.size}
-            onUpdateSegment={updateSegment}
-            onMergeWithNext={mergeSegmentWithNext}
-            onDuplicate={duplicateSegment}
-            onRemove={(key) => removeSegments(new Set([key]))}
-            onDeleteSelected={() => removeSegments(selectedKeys)}
-          />
-        ) : activeTab === "caption" ? (
-          <CaptionInspectorPanel
-            segments={form.segments}
-            selectedSegmentKey={selectedSegmentKey}
-            selectedCount={selectedKeys.size}
-            sfxCount={sfxClips.length}
-            maxSfxClips={MAX_SFX_CLIPS}
-            onUpdateSegment={updateSegment}
-            onApplyAnimationToAll={applyAnimationToAll}
-            narrationGenerating={narrationGenerating}
-            onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
-            onOpenBulkEdit={openBulkEdit}
-            canOpenBulkEdit={form.segments.length > 0}
-            onGenerateCaptionsForAll={handleGenerateCaptionsForAll}
-            captionsGenerating={isTranscribingCaptions}
-            captionsError={transcribeState.status === "error" ? transcribeState.message : null}
-            onClearCaptions={handleClearCaptions}
-            hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
-          />
-        ) : activeTab === "effects" ? (
-          <EffectsInspectorPanel
-            segments={form.segments}
-            selectedSegmentKey={selectedSegmentKey}
-            selectedCount={selectedKeys.size}
-            hook={project?.hook ?? null}
-            cta={project?.cta ?? null}
-            globalOverlays={project?.globalOverlays ?? null}
-            globalImages={project?.globalImages ?? null}
-            onUpdateSegmentEffects={updateSegmentEffects}
-            onUpdateProjectEffects={updateProjectEffects}
-          />
-        ) : activeTab === "se" ? (
-          <SfxInspectorPanel
-            audioSelection={audioSelection}
-            sfxClips={sfxOnlyClips}
-            totalSfxCount={sfxClips.length}
-            sfxUploading={sfxUploading}
-            maxSfxClips={MAX_SFX_CLIPS}
-            sfxPresets={SFX_PRESETS}
-            onUpdateSfx={updateSfxClip}
-            onRemoveSfx={removeSfxClip}
-            onAddSfxFile={(file) => void handleAddSfx(file)}
-            onAddSfxPreset={handleAddSfxPreset}
-          />
-        ) : activeTab === "narration" ? (
-          <NarrationInspectorPanel
-            segments={form.segments}
-            selectedSegmentKey={selectedSegmentKey}
-            audioSelection={audioSelection}
-            narrationClips={narrationOnlyClips}
-            totalSfxCount={sfxClips.length}
-            maxSfxClips={MAX_SFX_CLIPS}
-            onUpdateSfx={updateSfxClip}
-            onRemoveSfx={removeSfxClip}
-            voiceOptions={VOICE_OPTIONS}
-            narrationVoice={narrationVoice}
-            onChangeNarrationVoice={setNarrationVoice}
-            narrationGenerating={narrationGenerating}
-            onGenerateNarrationForSegment={(key) => void handleGenerateNarrationForSegment(key)}
-            onGenerateNarrationForAll={() => void handleGenerateNarrationForAll()}
-            onCancelNarrationGeneration={() => {
-              narrationCancelRef.current = true;
-            }}
-          />
-        ) : activeTab === "bgm" ? (
-          <BgmInspectorPanel
-            audioSelection={audioSelection}
-            bgm={bgm}
-            bgmUploading={bgmUploading}
-            bgmPresets={BGM_PRESETS}
-            onSetBgmField={(patch) => setBgm((prev) => (prev ? { ...prev, ...patch } : prev))}
-            onRemoveBgm={() => setBgm(null)}
-            onSetBgmFile={(file) => void handleSetBgm(file)}
-            onSetBgmPreset={handleSetBgmPreset}
-          />
-        ) : null}
       </div>
+      <div className="editor-field-row">
+        <label className="editor-field">
+          <span>配色</span>
+          <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+        </label>
+        <label className="editor-field">
+          <span>見た目</span>
+          <select value={captionStyle} onChange={(e) => setCaptionStyle(e.target.value as CaptionStyle)}>
+            {CAPTION_STYLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="editor-field-row">
+        <label className="editor-field">
+          <span>フォント</span>
+          <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value as CaptionFontFamily)}>
+            {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="editor-field">
+          <span>位置</span>
+          <select value={captionPosition} onChange={(e) => setCaptionPosition(e.target.value as CaptionPosition)}>
+            {CAPTION_POSITION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="editor-field">
+        <span>文字サイズ</span>
+        <select value={fontSize} onChange={(e) => setFontSize(e.target.value as CaptionFontSize)}>
+          {CAPTION_FONT_SIZE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Collapsible>
+  );
 
-      {/*
-        「こういう演出を足して」「この文字を大きく」のような文章の依頼でAIに編集を直してもらう欄。
-        自動編集の後に、手で1つずつ直す以外の方法でも演出を足せるようにするため(AiRevisePanel.tsx)。
-      */}
-      <AiRevisePanel
-        buildState={buildAiEditableState}
-        videoDurationInSeconds={videoDurationInSeconds}
-        selectedClip={
-          selectedSegmentKey
-            ? (() => {
-                const index = form.segments.findIndex((segment) => segment.key === selectedSegmentKey);
-                if (index < 0) return null;
-                const caption = form.segments[index].caption.trim();
-                return { id: index, label: caption ? caption.slice(0, 12) : "字幕なし" };
-              })()
-            : null
+  const tabSettings =
+    activeTab === "cut" ? (
+      <ClipInspectorPanel
+        segments={form.segments}
+        selectedSegmentKey={selectedSegmentKey}
+        selectedCount={selectedKeys.size}
+        onUpdateSegment={updateSegment}
+        onMergeWithNext={mergeSegmentWithNext}
+        onDuplicate={duplicateSegment}
+        onRemove={(key) => removeSegments(new Set([key]))}
+        onDeleteSelected={() => removeSegments(selectedKeys)}
+      />
+    ) : activeTab === "caption" ? (
+        <CaptionInspectorPanel
+          segments={form.segments}
+          selectedSegmentKey={selectedSegmentKey}
+          selectedCount={selectedKeys.size}
+          onUpdateSegment={updateSegment}
+          onUpdateEmphasis={updateSegmentEffects}
+          onApplyAnimationToAll={applyAnimationToAll}
+          onOpenBulkEdit={openBulkEdit}
+          canOpenBulkEdit={form.segments.length > 0}
+          onGenerateCaptionsForAll={handleGenerateCaptionsForAll}
+          captionsGenerating={isTranscribingCaptions}
+          captionsError={transcribeState.status === "error" ? transcribeState.message : null}
+          onClearCaptions={handleClearCaptions}
+          hasAnyCaption={form.segments.some((segment) => segment.caption.trim().length > 0)}
+          narrationBulkAction={narrationBulkAction}
+          narrationSection={narrationPanel}
+          lookSettings={captionLookSettings}
+        />
+    ) : activeTab === "effects" ? (
+      <EffectsInspectorPanel
+        scope={effectsScope}
+        onChangeScope={setEffectsScope}
+        segments={form.segments}
+        selectedSegmentKey={selectedSegmentKey}
+        selectedCount={selectedKeys.size}
+        hook={project?.hook ?? null}
+        cta={project?.cta ?? null}
+        globalOverlays={project?.globalOverlays ?? null}
+        globalImages={project?.globalImages ?? null}
+        fadeInOut={fadeInOut}
+        onChangeFadeInOut={setFadeInOut}
+        totalSeconds={stats.totalSeconds}
+        onUpdateSegmentEffects={updateSegmentEffects}
+        onUpdateProjectEffects={updateProjectEffects}
+        onPreviewInClip={previewInClip}
+        onPreviewInProgram={previewAtSeconds}
+      />
+    ) : activeTab === "se" ? (
+      <SfxInspectorPanel
+        audioSelection={audioSelection}
+        sfxClips={sfxOnlyClips}
+        totalSfxCount={sfxClips.length}
+        sfxUploading={sfxUploading}
+        maxSfxClips={MAX_SFX_CLIPS}
+        sfxPresets={SFX_PRESETS}
+        onUpdateSfx={updateSfxClip}
+        onRemoveSfx={removeSfxClip}
+        onAddSfxFile={(file) => void handleAddSfx(file)}
+        onAddSfxPreset={handleAddSfxPreset}
+      />
+    ) : activeTab === "bgm" ? (
+      <BgmInspectorPanel
+        audioSelection={audioSelection}
+        bgm={bgm}
+        bgmUploading={bgmUploading}
+        bgmPresets={BGM_PRESETS}
+        onSetBgmField={(patch) => setBgm((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onRemoveBgm={() => setBgm(null)}
+        onSetBgmFile={(file) => void handleSetBgm(file)}
+        onSetBgmPreset={handleSetBgmPreset}
+      />
+    ) : null;
+
+  // カット・字幕・演出(クリップごと)では、設定パネルを閉じずに前後のクリップへ移れるようにする。
+  // 効果音・BGMは動画全体の時刻で置く音で、クリップごとの設定ではないため切り替えは出さない。
+  const showClipNav =
+    settingsView === "tab" &&
+    (activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip"));
+  const clipNav: ClipNav | undefined = showClipNav
+    ? {
+        label:
+          selectedSegmentIndex >= 0
+            ? `クリップ${selectedSegmentIndex + 1} / ${form.segments.length}`
+            : "クリップ未選択",
+        canPrev: selectedSegmentIndex > 0,
+        canNext: selectedSegmentIndex < form.segments.length - 1,
+        onPrev: () => goToClip(selectedSegmentIndex - 1),
+        onNext: () => goToClip(selectedSegmentIndex + 1),
+      }
+    : undefined;
+
+  return (
+    <div
+      className={`editor-app${sheetOpen ? " sheet-open" : ""}${settingsInline ? " settings-inline" : ""}`}
+    >
+      <AppTopBar
+        className="editor-area-topbar"
+        backHref="/create/auto-edit"
+        backLabel="前の手順(AIで自動編集)へ戻る"
+        onBack={handleGoToAutoEdit}
+        onHome={handleBackToTop}
+        title="編集"
+        step={{ current: 5, total: 6 }}
+        hideProgress
+        actions={
+          <>
+            <button type="button" className="btn-outline topbar-outline hidden lg:inline-flex" onClick={handleExportProject}>
+              <SaveIcon size={16} />
+              編集データを保存
+            </button>
+            <label className="btn-outline topbar-outline hidden cursor-pointer lg:inline-flex">
+              <FolderOpenIcon size={16} />
+              保存したデータを開く
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  void handleImportProjectFile(e.target.files?.[0] ?? null);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className={`topbar-pill${settingsView === "ai" && sheetOpen ? " active" : ""}`}
+              onClick={openAiPanel}
+            >
+              <SparkleIcon size={16} />
+              AIに頼む
+            </button>
+            <EditorMenu
+              items={[
+                {
+                  key: "auto-edit",
+                  label: "自動編集を試す",
+                  description: "AIに演出・効果音・ナレーションをまとめて提案してもらう",
+                  icon: <SparkleIcon />,
+                  onClick: handleGoToAutoEdit,
+                },
+                {
+                  key: "save",
+                  label: "編集データを保存",
+                  description: "今の編集の状態をファイルに残す(動画そのものは含まない)",
+                  icon: <SaveIcon />,
+                  onClick: handleExportProject,
+                },
+                {
+                  key: "open",
+                  label: "保存した編集データを開く",
+                  description: "保存したファイルを選んで、その時の状態に戻す",
+                  icon: <FolderOpenIcon />,
+                  accept: "application/json",
+                  onFile: (file) => void handleImportProjectFile(file),
+                },
+                {
+                  key: "copy",
+                  label: copyStatus === "done" ? "字幕をコピーしました" : "字幕をコピー",
+                  description: "全クリップの字幕を、文章としてコピーする",
+                  icon: <CopyIcon />,
+                  onClick: () => void handleCopyCaptions(),
+                  keepOpen: true,
+                },
+                {
+                  key: "start-over",
+                  label: "別の動画からやり直す",
+                  description: "今の編集を削除して、動画のアップロードからやり直す",
+                  icon: <RestartIcon />,
+                  danger: true,
+                  onClick: handleStartOver,
+                },
+              ]}
+              footer={
+                <span>
+                  総尺 {stats.totalSeconds.toFixed(1)}秒・クリップ {stats.clipCount}個・文字数 {stats.charCount}字
+                </span>
+              }
+            />
+          </>
         }
-        onApply={applyAiRevision}
-        canUndo={aiUndoSnapshot !== null}
-        onUndo={undoAiRevision}
       />
 
-      {/* タブ切り替え(動画カット/字幕/演出/SE/AI音声/BGM/スタイル)。プレビュー・タイムライン・書き出しは常時表示。 */}
-      <div className="tab-bar">
-        <button
-          type="button"
-          onClick={() => setActiveTab("cut")}
-          className={`tab-button${activeTab === "cut" ? " active" : ""}`}
-        >
-          動画カット
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("caption")}
-          className={`tab-button${activeTab === "caption" ? " active" : ""}`}
-        >
-          字幕
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("effects")}
-          className={`tab-button${activeTab === "effects" ? " active" : ""}`}
-        >
-          演出
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("se")}
-          className={`tab-button${activeTab === "se" ? " active" : ""}`}
-        >
-          効果音
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("narration")}
-          className={`tab-button${activeTab === "narration" ? " active" : ""}`}
-        >
-          AI音声
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("bgm")}
-          className={`tab-button${activeTab === "bgm" ? " active" : ""}`}
-        >
-          BGM
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("style")}
-          className={`tab-button${activeTab === "style" ? " active" : ""}`}
-        >
-          スタイル
-        </button>
+      <EditorTabBar
+        className="editor-area-tabs"
+        active={activeTab}
+        onSelect={handleSelectTab}
+        onFinish={handleGoToExport}
+        canFinish={canRender}
+      />
+
+      {/* プログラムモニター(再生しながら編集できる中心のプレビュー) */}
+      <div className="editor-area-stage editor-stage">
+        {form.segments.length > 0 ? (
+          <div className="editor-stage-frame">
+            <Player
+              ref={playerRef}
+              component={StandardVideo}
+              inputProps={props}
+              durationInFrames={Math.max(durationInFrames, 1)}
+              fps={VIDEO_FPS}
+              compositionWidth={VIDEO_WIDTH}
+              compositionHeight={VIDEO_HEIGHT}
+              style={{ width: "100%", height: "100%" }}
+              clickToPlay
+              loop
+            />
+            {!isPreviewPlaying ? (
+              <PreviewDragLayer
+                segments={form.segments}
+                globalOverlays={project?.globalOverlays}
+                globalImages={project?.globalImages}
+                frame={previewFrame}
+                fontFamilyStack={resolveFontFamilyStack(fontFamily)}
+                onMove={moveOverlayOnPreview}
+              />
+            ) : null}
+          </div>
+        ) : (
+          <div className="editor-stage-empty">クリップを追加するとここで再生確認できます</div>
+        )}
       </div>
 
-      {activeTab === "style" ? (
-        <div className="panel flex flex-col gap-4 p-5">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold">スタイルプリセット</h2>
-            <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              配色・フォント・位置・見た目・演出をまとめて1クリックで適用します
-            </span>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {STYLE_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyStylePreset(preset, true)}
-                  className="preset-card flex flex-col gap-1 p-3"
-                  title={preset.description}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="h-4 w-4 shrink-0 rounded-full"
-                      style={{ background: preset.primaryColor, border: "1px solid var(--border-strong)" }}
-                    />
-                    <span className="text-xs font-semibold">{preset.label}</span>
-                  </span>
-                  <span className="text-[11px]" style={{ color: "var(--muted-2)" }}>
-                    {preset.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+      <PlaybackBar
+        className="editor-area-playback"
+        isPlaying={isPreviewPlaying}
+        onTogglePlay={togglePlay}
+        currentSeconds={previewFrame / VIDEO_FPS}
+        totalSeconds={stats.totalSeconds}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        onFullscreen={showFullscreen}
+      >
+        {activeTab === "cut" ? <ToolInline items={cutTools} /> : null}
+      </PlaybackBar>
 
-          <div
-            className="flex flex-wrap items-center gap-4 border-t pt-4"
-            style={{ borderColor: "var(--border)" }}
-          >
-            <label className="flex items-center gap-2">
-              <span className="field-label">配色</span>
-              <input
-                type="color"
-                className="h-8 w-14"
-                value={primaryColor}
-                onChange={(e) => setPrimaryColor(e.target.value)}
-              />
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="field-label">見た目</span>
-              <select
-                value={captionStyle}
-                onChange={(e) => setCaptionStyle(e.target.value as CaptionStyle)}
-                className="field-input w-fit py-1 text-sm"
-              >
-                {CAPTION_STYLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="field-label">フォント</span>
-              <select
-                value={fontFamily}
-                onChange={(e) => setFontFamily(e.target.value as CaptionFontFamily)}
-                className="field-input w-fit py-1 text-sm"
-              >
-                {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="field-label">位置</span>
-              <select
-                value={captionPosition}
-                onChange={(e) => setCaptionPosition(e.target.value as CaptionPosition)}
-                className="field-input w-fit py-1 text-sm"
-              >
-                {CAPTION_POSITION_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="field-label">文字サイズ</span>
-              <select
-                value={fontSize}
-                onChange={(e) => setFontSize(e.target.value as CaptionFontSize)}
-                className="field-input w-fit py-1 text-sm"
-              >
-                {CAPTION_FONT_SIZE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={fadeInOut} onChange={(e) => setFadeInOut(e.target.checked)} />
-              <span className="field-label">全体フェードイン/アウト</span>
-            </label>
-          </div>
-        </div>
-      ) : null}
-
-      {activeTab !== "style" ? (
+      <div className="editor-area-timeline">
         <TimelineRoot
           segments={form.segments}
-          sfxClips={activeTab === "se" ? sfxOnlyClips : activeTab === "narration" ? narrationOnlyClips : sfxClips}
+          sfxClips={activeTab === "se" ? sfxOnlyClips : activeTab === "caption" ? narrationOnlyClips : sfxClips}
+          sfxTrackLabel={activeTab === "caption" ? "AI音声" : "効果音"}
           bgm={bgm}
           videoPath={project.videoPath}
           totalDurationSeconds={stats.totalSeconds}
@@ -1620,35 +1769,57 @@ export const ClipEditor: React.FC = () => {
           onMoveSfx={(key, value) => updateSfxClip(key, { startFromSeconds: value })}
           onSelectBgm={selectBgm}
           onScrub={(seconds) => playerRef.current?.seekTo(Math.round(seconds * VIDEO_FPS))}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onUndo={undo}
-          onRedo={redo}
-          canAddSegment={canAddSegment}
-          onAddSegment={addSegment}
-          selectedCount={selectedKeys.size}
-          onDeleteSelected={() => removeSegments(selectedKeys)}
-          canSplitAtPlayhead={canSplitAtPlayhead}
-          onSplitAtPlayhead={splitAtPlayhead}
-          onTrimStartToPlayhead={trimStartToPlayhead}
-          onTrimEndToPlayhead={trimEndToPlayhead}
-          showCutTools={activeTab === "cut"}
           tracks={{
             video: true,
-            sfx: activeTab === "se" || activeTab === "narration",
+            sfx: activeTab === "se" || activeTab === "caption",
             bgm: activeTab === "bgm",
           }}
         />
-      ) : null}
+      </div>
 
-      <button
-        type="button"
-        onClick={handleGoToExport}
-        disabled={!canRender}
-        className="btn-primary flex h-14 items-center justify-center px-6 text-base"
+      <div className="editor-area-tools">
+        {activeTab === "cut" ? (
+          <ToolGrid items={cutToolsWithSettings} />
+        ) : settingsInline ? null : (
+          <div className="editor-tools-single">
+            <button type="button" className="editor-open-settings-btn" onClick={openSettings}>
+              {EDITOR_TAB_LABELS[activeTab]}の設定を開く{settingsTargetLabel ? `(${settingsTargetLabel})` : ""}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <SettingsPanel
+        className="editor-area-settings"
+        title={settingsView === "ai" ? "AIに頼む" : EDITOR_TAB_LABELS[activeTab]}
+        subtitle={settingsView === "ai" ? undefined : settingsTargetLabel}
+        clipNav={clipNav}
+        onClose={closeSettings}
       >
-        動画を書き出す →
-      </button>
+        {/*
+          「こういう演出を足して」「この文字を大きく」のような文章の依頼でAIに編集を直してもらう欄。
+          自動編集の後に、手で1つずつ直す以外の方法でも演出を足せるようにするため(AiRevisePanel.tsx)。
+        */}
+        {/* 依頼文や処理中・完了した修正案を失わないよう、閉じても外さずに隠すだけにする */}
+        <div hidden={settingsView !== "ai"}>
+            <AiRevisePanel
+              buildState={buildAiEditableState}
+              videoDurationInSeconds={videoDurationInSeconds}
+              selectedClip={
+                selectedSegmentIndex >= 0
+                  ? {
+                      id: selectedSegmentIndex,
+                      label: form.segments[selectedSegmentIndex].caption.trim().slice(0, 12) || "字幕なし",
+                    }
+                  : null
+              }
+              onApply={applyAiRevision}
+              canUndo={aiUndoSnapshot !== null}
+              onUndo={undoAiRevision}
+            />
+        </div>
+        {settingsView === "tab" ? tabSettings : null}
+      </SettingsPanel>
 
       {bulkEditOpen ? (
         <div className="modal-backdrop" onClick={() => setBulkEditOpen(false)}>

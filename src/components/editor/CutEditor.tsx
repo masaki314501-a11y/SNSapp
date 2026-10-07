@@ -29,6 +29,18 @@ import {
 } from "./timelineUtils";
 import { TimelineRoot } from "./timeline/TimelineRoot";
 import { beginPointerDrag } from "./timeline/pointerDrag";
+import { AppTopBar } from "@/components/AppTopBar";
+import {
+  CropIcon,
+  RestoreClipIcon,
+  RestartIcon,
+  ScissorsIcon,
+  TrashIcon,
+  TrimEndIcon,
+  TrimStartIcon,
+} from "@/components/icons";
+import { PlaybackBar } from "./PlaybackBar";
+import { ToolGrid, type ToolItem } from "./ToolButtons";
 
 /**
  * アップロード直後の動画から、実際に使う範囲だけを粗く選ぶラフカット画面(/create/cut)。
@@ -60,14 +72,19 @@ const applyTrimPatch = (
 };
 
 const EmptyState: React.FC = () => (
-  <div className="panel flex flex-col items-center gap-3 p-10 text-center">
-    <p className="text-sm font-medium">カットする動画がありません</p>
-    <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-      まずは動画をアップロードしてください
-    </p>
-    <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
-      動画をアップロードする →
-    </a>
+  <div className="flow-page">
+    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 6 }} />
+    <main className="flow-main">
+      <div className="panel flex flex-col items-center gap-3 p-10 text-center">
+        <p className="text-sm font-medium">カットする動画がありません</p>
+        <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+          まずは動画をアップロードしてください
+        </p>
+        <a href="/create" className="btn-primary px-4 py-2 text-sm">
+          動画をアップロードする →
+        </a>
+      </div>
+    </main>
   </div>
 );
 
@@ -126,6 +143,9 @@ export const CutEditor: React.FC = () => {
   const durationInFrames = useMemo(() => getStandardVideoDurationInFrames(props), [props]);
 
   const [previewFrame, setPreviewFrame] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  // Remotion標準のコントロールをやめたので、音のオン/オフは再生バーのボタンで切り替える。
+  const [isMuted, setIsMuted] = useState(false);
   const hasClips = segments.length > 0;
   useEffect(() => {
     if (!hasClips) return;
@@ -134,8 +154,16 @@ export const CutEditor: React.FC = () => {
     const handleFrameUpdate = ({ detail }: { detail: { frame: number } }) => {
       setPreviewFrame(detail.frame);
     };
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
     player.addEventListener("frameupdate", handleFrameUpdate);
-    return () => player.removeEventListener("frameupdate", handleFrameUpdate);
+    player.addEventListener("play", handlePlay);
+    player.addEventListener("pause", handlePause);
+    return () => {
+      player.removeEventListener("frameupdate", handleFrameUpdate);
+      player.removeEventListener("play", handlePlay);
+      player.removeEventListener("pause", handlePause);
+    };
   }, [hasClips]);
 
   const segmentFrameRanges = useMemo(
@@ -486,8 +514,14 @@ export const CutEditor: React.FC = () => {
   });
 
   const handleStartOver = () => {
-    if (!window.confirm("現在の内容を破棄して、新しい動画のアップロードからやり直しますか?")) return;
+    if (!window.confirm("現在の内容を削除して、新しい動画のアップロードからやり直しますか?")) return;
     clearProject();
+    router.push("/create");
+  };
+
+  /** 上部バーの戻る。自動保存は少し待ってから書き込むため、離れる前に同期的に書き戻す。 */
+  const handleBackToUpload = () => {
+    if (project) saveProject({ ...project, segments });
     router.push("/create");
   };
 
@@ -500,149 +534,208 @@ export const CutEditor: React.FC = () => {
   if (!hasCheckedProject) return null;
   if (!project) return <EmptyState />;
 
+  const cutTools: ToolItem[] = [
+    { key: "split", label: "クリップ分割", icon: <ScissorsIcon />, onClick: splitAtPlayhead, disabled: !canSplitAtPlayhead },
+    {
+      key: "trim-start",
+      label: "ここから使う",
+      icon: <TrimStartIcon />,
+      onClick: trimStartToPlayhead,
+      disabled: activeSegmentKey === null,
+    },
+    {
+      key: "trim-end",
+      label: "ここまで使う",
+      icon: <TrimEndIcon />,
+      onClick: trimEndToPlayhead,
+      disabled: activeSegmentKey === null,
+    },
+    {
+      key: "add",
+      label: "削除部分を復元",
+      // 選んだクリップの複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
+      title: "削除した部分のうち一番長い所から、最大5秒を動画の最後に戻します",
+      icon: <RestoreClipIcon />,
+      onClick: addSegment,
+      disabled: !canAddSegment,
+    },
+    {
+      key: "discard",
+      label: "クリップ削除",
+      icon: <TrashIcon />,
+      onClick: () => removeSegments(selectedKeys),
+      disabled: selectedKeys.size === 0,
+      danger: true,
+    },
+  ];
+
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <button type="button" onClick={handleStartOver} className="btn-ghost self-start text-xs">
-        ← 別の動画からやり直す
-      </button>
+    <div className="editor-app cut-app">
+      <AppTopBar
+        className="editor-area-topbar"
+        backHref="/create"
+        onBack={handleBackToUpload}
+        title="使う範囲を選ぶ"
+        step={{ current: 2, total: 6 }}
+        actions={
+          <button type="button" className="btn-outline topbar-outline inline-flex" onClick={handleStartOver}>
+            <RestartIcon size={16} />
+            別の動画にする
+          </button>
+        }
+      />
 
-      <div
-        style={{
-          height: "min(58vh, 620px)",
-          aspectRatio: `${VIDEO_WIDTH} / ${VIDEO_HEIGHT}`,
-          borderRadius: 8,
-          overflow: "hidden",
-          border: "1px solid var(--border-strong)",
-          alignSelf: "center",
-        }}
-      >
-        <Player
-          ref={playerRef}
-          component={StandardVideo}
-          inputProps={props}
-          durationInFrames={Math.max(durationInFrames, 1)}
-          fps={VIDEO_FPS}
-          compositionWidth={VIDEO_WIDTH}
-          compositionHeight={VIDEO_HEIGHT}
-          style={{ width: "100%", height: "100%" }}
-          controls
-          loop
-        />
-      </div>
-      <p className="keyboard-hint text-center text-xs" style={{ color: "var(--muted-2)" }}>
-        キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=分割・I=ここから使う・O=ここまで使う・Delete=選んだ範囲を捨てる
-      </p>
-
-      {videoDurationInSeconds > 0 ? (
-        <div className="editor-coverage-wrap">
-          <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted-2)" }}>
-            <span>元動画のうち、使う範囲(オレンジ)</span>
-            <span>
-              使用 {sourceCoverage.keptSeconds.toFixed(1)}秒 / 全体 {videoDurationInSeconds.toFixed(1)}秒
-              (
-              {Math.round((1 - sourceCoverage.keptSeconds / videoDurationInSeconds) * 100)}
-              %カット)
-            </span>
-          </div>
-          <div
-            className="editor-coverage-bar"
-            ref={coverageBarRef}
-            onPointerDown={handleCoveragePointerDown}
-            style={{ cursor: "text" }}
-            title="クリックでその位置へ移動、横にドラッグで範囲を選択"
-          >
-            {sourceCoverage.ranges.map(([start, end], i) => (
-              <div
-                key={i}
-                className="editor-coverage-kept"
-                style={{
-                  left: `${(start / videoDurationInSeconds) * 100}%`,
-                  width: `${((end - start) / videoDurationInSeconds) * 100}%`,
-                }}
-              />
-            ))}
-            {sourceRange ? (
-              <div
-                className="editor-coverage-selection"
-                style={{
-                  left: `${(sourceRange.start / videoDurationInSeconds) * 100}%`,
-                  width: `${((sourceRange.end - sourceRange.start) / videoDurationInSeconds) * 100}%`,
-                }}
-              />
-            ) : null}
-            {activeSourceSeconds !== null ? (
-              <div
-                className="editor-coverage-playhead"
-                style={{ left: `${(activeSourceSeconds / videoDurationInSeconds) * 100}%` }}
-              />
-            ) : null}
-          </div>
-          {sourceRange ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs" style={{ color: "var(--muted)" }}>
-                選択範囲 {sourceRange.start.toFixed(1)}秒 〜 {sourceRange.end.toFixed(1)}秒
-                ({(sourceRange.end - sourceRange.start).toFixed(1)}秒)
-              </span>
-              <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
-                この範囲を捨てる
-              </button>
-              <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
-                ここだけ残す
-              </button>
-              <button type="button" className="btn-ghost text-xs" onClick={() => setSourceRange(null)}>
-                選択解除
-              </button>
-            </div>
-          ) : (
-            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-              バーをクリックでその位置へ移動・横にドラッグで範囲を選ぶと、まとめて捨てられます
-            </p>
-          )}
+      <div className="editor-area-stage editor-stage">
+        <div className="editor-stage-frame">
+          <Player
+            ref={playerRef}
+            component={StandardVideo}
+            inputProps={props}
+            durationInFrames={Math.max(durationInFrames, 1)}
+            fps={VIDEO_FPS}
+            compositionWidth={VIDEO_WIDTH}
+            compositionHeight={VIDEO_HEIGHT}
+            style={{ width: "100%", height: "100%" }}
+            clickToPlay
+            loop
+          />
         </div>
-      ) : null}
+      </div>
 
-      <TimelineRoot
-        segments={segments}
-        sfxClips={[]}
-        bgm={null}
-        videoPath={project.videoPath}
-        totalDurationSeconds={totalSeconds}
+      <PlaybackBar
+        className="editor-area-playback"
+        isPlaying={isPlaying}
+        onTogglePlay={() => playerRef.current?.toggle()}
         currentSeconds={previewFrame / VIDEO_FPS}
-        selectedKeys={selectedKeys}
-        activeSegmentKey={activeSegmentKey}
-        audioSelection={null}
-        onSelectSegment={selectSegment}
-        onTrimStart={handleTrimStart}
-        onTrimEnd={handleTrimEnd}
-        onTrimBegin={pushHistory}
-        onReorder={reorderSegment}
-        onSelectSfx={() => {}}
-        onMoveSfx={() => {}}
-        onSelectBgm={() => {}}
-        onScrub={(seconds) => playerRef.current?.seekTo(Math.round(seconds * VIDEO_FPS))}
+        totalSeconds={totalSeconds}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
-        canAddSegment={canAddSegment}
-        onAddSegment={addSegment}
-        selectedCount={selectedKeys.size}
-        onDeleteSelected={() => removeSegments(selectedKeys)}
-        canSplitAtPlayhead={canSplitAtPlayhead}
-        onSplitAtPlayhead={splitAtPlayhead}
-        onTrimStartToPlayhead={trimStartToPlayhead}
-        onTrimEndToPlayhead={trimEndToPlayhead}
-        tracks={{ sfx: false, bgm: false }}
+        isMuted={isMuted}
+        onToggleMute={() => {
+          const player = playerRef.current;
+          if (!player) return;
+          if (player.isMuted()) player.unmute();
+          else player.mute();
+          setIsMuted(player.isMuted());
+        }}
+        onFullscreen={() => playerRef.current?.requestFullscreen()}
       />
 
-      <button
-        type="button"
-        onClick={handleGoToStyle}
-        disabled={segments.length === 0}
-        className="btn-primary flex h-14 items-center justify-center px-6 text-base"
-      >
-        この範囲で進む(参考スクショへ) →
-      </button>
+      <div className="editor-area-timeline">
+        <TimelineRoot
+          segments={segments}
+          sfxClips={[]}
+          bgm={null}
+          videoPath={project.videoPath}
+          totalDurationSeconds={totalSeconds}
+          currentSeconds={previewFrame / VIDEO_FPS}
+          selectedKeys={selectedKeys}
+          activeSegmentKey={activeSegmentKey}
+          audioSelection={null}
+          onSelectSegment={selectSegment}
+          onTrimStart={handleTrimStart}
+          onTrimEnd={handleTrimEnd}
+          onTrimBegin={pushHistory}
+          onReorder={reorderSegment}
+          onSelectSfx={() => {}}
+          onMoveSfx={() => {}}
+          onSelectBgm={() => {}}
+          onScrub={(seconds) => playerRef.current?.seekTo(Math.round(seconds * VIDEO_FPS))}
+          tracks={{ sfx: false, bgm: false }}
+        />
+      </div>
+
+      {/* 可視化バー・操作ボタン・次へ。スマホでは縦に並び、1024px以上では右側にまとまる */}
+      <div className="cut-side">
+        {videoDurationInSeconds > 0 ? (
+          <div className="editor-area-coverage editor-coverage-wrap">
+            <div className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="font-bold">使う範囲</span>
+              <span className="whitespace-nowrap tabular-nums" style={{ color: "var(--muted)" }}>
+                <b style={{ color: "var(--foreground)" }}>{sourceCoverage.keptSeconds.toFixed(1)}秒</b> / 全体{" "}
+                {videoDurationInSeconds.toFixed(1)}秒
+              </span>
+            </div>
+            <div
+              className="editor-coverage-bar"
+              ref={coverageBarRef}
+              onPointerDown={handleCoveragePointerDown}
+              style={{ cursor: "text" }}
+              title="クリックでその位置へ移動、横にドラッグで範囲を選択"
+            >
+              {sourceCoverage.ranges.map(([start, end], i) => (
+                <div
+                  key={i}
+                  className="editor-coverage-kept"
+                  style={{
+                    left: `${(start / videoDurationInSeconds) * 100}%`,
+                    width: `${((end - start) / videoDurationInSeconds) * 100}%`,
+                  }}
+                />
+              ))}
+  
+            {sourceRange ? (
+                <div
+                  className="editor-coverage-selection"
+                  style={{
+                    left: `${(sourceRange.start / videoDurationInSeconds) * 100}%`,
+                    width: `${((sourceRange.end - sourceRange.start) / videoDurationInSeconds) * 100}%`,
+                  }}
+                />
+              ) : null}
+              {activeSourceSeconds !== null ? (
+                <div
+                  className="editor-coverage-playhead"
+                  style={{ left: `${(activeSourceSeconds / videoDurationInSeconds) * 100}%` }}
+                />
+              ) : null}
+            </div>
+            {sourceRange ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  選択範囲 {sourceRange.start.toFixed(1)}秒 〜 {sourceRange.end.toFixed(1)}秒
+                  ({(sourceRange.end - sourceRange.start).toFixed(1)}秒)
+                </span>
+                {/* 選んだ範囲への操作は1行にまとめる(以前は折り返して2行に分かれていた)。選択はバーの別の場所を押すと外れる */}
+                <div className="coverage-actions">
+                  <button type="button" className="editor-toolbar-btn danger" onClick={() => applySourceRange("discard")}>
+                    <TrashIcon size={14} />
+                    選択範囲を削除
+                  </button>
+                  <button type="button" className="editor-toolbar-btn" onClick={() => applySourceRange("keepOnly")}>
+                    <CropIcon size={14} />
+                    選択範囲だけ残す
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+                バーを指でなぞると、まとめて削除する範囲を選べます
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        <div className="editor-area-tools">
+          <ToolGrid items={cutTools} />
+        </div>
+        <p className="keyboard-hint hidden text-xs lg:block" style={{ color: "var(--muted-2)" }}>
+          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=クリップ分割・I=ここから使う・O=ここまで使う・Delete=選んだクリップを削除
+        </p>
+
+        <div className="editor-area-action">
+          <button
+            type="button"
+            onClick={handleGoToStyle}
+            disabled={segments.length === 0}
+            className="btn-primary flex items-center justify-center"
+          >
+            見た目の手本へ進む
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
