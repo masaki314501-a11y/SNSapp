@@ -7,7 +7,6 @@
  */
 export type EditTemplate = {
   id: string;
-  emoji: string;
   label: string;
   /** 画面に出す説明。誰でもわかる言葉で、どんな動画に向くかを書く。 */
   description: string;
@@ -18,7 +17,6 @@ export type EditTemplate = {
 export const EDIT_TEMPLATES: EditTemplate[] = [
   {
     id: "ranking",
-    emoji: "🏆",
     label: "ランキング・比較",
     description: "「おすすめ5選」「AとBどっちがいい?」など、順位や比べる動画に",
     instructions: `
@@ -32,7 +30,6 @@ export const EDIT_TEMPLATES: EditTemplate[] = [
   },
   {
     id: "explainer",
-    emoji: "💡",
     label: "解説・ノウハウ",
     description: "やり方・豆知識・お役立ち情報を、わかりやすく伝える動画に",
     instructions: `
@@ -46,7 +43,6 @@ export const EDIT_TEMPLATES: EditTemplate[] = [
   },
   {
     id: "kirinuki",
-    emoji: "✂️",
     label: "切り抜き風",
     description: "対談・配信・トークの一部を切り出した、よく見る切り抜き動画の見た目に",
     instructions: `
@@ -60,7 +56,6 @@ export const EDIT_TEMPLATES: EditTemplate[] = [
   },
   {
     id: "high-tension",
-    emoji: "🔥",
     label: "ハイテンション",
     description: "テンポが速く、ズームと効果音でたたみかける、にぎやかな動画に",
     instructions: `
@@ -74,7 +69,6 @@ export const EDIT_TEMPLATES: EditTemplate[] = [
   },
   {
     id: "vlog",
-    emoji: "☕",
     label: "Vlog・日常",
     description: "日常・旅行・ルーティンなど、雰囲気を大事にする落ち着いた動画に",
     instructions: `
@@ -87,7 +81,6 @@ export const EDIT_TEMPLATES: EditTemplate[] = [
   },
   {
     id: "story",
-    emoji: "📖",
     label: "ストーリー・体験談",
     description: "失敗談・ビフォーアフター・実体験を、最後まで見たくなる流れで伝える動画に",
     instructions: `

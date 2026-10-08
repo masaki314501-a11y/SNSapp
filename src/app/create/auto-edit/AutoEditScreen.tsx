@@ -167,7 +167,7 @@ export const AutoEditScreen: React.FC = () => {
                   }}
                 >
                   <span className="text-sm font-medium">
-                    {template ? `${template.emoji} ${template.label}` : "🎲 おまかせ"}
+                    {template ? template.label : "おまかせ"}
                   </span>
                   <span className="text-xs" style={{ color: "var(--muted)" }}>
                     {template ? template.description : "型を決めず、動画の中身に合わせてAIが自由に編集します"}
@@ -212,20 +212,20 @@ export const AutoEditScreen: React.FC = () => {
             ) : null}
             <ul className="flex flex-col gap-1 text-xs" style={{ color: "var(--muted)" }}>
               <li>
-                ✂️ {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {autoEditState.segments.length}
+                {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {autoEditState.segments.length}
                 クリップ・{totalSeconds(autoEditState.segments).toFixed(1)}秒
               </li>
-              {autoEditState.plan.hook ? <li>🪝 冒頭の見出し: {autoEditState.plan.hook.headline}</li> : null}
-              {autoEditState.plan.cta ? <li>📣 締めの一言: {autoEditState.plan.cta.text}</li> : null}
+              {autoEditState.plan.hook ? <li>冒頭の見出し: {autoEditState.plan.hook.headline}</li> : null}
+              {autoEditState.plan.cta ? <li>締めの一言: {autoEditState.plan.cta.text}</li> : null}
               {autoEditState.plan.globalOverlays.length > 0 ? (
-                <li>📌 ずっと出す文字: {autoEditState.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
+                <li>ずっと出す文字: {autoEditState.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
               ) : null}
-              <li>🔍 寄り(ズーム): {autoEditState.segments.filter((s) => s.zoom).length}か所</li>
+              <li>寄り(ズーム): {autoEditState.segments.filter((s) => s.zoom).length}か所</li>
               <li>
-                💬 強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
+                強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
               </li>
               <li>
-                🔊 効果音: {autoEditState.generatedClips.filter((c) => !c.narrationSegmentKey).length}個 / 🎙 ナレーション:{" "}
+                効果音: {autoEditState.generatedClips.filter((c) => !c.narrationSegmentKey).length}個 / ナレーション:{" "}
                 {autoEditState.generatedClips.filter((c) => c.narrationSegmentKey).length}個
               </li>
             </ul>

@@ -456,9 +456,9 @@ export const ClipEditor: React.FC = () => {
   );
 
   // sfxClips配列にはSEとAIナレーションが同じ形で混在している(appendNarrationClip参照)。
-  // データモデルは変えず、ラベルの絵文字プレフィックスで表示上だけ区別する
+  // データモデルは変えず、narrationSegmentKeyの有無で表示上だけ区別する
   // (「SE」「AI音声」タブそれぞれに、関係あるクリップだけを見せるため)。
-  // narrationSegmentKeyを持たない古い保存データもあるため、ラベルの絵文字も引き続き見る。
+  // narrationSegmentKeyを持たない古い保存データは、当時ラベルの頭に付けていた「🎙」で見分ける。
   const isNarrationClip = (clip: ProjectSfxClip) =>
     clip.narrationSegmentKey !== undefined || clip.label.startsWith("🎙");
   const sfxOnlyClips = useMemo(() => sfxClips.filter((c) => !isNarrationClip(c)), [sfxClips]);
@@ -1074,7 +1074,7 @@ export const ClipEditor: React.FC = () => {
       const next: ProjectSfxClip = {
         key: crypto.randomUUID(),
         src: path,
-        label: `🎙 ${caption.slice(0, 12)}`,
+        label: caption.slice(0, 12),
         startFromSeconds,
         volume: DEFAULT_CLIP_VOLUME,
         narrationSegmentKey: segmentKey,

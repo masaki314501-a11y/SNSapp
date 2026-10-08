@@ -114,7 +114,7 @@ export async function POST(request: Request) {
           generatedClips.push({
             key: randomUUID(),
             src: path,
-            label: `🎙 ${clip.narration.slice(0, 12)}`,
+            label: clip.narration.slice(0, 12),
             startFromSeconds: cumulativeStart,
             volume: DEFAULT_CLIP_VOLUME,
             narrationSegmentKey: key,
