@@ -48,6 +48,8 @@ export const ExportScreen: React.FC = () => {
         cta: current.cta,
         globalOverlays: current.globalOverlays,
         globalImages: current.globalImages,
+        globalShapes: current.globalShapes,
+        framing: current.framing,
         muteOriginalUnderNarration: current.muteOriginalUnderNarration,
       }),
       exportFileName(current)

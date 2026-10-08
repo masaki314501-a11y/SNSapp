@@ -429,76 +429,102 @@
       "summary": "無言や言い淀みを細かくカットし、ランキング形式でテンポよく進行。右側のスペースに要約テキストを大きく表示して視認性を高めている。",
       "theme": {
         "primaryColor": "#00BFFF",
-        "fontFamily": "Noto Sans JP",
+        "fontFamily": "M PLUS Rounded 1c",
         "captionPosition": "bottom",
         "captionStyle": "outline"
       },
-      "hook": {
-        "headline": "どの症状が最悪？矯正した方がいい歯の症状",
-        "subline": null
-      },
-      "cta": {
-        "text": "プロフィールの予約リンクへ！"
-      },
+      "hook": null,
+      "cta": null,
       "globalOverlays": [
         {
-          "text": "どの症状が最悪？\n矯正した方がいい\n歯の症状",
-          "xPercent": 25,
-          "yPercent": 10
+          "text": "どの症状が最重要？",
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 26.3,
+          "yPercent": 9.2,
+          "fontSizePx": 30,
+          "color": "#FFFFFF",
+          "backgroundColor": "#000000",
+          "italic": true,
+          "animation": "fade"
+        },
+        {
+          "text": "矯正した方がいい\n歯の症状",
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 26,
+          "yPercent": 14.2,
+          "fontSizePx": 52,
+          "color": "#FFFFFF",
+          "strokeColor": "#1E9BE0",
+          "animation": "fade",
+          "strokeWidthPx": 9
         },
         {
           "text": "1位",
-          "xPercent": 17,
-          "yPercent": 28.5,
-          "fontSizePx": 44,
-          "color": "#F5C542",
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 17.6,
+          "yPercent": 28.4,
+          "fontSizePx": 46,
+          "color": "#D9C04A",
           "strokeColor": "#000000",
-          "backgroundColor": null
+          "animation": "fade"
         },
         {
           "text": "2位",
-          "xPercent": 17,
-          "yPercent": 40.5,
-          "fontSizePx": 44,
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 17.6,
+          "yPercent": 40.199999999999996,
+          "fontSizePx": 46,
           "color": "#FFFFFF",
           "strokeColor": "#000000",
-          "backgroundColor": null
+          "animation": "fade"
         },
         {
           "text": "3位",
-          "xPercent": 17,
-          "yPercent": 52.5,
-          "fontSizePx": 44,
-          "color": "#D9893B",
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 17.6,
+          "yPercent": 51.8,
+          "fontSizePx": 46,
+          "color": "#C98A3E",
           "strokeColor": "#000000",
-          "backgroundColor": null
+          "animation": "fade"
         },
         {
           "text": "4位",
-          "xPercent": 17,
-          "yPercent": 64,
-          "fontSizePx": 44,
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 17.6,
+          "yPercent": 63.3,
+          "fontSizePx": 46,
           "color": "#FFFFFF",
           "strokeColor": "#000000",
-          "backgroundColor": null
+          "animation": "fade"
         },
         {
           "text": "5位",
-          "xPercent": 17,
-          "yPercent": 75.5,
-          "fontSizePx": 44,
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 17.6,
+          "yPercent": 74.80000000000001,
+          "fontSizePx": 46,
           "color": "#FFFFFF",
           "strokeColor": "#000000",
-          "backgroundColor": null
+          "animation": "fade"
         },
         {
           "text": "6位",
-          "xPercent": 17,
-          "yPercent": 87,
-          "fontSizePx": 44,
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 17.6,
+          "yPercent": 86.10000000000001,
+          "fontSizePx": 46,
           "color": "#FFFFFF",
           "strokeColor": "#000000",
-          "backgroundColor": null
+          "animation": "fade"
         }
       ],
       "clips": [
@@ -527,8 +553,8 @@
               "text": "八重歯",
               "startOffsetSeconds": 0,
               "durationInSeconds": 7,
-              "xPercent": 66,
-              "yPercent": 87,
+              "xPercent": 67,
+              "yPercent": 85.5,
               "fontSizePx": 64,
               "color": "#000000",
               "backgroundColor": "#FFFFFF",
@@ -543,11 +569,12 @@
               "description": "八重歯の口元のアップ写真(歯並び)",
               "startOffsetSeconds": 0,
               "durationInSeconds": 1,
-              "xPercent": 66,
-              "yPercent": 74,
-              "widthPercent": 50,
-              "cornerRadiusPx": 24,
-              "animation": "pop"
+              "xPercent": 65.7,
+              "yPercent": 72.3,
+              "widthPercent": 49,
+              "cornerRadiusPx": 32,
+              "animation": "pop",
+              "heightPercent": 19.5
             }
           ]
         },
@@ -567,9 +594,13 @@
           "overlays": [
             {
               "text": "八重歯は2位です",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": [
@@ -584,12 +615,13 @@
               "imageNumber": null,
               "description": "八重歯の口元のアップ写真(歯並び)(順位の枠に入れたもの)",
               "startOffsetSeconds": 0,
-              "xPercent": 25,
-              "yPercent": 37,
-              "widthPercent": 25,
-              "cornerRadiusPx": 16,
+              "xPercent": 24.3,
+              "yPercent": 37.3,
+              "widthPercent": 26.4,
+              "cornerRadiusPx": 26,
               "animation": "pop",
-              "keepUntilEnd": true
+              "keepUntilEnd": true,
+              "heightPercent": 10
             }
           ]
         },
@@ -604,9 +636,14 @@
           "overlays": [
             {
               "text": "歯磨きが\nしづらい",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#8E44D8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null,
+              "glowColor": "#B57BFF"
             }
           ],
           "sfx": null,
@@ -628,15 +665,23 @@
           "overlays": [
             {
               "text": "汚れが溜まって\n虫歯になりやすい",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 47,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             },
             {
               "text": "八重歯は2位",
-              "xPercent": 75,
-              "yPercent": 75,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 57,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -653,16 +698,20 @@
           "overlays": [
             {
               "text": "いわゆる口ゴボ",
-              "xPercent": 75,
-              "yPercent": 30,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#2FB8E8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null
             },
             {
               "text": "出っ歯",
               "startOffsetSeconds": 0,
               "durationInSeconds": 18,
-              "xPercent": 66,
-              "yPercent": 87,
+              "xPercent": 67,
+              "yPercent": 85.5,
               "fontSizePx": 64,
               "color": "#000000",
               "backgroundColor": "#FFFFFF",
@@ -677,11 +726,12 @@
               "description": "出っ歯の口元を横から写したアップ写真",
               "startOffsetSeconds": 0,
               "durationInSeconds": 16.5,
-              "xPercent": 66,
-              "yPercent": 74,
-              "widthPercent": 50,
-              "cornerRadiusPx": 24,
-              "animation": "pop"
+              "xPercent": 65.7,
+              "yPercent": 72.3,
+              "widthPercent": 49,
+              "cornerRadiusPx": 32,
+              "animation": "pop",
+              "heightPercent": 19.5
             }
           ]
         },
@@ -701,9 +751,13 @@
           "overlays": [
             {
               "text": "口元が出ている",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -720,15 +774,23 @@
           "overlays": [
             {
               "text": "見た目的にも\n口元を下げた方が",
-              "xPercent": 75,
-              "yPercent": 30,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 47,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             },
             {
               "text": "横顔がスッキリ",
-              "xPercent": 75,
-              "yPercent": 65,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 57,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#2FB8E8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -736,7 +798,7 @@
         },
         {
           "sourceStartSeconds": 15.5,
-          "sourceEndSeconds": 17.5,
+          "sourceEndSeconds": 18,
           "speech": "すごい綺麗になりますし",
           "captionAnimation": null,
           "emphasisWords": null,
@@ -750,9 +812,13 @@
           "overlays": [
             {
               "text": "綺麗に治る",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -769,9 +835,13 @@
           "overlays": [
             {
               "text": "そもそも\n口元が出ている\n出っ歯の方は",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -793,9 +863,13 @@
           "overlays": [
             {
               "text": "口が閉じにくい",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -817,9 +891,13 @@
           "overlays": [
             {
               "text": "口呼吸になるので",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -836,9 +914,14 @@
           "overlays": [
             {
               "text": "口内環境が\n悪くなる",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#8E44D8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null,
+              "glowColor": "#B57BFF"
             }
           ],
           "sfx": null,
@@ -860,9 +943,13 @@
           "overlays": [
             {
               "text": "3位",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#2FB8E8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null
             }
           ],
           "sfx": [
@@ -877,12 +964,13 @@
               "imageNumber": null,
               "description": "出っ歯の口元を横から写したアップ写真(順位の枠に入れたもの)",
               "startOffsetSeconds": 0,
-              "xPercent": 25,
-              "yPercent": 49,
-              "widthPercent": 25,
-              "cornerRadiusPx": 16,
+              "xPercent": 24.3,
+              "yPercent": 48.9,
+              "widthPercent": 26.4,
+              "cornerRadiusPx": 26,
               "animation": "pop",
-              "keepUntilEnd": true
+              "keepUntilEnd": true,
+              "heightPercent": 10
             }
           ]
         },
@@ -899,8 +987,8 @@
               "text": "バニーティース",
               "startOffsetSeconds": 0,
               "durationInSeconds": 5,
-              "xPercent": 66,
-              "yPercent": 87,
+              "xPercent": 67,
+              "yPercent": 85.5,
               "fontSizePx": 64,
               "color": "#000000",
               "backgroundColor": "#FFFFFF",
@@ -915,11 +1003,12 @@
               "description": "前歯2本が大きいバニーティースの口元のアップ写真",
               "startOffsetSeconds": 0,
               "durationInSeconds": 2.5,
-              "xPercent": 66,
-              "yPercent": 74,
-              "widthPercent": 50,
-              "cornerRadiusPx": 24,
-              "animation": "pop"
+              "xPercent": 65.7,
+              "yPercent": 72.3,
+              "widthPercent": 49,
+              "cornerRadiusPx": 32,
+              "animation": "pop",
+              "heightPercent": 19.5
             }
           ]
         },
@@ -939,15 +1028,25 @@
           "overlays": [
             {
               "text": "チャーミング",
-              "xPercent": 75,
-              "yPercent": 30,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 47,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#C04BD8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null,
+              "glowColor": "#FF8AD8",
+              "fontFamily": "Noto Serif JP"
             },
             {
               "text": "可愛いし",
-              "xPercent": 75,
-              "yPercent": 60,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 57,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -964,9 +1063,13 @@
           "overlays": [
             {
               "text": "5位にします",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#2FB8E8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null
             }
           ],
           "sfx": [
@@ -981,12 +1084,13 @@
               "imageNumber": null,
               "description": "前歯2本が大きいバニーティースの口元のアップ写真(順位の枠に入れたもの)",
               "startOffsetSeconds": 0,
-              "xPercent": 25,
-              "yPercent": 72,
-              "widthPercent": 25,
-              "cornerRadiusPx": 16,
+              "xPercent": 24.3,
+              "yPercent": 71.9,
+              "widthPercent": 26.4,
+              "cornerRadiusPx": 26,
               "animation": "pop",
-              "keepUntilEnd": true
+              "keepUntilEnd": true,
+              "heightPercent": 10
             }
           ]
         },
@@ -1003,8 +1107,8 @@
               "text": "ガミースマイル",
               "startOffsetSeconds": 0,
               "durationInSeconds": 7.5,
-              "xPercent": 66,
-              "yPercent": 87,
+              "xPercent": 67,
+              "yPercent": 85.5,
               "fontSizePx": 64,
               "color": "#000000",
               "backgroundColor": "#FFFFFF",
@@ -1019,11 +1123,12 @@
               "description": "笑うと歯ぐきが見えるガミースマイルの口元写真",
               "startOffsetSeconds": 0,
               "durationInSeconds": 5.5,
-              "xPercent": 66,
-              "yPercent": 74,
-              "widthPercent": 50,
-              "cornerRadiusPx": 24,
-              "animation": "pop"
+              "xPercent": 65.7,
+              "yPercent": 72.3,
+              "widthPercent": 49,
+              "cornerRadiusPx": 32,
+              "animation": "pop",
+              "heightPercent": 19.5
             }
           ]
         },
@@ -1043,15 +1148,23 @@
           "overlays": [
             {
               "text": "基本的に\n口ゴボの人が",
-              "xPercent": 75,
-              "yPercent": 30,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 47,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             },
             {
               "text": "ガミースマイルの\n方が多い",
-              "xPercent": 75,
-              "yPercent": 65,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 57,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1073,9 +1186,13 @@
           "overlays": [
             {
               "text": "4位ですね",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#2FB8E8",
+              "strokeColor": "#FFFFFF",
+              "backgroundColor": null
             }
           ],
           "sfx": [
@@ -1090,12 +1207,13 @@
               "imageNumber": null,
               "description": "笑うと歯ぐきが見えるガミースマイルの口元写真(順位の枠に入れたもの)",
               "startOffsetSeconds": 0,
-              "xPercent": 25,
-              "yPercent": 60.5,
-              "widthPercent": 25,
-              "cornerRadiusPx": 16,
+              "xPercent": 24.3,
+              "yPercent": 60.4,
+              "widthPercent": 26.4,
+              "cornerRadiusPx": 26,
               "animation": "pop",
-              "keepUntilEnd": true
+              "keepUntilEnd": true,
+              "heightPercent": 10
             }
           ]
         },
@@ -1112,8 +1230,8 @@
               "text": "開咬",
               "startOffsetSeconds": 0,
               "durationInSeconds": 20,
-              "xPercent": 66,
-              "yPercent": 87,
+              "xPercent": 67,
+              "yPercent": 85.5,
               "fontSizePx": 64,
               "color": "#000000",
               "backgroundColor": "#FFFFFF",
@@ -1128,11 +1246,12 @@
               "description": "前歯が噛み合わない開咬の口元のアップ写真",
               "startOffsetSeconds": 0,
               "durationInSeconds": 1,
-              "xPercent": 66,
-              "yPercent": 74,
-              "widthPercent": 50,
-              "cornerRadiusPx": 24,
-              "animation": "pop"
+              "xPercent": 65.7,
+              "yPercent": 72.3,
+              "widthPercent": 49,
+              "cornerRadiusPx": 32,
+              "animation": "pop",
+              "heightPercent": 19.5
             }
           ]
         },
@@ -1152,9 +1271,13 @@
           "overlays": [
             {
               "text": "開咬は\n圧倒的に1位",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#E5531A",
+              "backgroundColor": null
             }
           ],
           "sfx": [
@@ -1169,12 +1292,13 @@
               "imageNumber": null,
               "description": "前歯が噛み合わない開咬の口元のアップ写真(順位の枠に入れたもの)",
               "startOffsetSeconds": 0,
-              "xPercent": 25,
-              "yPercent": 25,
-              "widthPercent": 25,
-              "cornerRadiusPx": 16,
+              "xPercent": 24.3,
+              "yPercent": 25.5,
+              "widthPercent": 26.4,
+              "cornerRadiusPx": 26,
               "animation": "pop",
-              "keepUntilEnd": true
+              "keepUntilEnd": true,
+              "heightPercent": 10
             }
           ]
         },
@@ -1189,9 +1313,13 @@
           "overlays": [
             {
               "text": "口ゴボや出っ歯の\n併用が多い",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1213,9 +1341,13 @@
           "overlays": [
             {
               "text": "前歯で物が\n噛めてない状態",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1232,9 +1364,13 @@
           "overlays": [
             {
               "text": "奥歯でしか\n噛めないので",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1256,9 +1392,13 @@
           "overlays": [
             {
               "text": "奥歯にかかる\n負担が大きい",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1275,9 +1415,13 @@
           "overlays": [
             {
               "text": "将来的に\n奥歯がダメに...",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1299,9 +1443,13 @@
           "overlays": [
             {
               "text": "開咬は絶対に\n治した方がいい",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1320,8 +1468,8 @@
               "text": "小さい歯",
               "startOffsetSeconds": 0,
               "durationInSeconds": 8.5,
-              "xPercent": 66,
-              "yPercent": 87,
+              "xPercent": 67,
+              "yPercent": 85.5,
               "fontSizePx": 64,
               "color": "#000000",
               "backgroundColor": "#FFFFFF",
@@ -1336,11 +1484,12 @@
               "description": "前歯が小さい歯の口元のアップ写真",
               "startOffsetSeconds": 0,
               "durationInSeconds": 7,
-              "xPercent": 66,
-              "yPercent": 74,
-              "widthPercent": 50,
-              "cornerRadiusPx": 24,
-              "animation": "pop"
+              "xPercent": 65.7,
+              "yPercent": 72.3,
+              "widthPercent": 49,
+              "cornerRadiusPx": 32,
+              "animation": "pop",
+              "heightPercent": 19.5
             }
           ]
         },
@@ -1360,9 +1509,13 @@
           "overlays": [
             {
               "text": "矯正というより",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1379,9 +1532,13 @@
           "overlays": [
             {
               "text": "ベニアや被せ物の\n審美治療が適応",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": null,
@@ -1403,9 +1560,13 @@
           "overlays": [
             {
               "text": "矯正では\nないから6位",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null
             }
           ],
           "sfx": [
@@ -1420,18 +1581,19 @@
               "imageNumber": null,
               "description": "前歯が小さい歯の口元のアップ写真(順位の枠に入れたもの)",
               "startOffsetSeconds": 0,
-              "xPercent": 25,
-              "yPercent": 83.5,
-              "widthPercent": 25,
-              "cornerRadiusPx": 16,
+              "xPercent": 24.3,
+              "yPercent": 83.2,
+              "widthPercent": 26.4,
+              "cornerRadiusPx": 26,
               "animation": "pop",
-              "keepUntilEnd": true
+              "keepUntilEnd": true,
+              "heightPercent": 10
             }
           ]
         },
         {
           "sourceStartSeconds": 68.5,
-          "sourceEndSeconds": 71,
+          "sourceEndSeconds": 71.37,
           "speech": "プロフィールの予約リンクあるので、カウンセリング是非ご来院ください",
           "captionAnimation": null,
           "emphasisWords": null,
@@ -1440,13 +1602,103 @@
           "overlays": [
             {
               "text": "歯に関して\n気になる方は\nプロフィールの予約リンクへ！",
-              "xPercent": 75,
-              "yPercent": 50,
-              "animation": "pop"
+              "xPercent": 66,
+              "yPercent": 56,
+              "animation": "pop",
+              "fontSizePx": 70,
+              "color": "#FFFFFF",
+              "strokeColor": "#1E9BE0",
+              "backgroundColor": null,
+              "glowColor": "#3CC8FF"
             }
           ],
           "sfx": null,
           "narration": null
+        }
+      ],
+      "framing": {
+        "scale": 1.3,
+        "focusXPercent": 7.5,
+        "focusYPercent": 21.6
+      },
+      "globalShapes": [
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 24.3,
+          "yPercent": 25.5,
+          "widthPercent": 26.4,
+          "heightPercent": 10,
+          "borderColor": "#000000",
+          "borderWidthPx": 10,
+          "fillColor": null,
+          "fillOpacity": null,
+          "cornerRadiusPx": 26
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 24.3,
+          "yPercent": 37.3,
+          "widthPercent": 26.4,
+          "heightPercent": 10,
+          "borderColor": "#000000",
+          "borderWidthPx": 10,
+          "fillColor": null,
+          "fillOpacity": null,
+          "cornerRadiusPx": 26
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 24.3,
+          "yPercent": 48.9,
+          "widthPercent": 26.4,
+          "heightPercent": 10,
+          "borderColor": "#000000",
+          "borderWidthPx": 10,
+          "fillColor": null,
+          "fillOpacity": null,
+          "cornerRadiusPx": 26
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 24.3,
+          "yPercent": 60.4,
+          "widthPercent": 26.4,
+          "heightPercent": 10,
+          "borderColor": "#000000",
+          "borderWidthPx": 10,
+          "fillColor": null,
+          "fillOpacity": null,
+          "cornerRadiusPx": 26
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 24.3,
+          "yPercent": 71.9,
+          "widthPercent": 26.4,
+          "heightPercent": 10,
+          "borderColor": "#000000",
+          "borderWidthPx": 10,
+          "fillColor": null,
+          "fillOpacity": null,
+          "cornerRadiusPx": 26
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": null,
+          "xPercent": 24.3,
+          "yPercent": 83.2,
+          "widthPercent": 26.4,
+          "heightPercent": 10,
+          "borderColor": "#000000",
+          "borderWidthPx": 10,
+          "fillColor": null,
+          "fillOpacity": null,
+          "cornerRadiusPx": 26
         }
       ]
     }

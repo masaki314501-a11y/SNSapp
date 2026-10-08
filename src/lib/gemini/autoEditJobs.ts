@@ -3,7 +3,7 @@ import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import type { AutoEditPlan } from "./autoEditPlan";
 
 /** 画面に見せる編集案の概要(クリップ自体はsegmentsとして組み立て済みで返す)。 */
-export type AutoEditPlanSummary = Pick<AutoEditPlan, "summary" | "referenceNotes" | "theme" | "hook" | "cta" | "globalOverlays" | "globalImages" | "generatedImageCount">;
+export type AutoEditPlanSummary = Pick<AutoEditPlan, "summary" | "referenceNotes" | "theme" | "hook" | "cta" | "globalOverlays" | "globalImages" | "globalShapes" | "framing" | "generatedImageCount">;
 
 export type AutoEditJob =
   | { status: "processing" }

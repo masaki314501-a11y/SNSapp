@@ -5,7 +5,7 @@ import { AbsoluteFill, Easing, Html5Video, interpolate, useCurrentFrame, useRemo
 // (サーバーのメモリ512MBでは落ちていた。useWebRender.ts参照)、どちらでも動く<Video>を使う。
 import { Video } from "@remotion/media";
 import { resolveClipSrc } from "./resolveSrc";
-import type { ClipZoom } from "./schema";
+import type { ClipZoom, VideoFraming } from "./schema";
 
 const PLACEHOLDER_COLORS = ["#1F2937", "#312E81", "#7C2D12", "#134E4A"];
 
@@ -16,6 +16,8 @@ type Props = {
   placeholderLabel: string;
   volume?: number;
   zoom?: ClipZoom;
+  /** 動画全体の画角。クリップごとの寄り(zoom)はこの上に重なる。 */
+  framing?: VideoFraming;
 };
 
 /**
@@ -30,6 +32,7 @@ export const MediaBackground: React.FC<Props> = ({
   placeholderLabel,
   volume = 1,
   zoom,
+  framing,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -51,7 +54,13 @@ export const MediaBackground: React.FC<Props> = ({
       : zoom.scale;
   const transformOrigin = zoom ? `${zoom.focusXPercent}% ${zoom.focusYPercent}%` : "50% 50%";
 
+  const framingStyle: React.CSSProperties | undefined =
+    framing && framing.scale > 1.001
+      ? { transform: `scale(${framing.scale})`, transformOrigin: `${framing.focusXPercent}% ${framing.focusYPercent}%` }
+      : undefined;
+
   return (
+    <AbsoluteFill style={framingStyle}>
     <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin }}>
       {src && isPlayer ? (
         // 編集画面のプレビューでは、ブラウザ標準の<video>で再生する。@remotion/mediaの<Video>は1コマずつ
@@ -91,6 +100,7 @@ export const MediaBackground: React.FC<Props> = ({
           </span>
         </AbsoluteFill>
       )}
+    </AbsoluteFill>
     </AbsoluteFill>
   );
 };

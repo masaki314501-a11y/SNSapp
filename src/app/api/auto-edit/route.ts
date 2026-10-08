@@ -132,6 +132,8 @@ export async function POST(request: Request) {
           cta: plan.cta,
           globalOverlays: plan.globalOverlays,
           globalImages: plan.globalImages,
+          globalShapes: plan.globalShapes,
+          framing: plan.framing,
           generatedImageCount: plan.generatedImageCount,
         },
         segments,

@@ -9,7 +9,9 @@ import {
   type CaptionStyle,
   type ClipZoom,
   type ImageOverlay,
+  type ShapeOverlay,
   type TextOverlay,
+  type VideoFraming,
 } from "@video/shared/schema";
 import type { StandardVideoProps } from "@video/templates/standard/schema";
 
@@ -139,6 +141,10 @@ export type VideoProject = {
   globalOverlays?: TextOverlay[] | null;
   /** 動画全体に重ね続ける画像(ロゴ等)。 */
   globalImages?: ImageOverlay[] | null;
+  /** 動画全体に重ねる図形(ランキングの枠等、自動編集が決める)。 */
+  globalShapes?: ShapeOverlay[] | null;
+  /** 動画全体の画角(人物を片側に寄せる等、自動編集が決める)。 */
+  framing?: VideoFraming | null;
   /** AIナレーションに使う声。画面を開き直しても選んだ声に揃えられるよう保存しておく。 */
   narrationVoice?: string;
   /** ONなら、AIナレーションを入れたクリップの元の音(話し声など)を消す。ナレーションと声が重ならないように。 */
@@ -195,6 +201,8 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
   cta: raw.cta ?? null,
   globalOverlays: raw.globalOverlays ?? null,
   globalImages: raw.globalImages ?? null,
+  globalShapes: raw.globalShapes ?? null,
+  framing: raw.framing ?? null,
   narrationVoice: raw.narrationVoice,
   muteOriginalUnderNarration: raw.muteOriginalUnderNarration ?? false,
 });
@@ -261,6 +269,8 @@ export const buildStandardVideoProps = (params: {
   cta?: VideoProject["cta"];
   globalOverlays?: VideoProject["globalOverlays"];
   globalImages?: VideoProject["globalImages"];
+  globalShapes?: VideoProject["globalShapes"];
+  framing?: VideoProject["framing"];
   muteOriginalUnderNarration?: boolean;
 }): StandardVideoProps => {
   // 元の音を消すスイッチがONのとき、AIナレーションが付いているクリップだけ元の音量を0にする。
@@ -270,6 +280,8 @@ export const buildStandardVideoProps = (params: {
     : new Set<string>();
   return {
     globalImages: params.globalImages && params.globalImages.length > 0 ? params.globalImages : undefined,
+    globalShapes: params.globalShapes && params.globalShapes.length > 0 ? params.globalShapes : undefined,
+    framing: params.framing ?? undefined,
     globalOverlays: params.globalOverlays && params.globalOverlays.length > 0 ? params.globalOverlays : undefined,
     hook: params.hook ?? undefined,
     cta: params.cta ?? undefined,

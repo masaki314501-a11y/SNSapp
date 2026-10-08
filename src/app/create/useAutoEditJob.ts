@@ -21,6 +21,8 @@ export type AutoEditPlanSummary = {
   cta: VideoProject["cta"];
   globalOverlays: NonNullable<VideoProject["globalOverlays"]>;
   globalImages: NonNullable<VideoProject["globalImages"]>;
+  globalShapes: NonNullable<VideoProject["globalShapes"]>;
+  framing: VideoProject["framing"];
   /** AIが作って使った画像の枚数(種類)。 */
   generatedImageCount: number;
 };

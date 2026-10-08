@@ -4,6 +4,8 @@ import { getCaptionAnimationStyle } from "./captionAnimations";
 import type { TextOverlay } from "./schema";
 import { VIDEO_WIDTH } from "./constants";
 import { JAPANESE_WRAP_STYLE, estimateTextWidthPx, fitFontSizeToWidth } from "./textWrap";
+import { resolveFontFamilyStack } from "./schema";
+import { ensureCaptionFontLoaded } from "./font";
 
 /** 強調テキストの最大幅(画面の9割)。 */
 const MAX_OVERLAY_WIDTH_PX = VIDEO_WIDTH * 0.9;
@@ -54,6 +56,13 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
   const { fps } = useVideoConfig();
   const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(overlay.animation, frame, fps);
   const { fontSizePx, xPercent } = resolveOverlayLayout(overlay);
+  // この文字だけ書体を変える時は、その書体も読み込む(テロップの書体はテロップ側で読み込まれる)。
+  if (overlay.fontFamily) void ensureCaptionFontLoaded(overlay.fontFamily);
+  const textShadow = overlay.glowColor
+    ? `0 0 ${Math.round(fontSizePx * 0.18)}px ${overlay.glowColor}, 0 0 ${Math.round(fontSizePx * 0.4)}px ${overlay.glowColor}`
+    : overlay.backgroundColor
+      ? undefined
+      : "0 6px 18px rgba(0,0,0,0.55)";
   // 縁取りも帯も無い明るい文字には黒い縁取りを付ける(明るい画像や白い背景の上でも読めるように)。
   const strokeColor =
     overlay.strokeColor ?? (!overlay.backgroundColor && isLightColor(overlay.color) ? "#000000" : undefined);
@@ -82,14 +91,20 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
             backgroundColor: overlay.backgroundColor,
             padding: overlay.backgroundColor ? "0.12em 0.4em" : undefined,
             borderRadius: overlay.backgroundColor ? "0.2em" : undefined,
-            WebkitTextStroke: strokeColor ? `${Math.max(2, fontSizePx / 18)}px ${strokeColor}` : undefined,
+            // 縁取りは文字の内側半分が文字に隠れる(paintOrder: stroke fill)ので、見える太さはこの半分。
+            // ショート動画でよく見る「太い縁取り」に合わせ、見える太さが文字の大きさの約8%になるようにする
+            // (以前の文字の約3%では細く、完成動画の手本と比べて縁取りがほとんど見えなかった)。
+            WebkitTextStroke: strokeColor
+              ? `${overlay.strokeWidthPx !== undefined ? overlay.strokeWidthPx * 2 : Math.max(3, Math.round(fontSizePx * 0.16))}px ${strokeColor}`
+              : undefined,
             paintOrder: "stroke fill",
-            fontFamily: fontFamilyStack,
+            fontFamily: overlay.fontFamily ? resolveFontFamilyStack(overlay.fontFamily) : fontFamilyStack,
+            fontStyle: overlay.italic ? "italic" : undefined,
             fontSize: fontSizePx,
             fontWeight: 900,
             lineHeight: 1.2,
             whiteSpace: "pre-wrap",
-            textShadow: overlay.backgroundColor ? undefined : "0 6px 18px rgba(0,0,0,0.55)",
+            textShadow,
           }}
         >
           {overlay.text}

@@ -183,6 +183,14 @@ export const textOverlaySchema = z.object({
   backgroundColor: zColor().optional().describe("文字の後ろの帯の色。省略時は帯無し"),
   rotationDeg: z.number().min(-30).max(30).default(0),
   animation: captionAnimationSchema,
+  /** この文字だけ書体を変える(「チャーミング」だけ明朝にする等)。省略時はテロップと同じ書体。 */
+  fontFamily: captionFontFamilySchema.removeDefault().optional(),
+  /** 文字の周りの光(にじみ)の色。省略時は光らせず、帯の無い文字には読みやすさのため黒い影を付ける。 */
+  glowColor: zColor().optional(),
+  /** 斜体にする(タイトルの小見出し等)。 */
+  italic: z.boolean().optional(),
+  /** 見える縁取りの太さ(横1080pxの画面でのpx)。省略時は文字の大きさの約8%。 */
+  strokeWidthPx: z.number().min(1).max(40).optional(),
 });
 
 export type TextOverlay = z.infer<typeof textOverlaySchema>;
@@ -198,12 +206,60 @@ export const imageOverlaySchema = z.object({
   xPercent: z.number().min(0).max(100).default(50).describe("画像の中心の横位置(左端0〜右端100)"),
   yPercent: z.number().min(0).max(100).default(50).describe("画像の中心の縦位置(上端0〜下端100)"),
   widthPercent: z.number().min(5).max(100).default(50).describe("画像の幅(画面幅に対する割合)"),
+  /** 画像の高さ(画面の高さに対する割合)。指定すると、その大きさの枠いっぱいに画像を切り抜いて収める(ランキングの枠など)。 */
+  heightPercent: z.number().min(2).max(100).optional().describe("画像の高さ(画面の高さに対する割合)。省略時は画像の縦横比のまま"),
+  /**
+   * 出る時に、この位置・大きさから今の位置・大きさへ動いてくる(大きく出していた写真が、縮みながらランキングの枠へ入る等)。
+   * 指定した時は出現アニメーション(animation)の代わりにこの動きを使う。
+   */
+  moveFrom: z
+    .object({
+      xPercent: z.number().min(0).max(100),
+      yPercent: z.number().min(0).max(100),
+      widthPercent: z.number().min(5).max(100),
+      heightPercent: z.number().min(2).max(100).optional(),
+    })
+    .optional(),
   rotationDeg: z.number().min(-45).max(45).default(0),
   cornerRadiusPx: z.number().min(0).max(200).default(0),
   animation: captionAnimationSchema,
 });
 
 export type ImageOverlay = z.infer<typeof imageOverlaySchema>;
+
+/**
+ * 画面に重ねる図形(角の丸い四角)。ランキングの空の枠のように、文字でも画像でもない飾りを描く。
+ * 枠線だけ(fillColor無し)なら、後から同じ位置に入れた画像の縁取りとしても見える。
+ */
+export const shapeOverlaySchema = z.object({
+  startOffsetSeconds: z.number().min(0).default(0).describe("カット先頭(動画全体の場合は動画先頭)から何秒後に出すか"),
+  durationInSeconds: z.number().min(0.2).max(600).optional().describe("表示秒数。省略時は最後まで"),
+  xPercent: z.number().min(0).max(100).default(50).describe("図形の中心の横位置(左端0〜右端100)"),
+  yPercent: z.number().min(0).max(100).default(50).describe("図形の中心の縦位置(上端0〜下端100)"),
+  widthPercent: z.number().min(1).max(100).default(30).describe("図形の幅(画面幅に対する割合)"),
+  heightPercent: z.number().min(1).max(100).default(10).describe("図形の高さ(画面の高さに対する割合)"),
+  borderColor: zColor().optional().describe("枠線の色。省略時は枠線無し"),
+  borderWidthPx: z.number().min(0).max(40).default(8),
+  fillColor: zColor().optional().describe("塗りの色。省略時は透明"),
+  fillOpacity: z.number().min(0).max(1).default(1),
+  cornerRadiusPx: z.number().min(0).max(200).default(24),
+  animation: captionAnimationSchema,
+});
+
+export type ShapeOverlay = z.infer<typeof shapeOverlaySchema>;
+
+/**
+ * 動画全体の画角。全クリップの映像をこの倍率で、この点を中心に寄せる(クリップごとの寄りはこの上に重なる)。
+ * 人物を画面の片側に寄せて、空いた側にランキングの枠などを置くために使う
+ * (例: 中心を左上寄りにして1.3倍にすると、人物が右へ寄る)。文字・画像・図形は寄せない。
+ */
+export const videoFramingSchema = z.object({
+  scale: z.number().min(1).max(2).default(1),
+  focusXPercent: z.number().min(0).max(100).default(50),
+  focusYPercent: z.number().min(0).max(100).default(50),
+});
+
+export type VideoFraming = z.infer<typeof videoFramingSchema>;
 
 /**
  * 動画/画像+テロップで構成されるカットの共通フィールド。

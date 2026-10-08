@@ -90,6 +90,8 @@ export const AutoEditScreen: React.FC = () => {
       cta: plan.cta,
       globalOverlays: plan.globalOverlays,
       globalImages: plan.globalImages,
+      globalShapes: plan.globalShapes,
+      framing: plan.framing,
       // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });

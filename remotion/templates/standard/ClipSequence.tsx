@@ -1,7 +1,7 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
 import type { ClipProps } from "./schema";
-import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "../../shared/schema";
+import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle, VideoFraming } from "../../shared/schema";
 import { resolveFontFamilyStack } from "../../shared/schema";
 import { TextOverlays } from "../../shared/TextOverlays";
 import { ImageOverlays } from "../../shared/ImageOverlays";
@@ -15,6 +15,13 @@ type Props = ClipProps & {
   fontFamily: CaptionFontFamily;
   captionPosition: CaptionPosition;
   fontSize: CaptionFontSize;
+  /** 動画全体の画角(全クリップ共通)。 */
+  framing?: VideoFraming;
+  /**
+   * 描く層。base=映像・テロップ・画像、text=強調テキストだけ。強調テキストを動画全体の画像・図形
+   * (ランキングの枠など)より上に重ねるため、StandardVideoで層を分けて2回描く。
+   */
+  layer: "base" | "text";
 };
 
 /**
@@ -37,7 +44,14 @@ export const ClipSequence: React.FC<Props> = ({
   zoom,
   overlays,
   images,
+  framing,
+  layer,
 }) => {
+  if (layer === "text") {
+    return overlays && overlays.length > 0 ? (
+      <TextOverlays overlays={overlays} fontFamilyStack={resolveFontFamilyStack(fontFamily)} />
+    ) : null;
+  }
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
       <MediaBackground
@@ -47,6 +61,7 @@ export const ClipSequence: React.FC<Props> = ({
         placeholderLabel={`CLIP ${index + 1}(動画未設定)`}
         volume={volume}
         zoom={zoom}
+        framing={framing}
       />
       <AnimatedCaption
         text={caption}
@@ -59,11 +74,8 @@ export const ClipSequence: React.FC<Props> = ({
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}
       />
-      {/* 画像は強調テキストより下に重ねる(文字が画像に隠れないように)。 */}
+      {/* 強調テキストはlayer="text"で、動画全体の画像・図形より上に別に描く。 */}
       {images && images.length > 0 ? <ImageOverlays images={images} /> : null}
-      {overlays && overlays.length > 0 ? (
-        <TextOverlays overlays={overlays} fontFamilyStack={resolveFontFamilyStack(fontFamily)} />
-      ) : null}
     </AbsoluteFill>
   );
 };

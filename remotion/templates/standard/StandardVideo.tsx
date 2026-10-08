@@ -17,6 +17,7 @@ import { Hook } from "../../shared/Hook";
 import { CTA } from "../../shared/CTA";
 import { TextOverlays } from "../../shared/TextOverlays";
 import { ImageOverlays } from "../../shared/ImageOverlays";
+import { ShapeOverlays } from "../../shared/ShapeOverlays";
 import {
   CTA_DURATION_IN_SECONDS,
   HOOK_DURATION_IN_SECONDS,
@@ -48,6 +49,8 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
   bgm,
   globalOverlays,
   globalImages,
+  globalShapes,
+  framing,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -86,12 +89,34 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
               fontFamily={theme.fontFamily}
               captionPosition={theme.captionPosition}
               fontSize={theme.fontSize}
+              framing={framing}
+              layer="base"
             />
           </Series.Sequence>
         ))}
       </Series>
 
       {globalImages && globalImages.length > 0 ? <ImageOverlays images={globalImages} /> : null}
+      {/* 図形(ランキングの枠など)は画像の上に重ね、枠に入れた画像の縁取りに見えるようにする。文字は図形より上。 */}
+      {globalShapes && globalShapes.length > 0 ? <ShapeOverlays shapes={globalShapes} /> : null}
+
+      {/* クリップごとの強調テキストは、動画全体の画像・図形に隠れないよう、それより上の層に描く。 */}
+      <Series>
+        {clips.map((clip, index) => (
+          <Series.Sequence key={index} durationInFrames={Math.round(clip.durationInSeconds * VIDEO_FPS)} layout="none">
+            <ClipSequence
+              {...clip}
+              index={index}
+              accentColor={theme.primaryColor}
+              captionStyle={theme.captionStyle}
+              fontFamily={theme.fontFamily}
+              captionPosition={theme.captionPosition}
+              fontSize={theme.fontSize}
+              layer="text"
+            />
+          </Series.Sequence>
+        ))}
+      </Series>
       {globalOverlays && globalOverlays.length > 0 ? (
         <TextOverlays overlays={globalOverlays} fontFamilyStack={resolveFontFamilyStack(theme.fontFamily)} />
       ) : null}

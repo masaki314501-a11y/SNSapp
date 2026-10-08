@@ -1,29 +1,52 @@
 import React from "react";
-import { AbsoluteFill, Img, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Img, Sequence, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { getCaptionAnimationStyle } from "./captionAnimations";
 import { resolveClipSrc } from "./resolveSrc";
 import type { ImageOverlay } from "./schema";
 
+/** moveFromから今の位置へ動く時間(秒)。 */
+const MOVE_SECONDS = 0.45;
+
 const OverlayImage: React.FC<{ image: ImageOverlay }> = ({ image }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(image.animation, frame, fps);
+  const moveFrom = image.moveFrom;
+  // 動いてくる画像は、出現アニメーションの代わりに位置・大きさの移動で出す。
+  const { transform, opacity, clipPath, filter } = moveFrom
+    ? { transform: undefined, opacity: undefined, clipPath: undefined, filter: undefined }
+    : getCaptionAnimationStyle(image.animation, frame, fps);
+  const progress = moveFrom
+    ? interpolate(frame, [0, Math.max(1, Math.round(MOVE_SECONDS * fps))], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+        easing: Easing.out(Easing.cubic),
+      })
+    : 1;
+  const lerp = (from: number | undefined, to: number) => (from === undefined ? to : from + (to - from) * progress);
+  const heightPercent =
+    image.heightPercent !== undefined ? lerp(moveFrom?.heightPercent, image.heightPercent) : undefined;
 
   return (
     <div
       style={{
         position: "absolute",
-        left: `${image.xPercent}%`,
-        top: `${image.yPercent}%`,
-        width: `${image.widthPercent}%`,
+        left: `${lerp(moveFrom?.xPercent, image.xPercent)}%`,
+        top: `${lerp(moveFrom?.yPercent, image.yPercent)}%`,
+        width: `${lerp(moveFrom?.widthPercent, image.widthPercent)}%`,
+        height: heightPercent !== undefined ? `${heightPercent}%` : undefined,
         // 位置は画像の中心で指定させているため、自分の大きさの半分だけ戻して中心を合わせる。
         transform: `translate(-50%, -50%) rotate(${image.rotationDeg}deg)`,
       }}
     >
-      <div style={{ transform, opacity, filter, clipPath }}>
+      <div style={{ transform, opacity, filter, clipPath, height: image.heightPercent !== undefined ? "100%" : undefined }}>
         <Img
           src={resolveClipSrc(image.src)}
-          style={{ width: "100%", height: "auto", display: "block", borderRadius: image.cornerRadiusPx }}
+          style={
+            image.heightPercent !== undefined
+              ? // 高さも決まっている時(ランキングの枠など)は、枠いっぱいに切り抜いて収める
+                { width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: image.cornerRadiusPx }
+              : { width: "100%", height: "auto", display: "block", borderRadius: image.cornerRadiusPx }
+          }
         />
       </div>
     </div>

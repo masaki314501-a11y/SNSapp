@@ -329,6 +329,8 @@ export const ClipEditor: React.FC = () => {
         cta: project?.cta,
         globalOverlays: project?.globalOverlays,
         globalImages: project?.globalImages,
+        globalShapes: project?.globalShapes,
+        framing: project?.framing,
         muteOriginalUnderNarration,
       }),
     [
@@ -339,6 +341,8 @@ export const ClipEditor: React.FC = () => {
       project?.cta,
       project?.globalOverlays,
       project?.globalImages,
+      project?.globalShapes,
+      project?.framing,
       primaryColor,
       captionStyle,
       fontFamily,

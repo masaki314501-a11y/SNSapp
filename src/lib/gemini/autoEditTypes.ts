@@ -34,6 +34,10 @@ const rawOverlaySchema = z.object({
   backgroundColor: z.string().nullable().optional(),
   rotationDeg: z.number().nullable().optional(),
   animation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
+  fontFamily: z.enum(FONT_FAMILY_VALUES as [string, ...string[]]).nullable().optional(),
+  glowColor: z.string().nullable().optional(),
+  italic: z.boolean().nullable().optional(),
+  strokeWidthPx: z.number().nullable().optional(),
   /**
    * クリップの強調テキストで、出てから動画の最後まで残す物(ランキングの空枠に入る項目名など)。
    * 動画全体の先頭からの秒数をGeminiに計算させるとずれるので、出すクリップに置かせたまま印だけ付けさせ、
@@ -58,9 +62,25 @@ const rawImageSchema = z.object({
   xPercent: z.number().nullable().optional(),
   yPercent: z.number().nullable().optional(),
   widthPercent: z.number().nullable().optional(),
+  heightPercent: z.number().nullable().optional(),
   cornerRadiusPx: z.number().nullable().optional(),
   animation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
   keepUntilEnd: z.boolean().nullable().optional(),
+});
+
+/** 動画全体に重ねる図形(ランキングの空の枠など)。秒数は動画全体の先頭から。 */
+const rawShapeSchema = z.object({
+  startOffsetSeconds: z.number().nullable().optional(),
+  durationInSeconds: z.number().nullable().optional(),
+  xPercent: z.number().nullable().optional(),
+  yPercent: z.number().nullable().optional(),
+  widthPercent: z.number().nullable().optional(),
+  heightPercent: z.number().nullable().optional(),
+  borderColor: z.string().nullable().optional(),
+  borderWidthPx: z.number().nullable().optional(),
+  fillColor: z.string().nullable().optional(),
+  fillOpacity: z.number().nullable().optional(),
+  cornerRadiusPx: z.number().nullable().optional(),
 });
 
 const rawClipSchema = z.object({
@@ -112,6 +132,17 @@ export const rawAutoEditPlanSchema = z.object({
     .optional(),
   hook: z.object({ headline: z.string(), subline: z.string().nullable().optional() }).nullable().optional(),
   cta: z.object({ text: z.string() }).nullable().optional(),
+  /** 動画全体の画角(人物を片側に寄せて、空いた側に枠などを置く)。 */
+  framing: z
+    .object({
+      scale: z.number(),
+      focusXPercent: z.number().nullable().optional(),
+      focusYPercent: z.number().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  /** 動画全体に重ねる図形(ランキングの空の枠など)。 */
+  globalShapes: z.array(rawShapeSchema).nullable().optional(),
   /** 動画全体に重ね続ける文字(参考投稿の上部タイトル等)。 */
   globalOverlays: z.array(rawOverlaySchema).nullable().optional(),
   /** AIに作らせる画像の画風。医療・美容・健康の話はイラスト必須(generateImage.ts参照)。 */
@@ -122,6 +153,7 @@ export const rawAutoEditPlanSchema = z.object({
 export type RawAutoEditPlan = z.infer<typeof rawAutoEditPlanSchema>;
 export type RawAutoEditClip = z.infer<typeof rawClipSchema>;
 export type RawAutoEditImage = z.infer<typeof rawImageSchema>;
+export type RawAutoEditShape = z.infer<typeof rawShapeSchema>;
 
 const nullableString = { type: Type.STRING, nullable: true } as const;
 const nullableNumber = { type: Type.NUMBER, nullable: true } as const;
@@ -140,6 +172,10 @@ const overlayItemSchema = {
     backgroundColor: nullableString,
     rotationDeg: nullableNumber,
     animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
+    fontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES, nullable: true },
+    glowColor: nullableString,
+    italic: { type: Type.BOOLEAN, nullable: true },
+    strokeWidthPx: nullableNumber,
     keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
   },
   required: ["text"],
@@ -156,11 +192,29 @@ const imageItemSchema = {
     xPercent: nullableNumber,
     yPercent: nullableNumber,
     widthPercent: nullableNumber,
+    heightPercent: nullableNumber,
     cornerRadiusPx: nullableNumber,
     animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
     keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
   },
   required: ["description"],
+} as const;
+
+const shapeItemSchema = {
+  type: Type.OBJECT,
+  properties: {
+    startOffsetSeconds: nullableNumber,
+    durationInSeconds: nullableNumber,
+    xPercent: nullableNumber,
+    yPercent: nullableNumber,
+    widthPercent: nullableNumber,
+    heightPercent: nullableNumber,
+    borderColor: nullableString,
+    borderWidthPx: nullableNumber,
+    fillColor: nullableString,
+    fillOpacity: nullableNumber,
+    cornerRadiusPx: nullableNumber,
+  },
 } as const;
 
 /**
@@ -195,6 +249,13 @@ export const autoEditResponseSchema = {
       properties: { text: { type: Type.STRING } },
       required: ["text"],
     },
+    framing: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: { scale: { type: Type.NUMBER }, focusXPercent: nullableNumber, focusYPercent: nullableNumber },
+      required: ["scale"],
+    },
+    globalShapes: { type: Type.ARRAY, nullable: true, items: shapeItemSchema },
     globalOverlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
     generatedImageStyle: { type: Type.STRING, format: "enum", enum: ["illustration", "photo"], nullable: true },
     clips: {
@@ -255,6 +316,17 @@ export const autoEditResponseSchema = {
     },
   },
   // 参考スクショの読み取り→ずっと置く物→テーマ(テロップの見た目)→クリップ→仕上げ、の順。
-  propertyOrdering: ["referenceNotes", "globalOverlays", "theme", "generatedImageStyle", "clips", "hook", "cta", "summary"],
+  propertyOrdering: [
+    "referenceNotes",
+    "framing",
+    "globalShapes",
+    "globalOverlays",
+    "theme",
+    "generatedImageStyle",
+    "clips",
+    "hook",
+    "cta",
+    "summary",
+  ],
   required: ["summary", "clips"],
 } as const;

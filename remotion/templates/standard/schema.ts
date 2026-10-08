@@ -6,8 +6,10 @@ import {
   mediaItemBaseSchema,
   imageOverlaySchema,
   sfxClipSchema,
+  shapeOverlaySchema,
   textOverlaySchema,
   themeSchema,
+  videoFramingSchema,
 } from "../../shared/schema";
 
 // 動画全体の音声を文字起こしして字幕化するため、発話の区切りの数だけクリップができる。
@@ -37,6 +39,8 @@ export const standardVideoSchema = z.object({
   // startOffsetSeconds/durationInSecondsは動画全体の先頭からの秒数。
   globalOverlays: z.array(textOverlaySchema).max(24).optional().describe("動画全体に重ねる文字(タイトル等)"),
   globalImages: z.array(imageOverlaySchema).max(24).optional().describe("動画全体に重ねる画像(ロゴ等)"),
+  globalShapes: z.array(shapeOverlaySchema).max(24).optional().describe("動画全体に重ねる図形(ランキングの枠等)"),
+  framing: videoFramingSchema.optional().describe("動画全体の画角(全クリップの映像の寄せ方)"),
 });
 
 export type ClipProps = z.infer<typeof clipSchema>;

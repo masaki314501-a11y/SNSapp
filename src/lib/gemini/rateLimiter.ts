@@ -2,7 +2,9 @@
 // 自動編集・スタイル抽出)とTTS(AIナレーション)で別々の列に分ける。各列の中では
 // サーバープロセス全体で1件ずつ直列実行し、呼び出し間に最低間隔を空けてレート制限エラーを避ける。
 // 列を分けておかないと、TTSの一括生成で詰まっている間にテキスト系の呼び出しまで待たされる。
-export type GeminiRateLimitLane = "text" | "tts";
+// 自動編集は答えの出来に波があるため2案を同時に作って良い方を選ぶ(autoEditPlan.ts)。2案目まで同じ列に並べると
+// 待ち時間が倍になるので、2案目だけは別の列("text-parallel")で送る(Tier 1のRPMには十分な余裕がある)。
+export type GeminiRateLimitLane = "text" | "text-parallel" | "tts";
 
 // 課金(Tier 1)に切り替えた後はテキスト系のRPM上限に大きく余裕があるため、間隔は短めでよい。
 // 無料枠に戻す場合は GEMINI_MIN_INTERVAL_MS=6500 程度に戻すこと
@@ -39,6 +41,7 @@ const createLane = (minIntervalMs: number) => {
 
 const lanes = {
   text: createLane(TEXT_MIN_INTERVAL_MS),
+  "text-parallel": createLane(TEXT_MIN_INTERVAL_MS),
   tts: createLane(TTS_MIN_INTERVAL_MS),
 };
 

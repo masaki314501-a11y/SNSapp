@@ -60,6 +60,8 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
   文言は画面の通りに書き、改行も画面の通り「\\n」で書く。xPercent/yPercentは文字の中心の位置(0〜100)、
   fontSizePxは横1080pxの画面での文字の高さ、color/strokeColor(縁取り)/backgroundColor(帯)は#RRGGBB、
   rotationDegは傾き、startOffsetSeconds/durationInSecondsはクリップ先頭からの表示タイミング。animationは候補から選ぶ。
+  文字の周りが光っている(にじんでいる)ならglowColor、斜体ならitalic、縁取りの見える太さはstrokeWidthPx(px)、テロップと書体が違うならfontFamily(候補はtheme.fontFamilyと同じ)。
+  色・縁取り・光は文字ごとに違うことが多いので、1つずつ画面の通りに書く。
   途中で出てから動画の最後まで残り続ける文字(ランキングの空枠に、発表のたびに入っていく項目名など)は、
   出始めたクリップのoverlaysに書いてkeepUntilEnd=trueにする(それ以外はnull)。最後まで残る物を書き漏らさないこと。
   クリップをまたいで出続ける文字(今話している項目名のラベルなど)は、出始めたクリップに書き、
@@ -69,6 +71,11 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
   widthPercentは画面幅に対する画像の幅、cornerRadiusPxは角の丸み、startOffsetSecondsはクリップ先頭からの秒、
   durationInSecondsは出ている長さ(クリップより長くてよい)。最後まで残る画像(ランキングの枠に入った写真など)は
   keepUntilEnd=true。画像が大きく出てから小さくなって別の場所(枠など)へ移る場合は、別々の2つの画像として書く。
+- framing: 正解動画の映像が素材より寄っていて、人物が片側に寄せられているなら、全体の寄せ方。scaleは素材に対する倍率、
+  focusXPercent/focusYPercentは拡大の中心(その点は動かず、ほかは点から離れる方向へ広がる)。素材の背景の物(額・ハンガー等)が
+  正解動画のどこに映っているかから計算する。寄せていなければnull。
+- globalShapes: ずっと出ている図形(ランキングの空の枠・箱・帯など)。位置は中心、widthPercent/heightPercentは画面に対する幅・高さ、
+  borderColor/borderWidthPx(横1080pxの画面での線の太さ)/fillColor/fillOpacity/cornerRadiusPxを測って書く。
 - globalOverlays: 動画の最初からずっと出ている文字(上部のタイトル帯、ランキングの空枠の「1位」〜など)。秒数は動画の先頭から、最後まで出ているならdurationInSecondsはnull。
 - zoom: 素材より画面が寄っているクリップだけ。scaleは素材に対する倍率、punch=切り替わった瞬間から寄っている /
   slow=クリップの中でゆっくり寄っていく、focusXPercent/focusYPercentは寄っている中心。寄っていなければnull。

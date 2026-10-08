@@ -1,5 +1,6 @@
 import { GoogleGenAI, PartMediaResolutionLevel, type Content, type Part } from "@google/genai";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
@@ -7,18 +8,22 @@ import {
   CAPTION_STYLE_OPTIONS,
   clipZoomSchema,
   imageOverlaySchema,
+  shapeOverlaySchema,
   textOverlaySchema,
+  videoFramingSchema,
   type CaptionAnimation,
   type CaptionFontFamily,
   type CaptionPosition,
   type CaptionStyle,
   type ClipZoom,
   type ImageOverlay,
+  type ShapeOverlay,
   type TextOverlay,
+  type VideoFraming,
 } from "@video/shared/schema";
 import { MAX_CLIPS } from "@video/templates/standard/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
-import { runWithGeminiRateLimit } from "./rateLimiter";
+import { runWithGeminiRateLimit, type GeminiRateLimitLane } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
 import { waitForGeminiFileActive } from "./geminiFiles";
 import { loadEditFewShotContext } from "./editExamplesStore";
@@ -29,6 +34,8 @@ import {
   rawAutoEditPlanSchema,
   type RawAutoEditClip,
   type RawAutoEditImage,
+  type RawAutoEditPlan,
+  type RawAutoEditShape,
 } from "./autoEditTypes";
 import type { EditTemplate } from "@/lib/editTemplates";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
@@ -56,6 +63,9 @@ const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const MAX_CLIP_OVERLAYS = 20;
 const MAX_CLIP_IMAGES = 20;
 const MAX_GLOBAL_IMAGES = 24;
+const MAX_GLOBAL_SHAPES = 24;
+/** 動画全体の画角の上限。寄せすぎると画質が荒れるので、クリップごとの寄りより少し大きい程度に抑える。 */
+const MAX_FRAMING_SCALE = 1.5;
 /** 1回の自動編集でAIに作らせる画像の種類の上限(1枚数円〜十円かかるため。ランキング6〜8項目が収まる数)。 */
 const MAX_GENERATED_IMAGES = 8;
 /** 自動編集で寄る倍率の上限。 */
@@ -106,6 +116,10 @@ export type AutoEditPlan = {
   globalOverlays: TextOverlay[];
   /** 動画全体に重ねる画像(ランキングの枠に入れて最後まで残す写真、話題の間ずっと出す写真など)。 */
   globalImages: ImageOverlay[];
+  /** 動画全体に重ねる図形(ランキングの空の枠など)。 */
+  globalShapes: ShapeOverlay[];
+  /** 動画全体の画角。寄せないならnull。 */
+  framing: VideoFraming | null;
   /** AIが作って動画に使った画像の枚数(種類)。 */
   generatedImageCount: number;
   clips: AutoEditClipPlan[];
@@ -155,7 +169,8 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
    - ランキングの枠をずっと出しているなら、順位が発表されたクリップで、その順位の枠の位置・大きさに合わせて同じ画像を置き、
      keepUntilEnd=trueにして枠を画像で埋めていく。話の間出していた大きい画像は、そこで終わるようにdurationInSecondsを決める。
    - 話の内容に合う画像が無い場面には出さない。同じ画像を関係ない話に使い回さない。
-   位置(xPercent/yPercent、画像の中心)・幅(widthPercent、画面幅に対する割合)・角の丸み(cornerRadiusPx)・出すタイミングは自由。`;
+   位置(xPercent/yPercent、画像の中心)・幅(widthPercent、画面幅に対する割合)・角の丸み(cornerRadiusPx)・出すタイミングは自由。
+   枠に入れる画像は、heightPercent(画面の高さに対する割合)も枠と同じにする(枠いっぱいに切り抜いて収まる)。`;
   const materialLine =
     materialImageCount > 0
       ? `本人の動画の直前に添付した「使える画像」(${materialImageCount}枚)は、imageNumberでその番号を指定して使う
@@ -217,8 +232,18 @@ ${keepRangesList}
 ### 手順① カットと、参考スクショの「物」の読み込み
 1. referenceNotes: まず参考スクショ/動画を見て、画面のどこに何が置いてあるか(左上のロゴ・右上の数字・
    上部のタイトル帯・角のアイコンや画像など)と、編集の癖を日本語1〜2文で書く(参考が無ければnull)。
+1-2. framing: 動画全体の画角。参考で人物が画面の片側に寄せられ、空いた側に枠・一覧・画像が置いてあるなら、全クリップの映像を
+   寄せて同じ構図にする。scale(1.0〜1.5)倍に、focusXPercent/focusYPercentの点を中心に拡大する(その点は動かず、
+   ほかは点から離れる方向へ広がる)。人物を右へ寄せたいなら中心を左寄り(focusXPercent 0〜20)、上下は人物の顔が
+   画面の上から3〜4割に来るように選ぶ。参考も本人の動画も人物が中央で、空ける必要が無ければnull。
+1-3. globalShapes: 参考にずっと出ている図形(ランキングの空の枠・一覧の箱・帯など)を、同じ位置・大きさ・線の太さ・
+   角の丸み・色で置く(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで)。xPercent/yPercentは図形の中心、
+   widthPercentは画面幅に対する幅、heightPercentは画面の高さに対する高さ、borderWidthPxは横1080pxの画面での線の太さ。
+   枠の中に後から画像を入れるなら、塗り(fillColor)は付けず線だけにする。無ければ空にする。
 2. clips: 完成動画に使う区間を再生順に並べる。元動画上の秒数(sourceStartSeconds〜sourceEndSeconds)で指定する。
-   - 間・言い淀み(「えーっと」「あの」)・言い直し・無音・話がだれる部分は容赦なく切って詰める
+   - 間・言い淀み(「えーっと」「あの」)・言い直し・無音・話がだれる部分は容赦なく切って詰める。
+     ただし本人がカット画面ですでに切ってあり、間が詰まっているなら、それ以上は切らない(完成動画の長さを変えず、
+     クリップは文字・画像・寄りを切り替える区切りとして分けるだけにする。編集例の正解動画もそうなっていれば同じにする)
    - 1クリップはおおむね1〜4秒(話のひと区切り)。長く話し続ける所も区切ってテンポを出す
    - 範囲の順番は入れ替えてよい(冒頭に一番強い一言を持ってくる等)。ただし同じ区間を二度使わない
    - クリップ数は最大${MAX_CLIPS}個
@@ -226,6 +251,7 @@ ${keepRangesList}
    同じ見た目で再現する(4の「最後まで残す物」と合わせて最大${MAX_GLOBAL_OVERLAYS}個)。参考スクショの上部に動画のテーマを表す
    タイトルが常に出ているなら、文言は真似せず、この動画の内容に合わせたタイトルを作る。何の動画か映像だけで十分わかるなら無くてよい。1行ごとに別要素にして色を変えてもよい。画像は4-2の「使える画像」だけ置ける。
    それ以外のアイコンや図は、近い意味の短い文字で置き換える。項目はoverlaysと同じ(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで表示)。
+   ランキングの「1位」〜の文字は、1-3の枠の中(左下など参考と同じ所)に置く。
 4. overlays(物): 参考スクショで一時的に出ている物(矢印・ラベル・アイコン等)は、本人の動画にも同じ役割の場面がある
    クリップにだけ、同じ位置で置く。
    出てから動画の最後まで残る物は、出し始めるクリップに置いてkeepUntilEnd=trueにする(残す以外の物はnull)。
@@ -235,7 +261,10 @@ ${keepRangesList}
    keepUntilEnd=trueの物で埋め、発表のたびに埋めていく(使える画像があれば4-2のとおり画像で、無ければ枠の中か
    すぐ横に項目名の文字で)。空の枠を出したまま埋めないのは不可。
    文言・位置(xPercent/yPercent、文字の中心)・大きさ(fontSizePx、20〜220)・色・縁取り色・帯の色・傾き(rotationDeg)・
-   出すタイミング(クリップ先頭からの秒)はすべて自由。animationは候補から選ぶ:
+   出すタイミング(クリップ先頭からの秒)はすべて自由。参考の見た目を細かく再現するため、文字ごとに書体(fontFamily、
+   候補は手順②と同じ。省略するとテロップと同じ)・光(glowColor、文字の周りのにじみ)・斜体(italic)・
+   縁取りの見える太さ(strokeWidthPx、横1080pxの画面でのpx。省略すると文字の大きさの約8%)も指定できる。
+   animationは候補から選ぶ:
 ${captionAnimationHints}
 ${imageSection}
 
@@ -257,6 +286,7 @@ ${captionStyleHints}
 9. overlays(強調): テロップとは別に画面へ出す強調テキスト(「実は3倍!」「ここ重要」「え?」など)。テロップだけでは
    伝わり切らない数字・結論・ツッコミ・問いかけがある所にだけ、手順①の物に足す。同じ時間に出すのは1〜2個まで。
    項目は4と同じ。参考スクショに似た見た目にし、顔や手順①の物・テロップを隠さない位置に置く。
+   参考が場面の気持ち(驚き・かわいい・深刻など)に合わせて文字の色・縁取り・光・書体を変えているなら、同じように変える。
 
 ### 手順④ カメラアングル(違和感が出ないことを最優先。迷ったら寄らない)
 10. zoom: 手順①〜③で決めた山場(強調した数字・結論・オチ)だけで画面を寄せる。見ている人が「カメラが動いた」と
@@ -278,8 +308,11 @@ ${sfxPresetHints}
 12. narration: 常にnull。AIナレーション(読み上げ音声)は本人が編集画面で必要な所にだけ付けるので、自動編集では入れない。
     編集例の書き起こしにnarrationが入っていても真似しない。
 13. hook: 冒頭0〜3秒に本人の映像の上へ重ねる大見出し(スクロールを止める一言。数字・意外性)。subline(補足)は任意。
-    冒頭の本人の一言だけで十分に引きがあるならnullでよい。
-14. cta: 最後の数秒に重ねる一言(「保存して見返してね」など)。不要ならnull。
+    冒頭の本人の一言だけで十分に引きがあるならnullでよい。上部のタイトルをずっと出しているなら、同じ言葉を繰り返さない(null)。
+    参考や編集例に冒頭の大見出しが無いなら、真似してnullにする。
+14. cta: 最後の数秒に、画面下から2割あたりへ帯付きで重ねる一言(「保存して見返してね」など)。不要ならnull。
+    最後のクリップのoverlaysで締めの言葉をすでに出しているなら、同じ内容を繰り返さない(null)。
+    参考や編集例に下の帯の締めの一言が無いなら、真似してnullにする。
 15. summary: どこを切ってどこをフックにし、どこで山を作ったかを日本語1〜2文で書く。
 
 ## 画面の配置(重なると読めなくなるので必ず守る)
@@ -338,8 +371,30 @@ const tidyLineBreaks = (text: string): string => {
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
-const hexOrUndefined = (value: string | null | undefined): string | undefined =>
-  value && HEX_COLOR_PATTERN.test(value) ? value : undefined;
+const NAMED_COLORS: Record<string, string> = {
+  black: "#000000",
+  white: "#FFFFFF",
+  red: "#FF0000",
+  blue: "#0000FF",
+  yellow: "#FFFF00",
+  green: "#008000",
+};
+
+/**
+ * Geminiが書いた色を#RRGGBBにそろえる。#RGB(3桁)・#RRGGBBAA(透明度付き)・black等の名前で書いてくることがあり、
+ * 6桁以外を捨てていた頃は、ランキングの枠の線の色が読めずに枠ごと消えていた。読めなければundefined。
+ */
+const hexOrUndefined = (value: string | null | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (HEX_COLOR_PATTERN.test(trimmed)) return trimmed;
+  const named = NAMED_COLORS[trimmed.toLowerCase()];
+  if (named) return named;
+  const short = /^#?([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(trimmed);
+  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`;
+  const longish = /^#?([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?$/.exec(trimmed);
+  return longish ? `#${longish[1]}` : undefined;
+};
 
 /**
  * Geminiが返したクリップを、カット画面で残した範囲に収める。クリップの中心が入っている
@@ -389,6 +444,10 @@ const normalizeOverlays = (
       backgroundColor: hexOrUndefined(raw.backgroundColor),
       rotationDeg: clamp(raw.rotationDeg ?? 0, -30, 30),
       animation: raw.animation ?? "pop",
+      fontFamily: raw.fontFamily ?? undefined,
+      glowColor: hexOrUndefined(raw.glowColor),
+      italic: raw.italic ?? undefined,
+      strokeWidthPx: raw.strokeWidthPx != null ? clamp(raw.strokeWidthPx, 1, 40) : undefined,
     });
     if (parsed.success) overlays.push(parsed.data);
   }
@@ -469,6 +528,7 @@ const normalizeImages = (
       xPercent: clamp(raw.xPercent ?? 50, 0, 100),
       yPercent: clamp(raw.yPercent ?? 50, 0, 100),
       widthPercent: clamp(raw.widthPercent ?? 50, 5, 100),
+      heightPercent: raw.heightPercent != null ? clamp(raw.heightPercent, 2, 100) : undefined,
       cornerRadiusPx: clamp(raw.cornerRadiusPx ?? 0, 0, 200),
       animation: raw.animation ?? "pop",
     });
@@ -503,6 +563,63 @@ const toWholeVideoTiming = <T extends { keepUntilEnd?: boolean | null; startOffs
   durationInSeconds: item.keepUntilEnd ? null : item.durationInSeconds,
 });
 
+/** Geminiの図形を描画側のスキーマに合わせて丸め込む。 */
+const normalizeShapes = (rawShapes: RawAutoEditShape[] | null | undefined, videoDuration: number): ShapeOverlay[] => {
+  const shapes: ShapeOverlay[] = [];
+  // Geminiは同じ形の枠を並べる時、2つ目以降(時には全部)の色・大きさを省いて位置だけ書くことがある。
+  // 省かれた項目は、色まで書いてある最初の図形から引き継ぎ、それも無ければ黒い線の枠として描く
+  // (以前は色が無い図形を「見えない」として捨てていたため、ランキングの枠ごと消えることがあった)。
+  const template = (rawShapes ?? []).find((shape) => hexOrUndefined(shape.borderColor) || hexOrUndefined(shape.fillColor));
+  const withoutNulls = (shape: RawAutoEditShape) =>
+    Object.fromEntries(Object.entries(shape).filter(([, value]) => value !== null && value !== undefined));
+  for (const original of rawShapes ?? []) {
+    const raw: RawAutoEditShape = {
+      ...(template ? withoutNulls({ ...template, xPercent: null, yPercent: null, startOffsetSeconds: null, durationInSeconds: null }) : { borderColor: "#000000" }),
+      ...withoutNulls(original),
+    };
+    const startOffsetSeconds = clamp(raw.startOffsetSeconds ?? 0, 0, Math.max(0, videoDuration - 0.2));
+    const parsed = shapeOverlaySchema.safeParse({
+      startOffsetSeconds,
+      durationInSeconds:
+        raw.durationInSeconds != null
+          ? clamp(raw.durationInSeconds, 0.2, Math.max(0.2, videoDuration - startOffsetSeconds))
+          : undefined,
+      xPercent: clamp(raw.xPercent ?? 50, 0, 100),
+      yPercent: clamp(raw.yPercent ?? 50, 0, 100),
+      widthPercent: clamp(raw.widthPercent ?? 30, 1, 100),
+      heightPercent: clamp(raw.heightPercent ?? 10, 1, 100),
+      borderColor: hexOrUndefined(raw.borderColor),
+      borderWidthPx: clamp(raw.borderWidthPx ?? 8, 0, 40),
+      fillColor: hexOrUndefined(raw.fillColor),
+      fillOpacity: clamp(raw.fillOpacity ?? 1, 0, 1),
+      cornerRadiusPx: clamp(raw.cornerRadiusPx ?? 24, 0, 200),
+      animation: "fade",
+    });
+    // 枠線も塗りも無い図形は見えないので捨てる。
+    if (parsed.success && (parsed.data.borderColor || parsed.data.fillColor)) {
+      shapes.push(parsed.data);
+    } else {
+      console.info(
+        `[autoEditPlan] 図形を捨てました: ${parsed.success ? "枠線も塗りも無い" : parsed.error.message} ${JSON.stringify(raw)}`
+      );
+    }
+  }
+  return shapes.slice(0, MAX_GLOBAL_SHAPES);
+};
+
+const normalizeFraming = (raw: RawAutoEditPlan["framing"]): VideoFraming | null => {
+  if (!raw || raw.scale <= 1.001) return null;
+  const parsed = videoFramingSchema.safeParse({
+    scale: clamp(raw.scale, 1, MAX_FRAMING_SCALE),
+    focusXPercent: clamp(raw.focusXPercent ?? 50, 0, 100),
+    focusYPercent: clamp(raw.focusYPercent ?? 50, 0, 100),
+  });
+  return parsed.success ? parsed.data : null;
+};
+
+/** 比べるために、空白・記号・改行を除いた文字だけにする。 */
+const comparableText = (text: string): string => text.replace(/[\s!！?？。、・…「」『』()（）\-ー〜~]/g, "");
+
 const normalizeZoom = (clip: RawAutoEditClip): ClipZoom | undefined => {
   if (!clip.zoom || clip.zoom.scale <= 1.001) return undefined;
   const parsed = clipZoomSchema.safeParse({
@@ -533,6 +650,270 @@ const uploadFileAsPart = async (
   uploadedFileNames.push(uploaded.name);
   await waitForGeminiFileActive(ai, uploaded.name);
   return { fileData: { fileUri: uploaded.uri, mimeType } };
+};
+
+/** 前の画像が消えてから、同じ画像が別の所に出るまでを「動いて移った」とみなす間(秒)。 */
+const MOVE_LINK_GAP_SECONDS = 0.6;
+
+/**
+ * 大きく出していた写真が消えるのと同時に、同じ写真が別の所(ランキングの枠など)に出たら、
+ * 前の位置・大きさから動いてくるようにする(完成動画の手本では、写真が縮みながら枠へ入っていく)。
+ * Geminiには「どこからどこへ」を考えさせず、出す時刻と画像の一致から決める。
+ */
+const linkImageMoves = (globalImages: ImageOverlay[], clips: AutoEditClipPlan[]): ImageOverlay[] => {
+  const shown: { image: ImageOverlay; start: number; end: number }[] = [];
+  let clipStart = 0;
+  for (const clip of clips) {
+    for (const image of clip.images ?? []) {
+      const start = clipStart + image.startOffsetSeconds;
+      shown.push({ image, start, end: start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds) });
+    }
+    clipStart += clip.durationInSeconds;
+  }
+  for (const image of globalImages) {
+    shown.push({
+      image,
+      start: image.startOffsetSeconds,
+      end: image.durationInSeconds !== undefined ? image.startOffsetSeconds + image.durationInSeconds : Infinity,
+    });
+  }
+  return globalImages.map((image) => {
+    if (image.moveFrom) return image;
+    const previous = shown.find(
+      (other) =>
+        other.image !== image &&
+        other.image.src === image.src &&
+        other.start < image.startOffsetSeconds &&
+        Math.abs(other.end - image.startOffsetSeconds) <= MOVE_LINK_GAP_SECONDS
+    )?.image;
+    if (!previous) return image;
+    return {
+      ...image,
+      moveFrom: {
+        xPercent: previous.xPercent,
+        yPercent: previous.yPercent,
+        widthPercent: previous.widthPercent,
+        heightPercent: previous.heightPercent,
+      },
+    };
+  });
+};
+
+/**
+ * Geminiの編集案(生のJSON)を、プロジェクトにそのまま書き込める形に直す。足りない画像はここで作る。
+ * 学習データの書き起こしも同じ形なので、手本がどう描かれるかの確認にも使える。
+ */
+export const finalizeAutoEditPlan = async (
+  data: RawAutoEditPlan,
+  input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages">,
+  options: { resolveImage?: ImageSourceResolver } = {}
+): Promise<AutoEditPlan> => {
+  const generatedImagePaths = input.generateMissingImages
+    ? await generateMissingImages(data, input.materialImages)
+    : new Map<string, string>();
+  const resolveImageSrc: ImageSourceResolver = (raw) =>
+    options.resolveImage?.(raw) ??
+    findMaterialImage(raw, input.materialImages)?.path ??
+    (raw.imageNumber == null ? generatedImagePaths.get(generatedImageKey(raw)) : undefined);
+
+  const clips: AutoEditClipPlan[] = [];
+  // クリップの外まで出し続ける文字・画像(最後まで残す物、話題の間ずっと出す物)。
+  // 出すクリップの完成動画上の開始秒に足して、全体の文字・画像へ移す。
+  const liftedOverlays: NonNullable<RawAutoEditClip["overlays"]> = [];
+  const liftedImages: RawAutoEditImage[] = [];
+  let outputStartSeconds = 0;
+  for (const raw of data.clips) {
+    if (clips.length >= MAX_CLIPS) break;
+    const fitted = fitClipToKeepRanges(raw, input.keepRanges);
+    if (!fitted) continue;
+    const clipDuration = fitted.durationInSeconds;
+    for (const overlay of raw.overlays ?? []) {
+      if (outlivesClip(overlay, clipDuration)) liftedOverlays.push(toWholeVideoTiming(overlay, outputStartSeconds, clipDuration));
+    }
+    for (const image of raw.images ?? []) {
+      if (outlivesClip(image, clipDuration)) liftedImages.push(toWholeVideoTiming(image, outputStartSeconds, clipDuration));
+    }
+    outputStartSeconds += clipDuration;
+    const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
+    clips.push({
+      ...fitted,
+      // テロップは描画側で文節の切れ目で折り返すので、Geminiが入れた改行は外す。
+      speechText: raw.speech?.replace(/\s*\n\s*/g, "").trim() ?? "",
+      captionAnimation: (raw.captionAnimation ?? undefined) as CaptionAnimation | undefined,
+      emphasisWords: emphasisWords.length > 0 ? emphasisWords : undefined,
+      emphasisColor: hexOrUndefined(raw.emphasisColor),
+      zoom: normalizeZoom(raw),
+      overlays: normalizeOverlays(
+        raw.overlays?.filter((overlay) => !outlivesClip(overlay, clipDuration)),
+        clipDuration,
+        MAX_CLIP_OVERLAYS
+      ),
+      images: normalizeImages(
+        raw.images?.filter((image) => !outlivesClip(image, clipDuration)),
+        clipDuration,
+        MAX_CLIP_IMAGES,
+        resolveImageSrc
+      ),
+      sfx: (raw.sfx ?? []).map((s) => ({
+        presetId: s.presetId,
+        offsetSeconds: clamp(s.offsetSeconds ?? 0, 0, Math.max(0, fitted.durationInSeconds - 0.1)),
+      })),
+    });
+  }
+  if (clips.length === 0) {
+    throw new Error("Geminiの編集案に使えるクリップがありませんでした。もう一度お試しください");
+  }
+
+  const globalImages = linkImageMoves(
+    normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, resolveImageSrc) ?? [],
+    clips
+  );
+  const generatedPaths = new Set(generatedImagePaths.values());
+  const usedGeneratedPaths = new Set(
+    [...globalImages, ...clips.flatMap((clip) => clip.images ?? [])]
+      .map((image) => image.src)
+      .filter((src) => generatedPaths.has(src))
+  );
+  const globalOverlays =
+    normalizeOverlays([...(data.globalOverlays ?? []), ...liftedOverlays], outputStartSeconds, MAX_GLOBAL_OVERLAYS) ?? [];
+  if (usedGeneratedPaths.size > 0) {
+    // 注意書きは上限で切られないよう先頭に入れる。
+    globalOverlays.unshift(GENERATED_IMAGE_NOTICE);
+    globalOverlays.splice(MAX_GLOBAL_OVERLAYS);
+  }
+
+  // 冒頭の見出し・締めの一言が、すでに画面に出している文字(タイトル・最後のクリップの文字)と同じ内容なら出さない。
+  // 同じ言葉が2か所に出ると読みにくいうえ、締めの一言は画面下の決まった位置に出るので、左に並べた枠などとも重なる。
+  const repeatsShownText = (text: string, shownTexts: string[]): boolean => {
+    const target = comparableText(text);
+    return (
+      target.length > 0 &&
+      shownTexts.map(comparableText).some((shown) => shown.length >= 4 && (shown.includes(target) || target.includes(shown)))
+    );
+  };
+  const hookHeadline = data.hook ? tidyLineBreaks(data.hook.headline) : "";
+  const titleTexts = globalOverlays.filter((overlay) => overlay.startOffsetSeconds < 1).map((overlay) => overlay.text);
+  const hook =
+    hookHeadline && !repeatsShownText(hookHeadline, titleTexts)
+      ? {
+          headline: hookHeadline,
+          subline: data.hook?.subline ? tidyLineBreaks(data.hook.subline) || undefined : undefined,
+        }
+      : null;
+  const ctaText = data.cta ? tidyLineBreaks(data.cta.text) : "";
+  const endingTexts = clips.slice(-3).flatMap((clip) => (clip.overlays ?? []).map((overlay) => overlay.text));
+  const cta = ctaText && !repeatsShownText(ctaText, endingTexts) ? { text: ctaText } : null;
+
+  const theme = data.theme ?? {};
+  return {
+    summary: data.summary,
+    referenceNotes: data.referenceNotes?.trim() || null,
+    theme: {
+      primaryColor: hexOrUndefined(theme.primaryColor),
+      fontFamily: (theme.fontFamily ?? undefined) as CaptionFontFamily | undefined,
+      captionPosition: (theme.captionPosition ?? undefined) as CaptionPosition | undefined,
+      captionStyle: (theme.captionStyle ?? undefined) as CaptionStyle | undefined,
+    },
+    hook,
+    cta,
+    globalOverlays,
+    globalImages,
+    globalShapes: normalizeShapes(data.globalShapes, outputStartSeconds),
+    framing: normalizeFraming(data.framing),
+    generatedImageCount: usedGeneratedPaths.size,
+    clips,
+  };
+};
+
+/** 一度に作る自動編集の案の数(1か2)。案の数だけ料金がかかる。 */
+const AUTO_EDIT_CANDIDATES = Math.min(2, Math.max(1, Number(process.env.AUTO_EDIT_CANDIDATES) || 2));
+
+/** Geminiに編集案を1つ作らせ、生のJSONのまま返す。混雑などの一時的な失敗は少し待ってやり直す。 */
+const requestRawPlan = async (
+  ai: GoogleGenAI,
+  model: string,
+  contents: Content[],
+  lane: GeminiRateLimitLane,
+  label: string
+): Promise<RawAutoEditPlan> => {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await runWithGeminiRateLimit(() => {
+        const generatePromise = ai.models.generateContent({
+          model,
+          contents,
+          config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
+        });
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
+        });
+        return Promise.race([generatePromise, timeoutPromise]);
+      }, lane);
+
+      // 1回あたりの消費量をサーバーログで追えるようにしておく(残高切れの前に重さに気づけるように)。
+      const usage = response.usageMetadata;
+      console.info(
+        `[autoEditPlan] ${label} model=${response.modelVersion ?? model} 入力${usage?.promptTokenCount ?? "?"}トークン` +
+          ` 出力${usage?.candidatesTokenCount ?? "?"}トークン 思考${usage?.thoughtsTokenCount ?? "?"}トークン`
+      );
+
+      const text = response.text;
+      if (!text) {
+        throw new Error("Gemini APIから空の応答が返されました");
+      }
+      const parsed = rawAutoEditPlanSchema.safeParse(JSON.parse(text));
+      if (!parsed.success) {
+        throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
+      }
+      return parsed.data;
+    } catch (error) {
+      lastError = error;
+      if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
+        const delayMs = RETRY_BASE_DELAY_MS * attempt;
+        console.warn(`[autoEditPlan] ${label}: Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS})`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+};
+
+const countImages = (plan: RawAutoEditPlan): number =>
+  plan.clips.reduce((sum, clip) => sum + (clip.images?.length ?? 0), 0);
+
+/** 編集案の「要素ごとの量」。手本と比べて、要素を丸ごと出し忘れていないかを見るのに使う。 */
+const elementCounts = (plan: RawAutoEditPlan): Record<string, number> => {
+  const images = plan.clips.flatMap((clip) => clip.images ?? []);
+  return {
+    framing: plan.framing && plan.framing.scale > 1.001 ? 1 : 0,
+    shapes: plan.globalShapes?.length ?? 0,
+    globalOverlays: plan.globalOverlays?.length ?? 0,
+    overlays: plan.clips.reduce((sum, clip) => sum + (clip.overlays?.length ?? 0), 0),
+    images: images.length,
+    keptImages: images.filter((image) => image.keepUntilEnd).length,
+    zooms: plan.clips.filter((clip) => clip.zoom && clip.zoom.scale > 1.001).length,
+  };
+};
+
+/**
+ * 編集案が、編集例の書き起こしにどれだけ近いか(0〜1)。手本にある要素ごとに「量の近さ」を平均する。
+ * 手本に無い要素は比べない(必要な所だけ入れる方針なので、手本より少ないこと自体は悪くないが、
+ * 手本にある要素を丸ごと出していない案は大きく下がる)。手本が無ければ全部同点(先に頼んだ案を使う)。
+ */
+export const similarityToExamples = (plan: RawAutoEditPlan, breakdowns: RawAutoEditPlan[]): number => {
+  if (breakdowns.length === 0) return 0;
+  const counts = elementCounts(plan);
+  const perExample = breakdowns.map((breakdown) => {
+    const expected = elementCounts(breakdown);
+    const keys = Object.keys(expected).filter((key) => expected[key] > 0);
+    if (keys.length === 0) return 0;
+    const closeness = keys.map((key) => Math.min(counts[key], expected[key]) / Math.max(counts[key], expected[key]));
+    return closeness.reduce((sum, value) => sum + value, 0) / keys.length;
+  });
+  return Math.max(...perExample);
 };
 
 /**
@@ -617,145 +998,41 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
       parts: [...materialImageParts, { text: "【今回編集する本人の動画】" }, videoPart, { text: prompt }],
     });
 
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const response = await runWithGeminiRateLimit(() => {
-          const generatePromise = ai.models.generateContent({
-            model,
-            contents,
-            config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
-          });
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
-          });
-          return Promise.race([generatePromise, timeoutPromise]);
-        });
-
-        // プリペイド(800円)で運用しているため、1回あたりの消費量をサーバーログで追えるようにしておく
-        // (残高切れの前に重さに気づけるように)。
-        const usage = response.usageMetadata;
-        console.info(
-          `[autoEditPlan] model=${response.modelVersion ?? model} 入力${usage?.promptTokenCount ?? "?"}トークン` +
-            ` 出力${usage?.candidatesTokenCount ?? "?"}トークン 思考${usage?.thoughtsTokenCount ?? "?"}トークン`
-        );
-
-        const text = response.text;
-        if (!text) {
-          throw new Error("Gemini APIから空の応答が返されました");
-        }
-
-        const parsed = rawAutoEditPlanSchema.safeParse(JSON.parse(text));
-        if (!parsed.success) {
-          throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
-        }
-
-        const generatedImagePaths = input.generateMissingImages
-          ? await generateMissingImages(parsed.data, input.materialImages)
-          : new Map<string, string>();
-        const resolveImageSrc: ImageSourceResolver = (raw) =>
-          findMaterialImage(raw, input.materialImages)?.path ??
-          (raw.imageNumber == null ? generatedImagePaths.get(generatedImageKey(raw)) : undefined);
-
-        const clips: AutoEditClipPlan[] = [];
-        // クリップの外まで出し続ける文字・画像(最後まで残す物、話題の間ずっと出す物)。
-        // 出すクリップの完成動画上の開始秒に足して、全体の文字・画像へ移す。
-        const liftedOverlays: NonNullable<RawAutoEditClip["overlays"]> = [];
-        const liftedImages: RawAutoEditImage[] = [];
-        let outputStartSeconds = 0;
-        for (const raw of parsed.data.clips) {
-          if (clips.length >= MAX_CLIPS) break;
-          const fitted = fitClipToKeepRanges(raw, input.keepRanges);
-          if (!fitted) continue;
-          const clipDuration = fitted.durationInSeconds;
-          for (const overlay of raw.overlays ?? []) {
-            if (outlivesClip(overlay, clipDuration)) liftedOverlays.push(toWholeVideoTiming(overlay, outputStartSeconds, clipDuration));
-          }
-          for (const image of raw.images ?? []) {
-            if (outlivesClip(image, clipDuration)) liftedImages.push(toWholeVideoTiming(image, outputStartSeconds, clipDuration));
-          }
-          outputStartSeconds += clipDuration;
-          const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
-          clips.push({
-            ...fitted,
-            // テロップは描画側で文節の切れ目で折り返すので、Geminiが入れた改行は外す。
-            speechText: raw.speech?.replace(/\s*\n\s*/g, "").trim() ?? "",
-            captionAnimation: (raw.captionAnimation ?? undefined) as CaptionAnimation | undefined,
-            emphasisWords: emphasisWords.length > 0 ? emphasisWords : undefined,
-            emphasisColor: hexOrUndefined(raw.emphasisColor),
-            zoom: normalizeZoom(raw),
-            overlays: normalizeOverlays(
-              raw.overlays?.filter((overlay) => !outlivesClip(overlay, clipDuration)),
-              clipDuration,
-              MAX_CLIP_OVERLAYS
-            ),
-            images: normalizeImages(
-              raw.images?.filter((image) => !outlivesClip(image, clipDuration)),
-              clipDuration,
-              MAX_CLIP_IMAGES,
-              resolveImageSrc
-            ),
-            sfx: (raw.sfx ?? []).map((s) => ({
-              presetId: s.presetId,
-              offsetSeconds: clamp(s.offsetSeconds ?? 0, 0, Math.max(0, fitted.durationInSeconds - 0.1)),
-            })),
-          });
-        }
-        if (clips.length === 0) {
-          throw new Error("Geminiの編集案に使えるクリップがありませんでした。もう一度お試しください");
-        }
-
-        const globalImages = normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, resolveImageSrc) ?? [];
-        const generatedPaths = new Set(generatedImagePaths.values());
-        const usedGeneratedPaths = new Set(
-          [...globalImages, ...clips.flatMap((clip) => clip.images ?? [])]
-            .map((image) => image.src)
-            .filter((src) => generatedPaths.has(src))
-        );
-        const globalOverlays =
-          normalizeOverlays([...(parsed.data.globalOverlays ?? []), ...liftedOverlays], outputStartSeconds, MAX_GLOBAL_OVERLAYS) ?? [];
-        if (usedGeneratedPaths.size > 0) {
-          // 注意書きは上限で切られないよう先頭に入れる。
-          globalOverlays.unshift(GENERATED_IMAGE_NOTICE);
-          globalOverlays.splice(MAX_GLOBAL_OVERLAYS);
-        }
-
-        const theme = parsed.data.theme ?? {};
-        return {
-          summary: parsed.data.summary,
-          referenceNotes: parsed.data.referenceNotes?.trim() || null,
-          theme: {
-            primaryColor: hexOrUndefined(theme.primaryColor),
-            fontFamily: (theme.fontFamily ?? undefined) as CaptionFontFamily | undefined,
-            captionPosition: (theme.captionPosition ?? undefined) as CaptionPosition | undefined,
-            captionStyle: (theme.captionStyle ?? undefined) as CaptionStyle | undefined,
-          },
-          hook: parsed.data.hook && tidyLineBreaks(parsed.data.hook.headline)
-            ? {
-                headline: tidyLineBreaks(parsed.data.hook.headline),
-                subline: parsed.data.hook.subline ? tidyLineBreaks(parsed.data.hook.subline) || undefined : undefined,
-              }
-            : null,
-          cta: parsed.data.cta && tidyLineBreaks(parsed.data.cta.text) ? { text: tidyLineBreaks(parsed.data.cta.text) } : null,
-          globalOverlays,
-          globalImages,
-          generatedImageCount: usedGeneratedPaths.size,
-          clips,
-        };
-      } catch (error) {
-        lastError = error;
-        if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
-          const delayMs = RETRY_BASE_DELAY_MS * attempt;
-          console.warn(
-            `[autoEditPlan] Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS})`
-          );
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          continue;
-        }
-        throw toFriendlyGeminiError(error);
+    // 同じ依頼でも、要素(枠の図形・最後まで残す画像など)を丸ごと出し忘れた手抜きの答えが混ざるため、
+    // 複数の案を同時に作り、編集例の書き起こしに一番近い案を選ぶ(料金は案の数だけかかる)。
+    const lanes: GeminiRateLimitLane[] = ["text", "text-parallel"].slice(0, AUTO_EDIT_CANDIDATES) as GeminiRateLimitLane[];
+    const results = await Promise.allSettled(
+      lanes.map((lane, index) => requestRawPlan(ai, model, contents, lane, `案${index + 1}`))
+    );
+    const candidates = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+    if (candidates.length === 0) {
+      throw toFriendlyGeminiError((results[0] as PromiseRejectedResult).reason);
+    }
+    // 調整用: AUTO_EDIT_DEBUG_DIRを指定すると、Geminiの生の答えをそこへ保存する(丸め込みで何を捨てたかを確かめる時に使う)。
+    if (process.env.AUTO_EDIT_DEBUG_DIR) {
+      for (const [index, candidate] of candidates.entries()) {
+        await writeFile(
+          path.join(process.env.AUTO_EDIT_DEBUG_DIR, `auto-edit-raw-${index + 1}.json`),
+          JSON.stringify(candidate, null, 2)
+        ).catch(() => {});
       }
     }
-    throw toFriendlyGeminiError(lastError);
+    const breakdowns = examples.flatMap((example) => (example.breakdown ? [example.breakdown] : []));
+    const scored = candidates.map((candidate) => ({ candidate, score: similarityToExamples(candidate, breakdowns) }));
+    const best = scored.reduce((a, b) => (b.score > a.score ? b : a));
+    console.info(
+      `[autoEditPlan] ${candidates.length}案の手本との近さ: ${scored.map((s) => s.score.toFixed(2)).join(" / ")} → ${best.score.toFixed(2)}の案を使う`
+    );
+
+    const plan = await finalizeAutoEditPlan(best.candidate, input);
+    // Geminiが出した数と、丸め込み後に残った数。形の崩れた要素を捨てすぎていないかをログで追えるようにする。
+    console.info(
+      `[autoEditPlan] 図形${best.candidate.globalShapes?.length ?? 0}→${plan.globalShapes.length}` +
+        ` 全体の文字${best.candidate.globalOverlays?.length ?? 0}→${plan.globalOverlays.length}` +
+        ` 画像${countImages(best.candidate)}→` +
+        `${plan.globalImages.length + plan.clips.reduce((sum, clip) => sum + (clip.images?.length ?? 0), 0)}`
+    );
+    return plan;
   } finally {
     for (const name of uploadedFileNames) {
       await ai.files.delete({ name }).catch(() => {});
