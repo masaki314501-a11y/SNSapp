@@ -167,7 +167,7 @@ export const PreviewDragLayer: React.FC<Props> = ({
                 style={
                   item.kind === "image"
                     ? { ...common, width: `${(overlay as ImageOverlay).widthPercent}%` }
-                    : { ...common, maxWidth: "90%" }
+                    : { ...common, width: "max-content", maxWidth: "90%" }
                 }
                 onPointerDown={handlePointerDown(item)}
                 title="ドラッグで動かせます"

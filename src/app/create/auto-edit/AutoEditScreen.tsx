@@ -86,6 +86,7 @@ export const AutoEditScreen: React.FC = () => {
       fontFamily: plan.theme.fontFamily ?? project.fontFamily,
       captionPosition: plan.theme.captionPosition ?? project.captionPosition,
       captionStyle: plan.theme.captionStyle ?? project.captionStyle,
+      fontSize: plan.theme.captionFontSize ?? project.fontSize,
       hook: plan.hook,
       cta: plan.cta,
       globalOverlays: plan.globalOverlays,

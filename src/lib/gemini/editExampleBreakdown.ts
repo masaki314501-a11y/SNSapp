@@ -55,6 +55,8 @@ ${hints(CAPTION_FONT_FAMILY_OPTIONS)}
   - captionAnimation: テロップの出方。候補:
 ${hints(CAPTION_ANIMATION_OPTIONS)}
   - emphasisWords / emphasisColor: テロップの中で色や大きさを変えている語と、その色(#RRGGBB)。
+  - captionAccentColor / captionFontFamily / captionGlowColor: そのクリップだけテロップの縁取りの色・書体・光が違うなら、それ。同じならnull。
+  - speechを2行で出しているなら、画面と同じ所に「\n」を入れる。
   使われていない場合(テロップが無い等)の候補も、正解動画に一番近いものを選ぶ。
 - overlays: テロップとは別に、そのクリップの間だけ画面に出ている文字(強調・ツッコミ・見出し・数字・ラベル)。
   文言は画面の通りに書き、改行も画面の通り「\\n」で書く。xPercent/yPercentは文字の中心の位置(0〜100)、
@@ -74,6 +76,8 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
 - framing: 正解動画の映像が素材より寄っていて、人物が片側に寄せられているなら、全体の寄せ方。scaleは素材に対する倍率、
   focusXPercent/focusYPercentは拡大の中心(その点は動かず、ほかは点から離れる方向へ広がる)。素材の背景の物(額・ハンガー等)が
   正解動画のどこに映っているかから計算する。寄せていなければnull。
+- showCaptions: 本人の話している言葉をそのまま字幕で出していればtrue、要点だけの文字ならfalse。
+- shapes(クリップ): 途中で出る図形(結論の所で重ねる〇印など)は、出始めたクリップに書く。kindは丸ならcircle(widthPercentが直径)。
 - globalShapes: ずっと出ている図形(ランキングの空の枠・箱・帯など)。位置は中心、widthPercent/heightPercentは画面に対する幅・高さ、
   borderColor/borderWidthPx(横1080pxの画面での線の太さ)/fillColor/fillOpacity/cornerRadiusPxを測って書く。
 - globalOverlays: 動画の最初からずっと出ている文字(上部のタイトル帯、ランキングの空枠の「1位」〜など)。秒数は動画の先頭から、最後まで出ているならdurationInSecondsはnull。

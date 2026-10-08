@@ -41,6 +41,9 @@ export const ClipSequence: React.FC<Props> = ({
   volume,
   emphasisWords,
   emphasisColor,
+  captionAccentColor,
+  captionFontFamily,
+  captionGlowColor,
   zoom,
   overlays,
   images,
@@ -65,10 +68,11 @@ export const ClipSequence: React.FC<Props> = ({
       />
       <AnimatedCaption
         text={caption}
-        accentColor={accentColor}
+        accentColor={captionAccentColor ?? accentColor}
+        glowColor={captionGlowColor}
         animation={captionAnimation}
         captionStyle={captionStyle}
-        fontFamily={fontFamily}
+        fontFamily={captionFontFamily ?? fontFamily}
         position={captionPosition}
         fontSize={fontSize}
         emphasisWords={emphasisWords}

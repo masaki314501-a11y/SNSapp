@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   CAPTION_ANIMATION_OPTIONS,
   CAPTION_FONT_FAMILY_OPTIONS,
+  CAPTION_FONT_SIZE_OPTIONS,
   CAPTION_POSITION_OPTIONS,
   CAPTION_STYLE_OPTIONS,
 } from "@video/shared/schema";
@@ -19,6 +20,7 @@ import { SFX_PRESETS } from "@/components/editor/audioPresets";
 const FONT_FAMILY_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value);
 const CAPTION_POSITION_VALUES = CAPTION_POSITION_OPTIONS.map((option) => option.value);
 const CAPTION_STYLE_VALUES = CAPTION_STYLE_OPTIONS.map((option) => option.value);
+const CAPTION_FONT_SIZE_VALUES = CAPTION_FONT_SIZE_OPTIONS.map((option) => option.value);
 const CAPTION_ANIMATION_VALUES = CAPTION_ANIMATION_OPTIONS.map((option) => option.value);
 const SFX_PRESET_IDS = SFX_PRESETS.map((preset) => preset.id);
 
@@ -70,6 +72,9 @@ const rawImageSchema = z.object({
 
 /** 動画全体に重ねる図形(ランキングの空の枠など)。秒数は動画全体の先頭から。 */
 const rawShapeSchema = z.object({
+  kind: z.enum(["rect", "circle"]).nullable().optional(),
+  /** クリップに置いた図形で、出てから動画の最後まで残す物。 */
+  keepUntilEnd: z.boolean().nullable().optional(),
   startOffsetSeconds: z.number().nullable().optional(),
   durationInSeconds: z.number().nullable().optional(),
   xPercent: z.number().nullable().optional(),
@@ -92,6 +97,9 @@ const rawClipSchema = z.object({
   captionAnimation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
   emphasisWords: z.array(z.string()).nullable().optional(),
   emphasisColor: z.string().nullable().optional(),
+  captionAccentColor: z.string().nullable().optional(),
+  captionFontFamily: z.enum(FONT_FAMILY_VALUES as [string, ...string[]]).nullable().optional(),
+  captionGlowColor: z.string().nullable().optional(),
   zoom: z
     .object({
       scale: z.number(),
@@ -103,6 +111,8 @@ const rawClipSchema = z.object({
     .optional(),
   overlays: z.array(rawOverlaySchema).nullable().optional(),
   images: z.array(rawImageSchema).nullable().optional(),
+  /** そのクリップで出す図形(〇印など)。出し続ける長さはクリップより長くてよく、全体の図形へサーバー側で移す。 */
+  shapes: z.array(rawShapeSchema).nullable().optional(),
   sfx: z
     .array(
       z.object({
@@ -127,6 +137,7 @@ export const rawAutoEditPlanSchema = z.object({
       fontFamily: z.enum(FONT_FAMILY_VALUES as [string, ...string[]]).nullable().optional(),
       captionPosition: z.enum(CAPTION_POSITION_VALUES as [string, ...string[]]).nullable().optional(),
       captionStyle: z.enum(CAPTION_STYLE_VALUES as [string, ...string[]]).nullable().optional(),
+      captionFontSize: z.enum(CAPTION_FONT_SIZE_VALUES as [string, ...string[]]).nullable().optional(),
     })
     .nullable()
     .optional(),
@@ -145,6 +156,8 @@ export const rawAutoEditPlanSchema = z.object({
   globalShapes: z.array(rawShapeSchema).nullable().optional(),
   /** 動画全体に重ね続ける文字(参考投稿の上部タイトル等)。 */
   globalOverlays: z.array(rawOverlaySchema).nullable().optional(),
+  /** 話している言葉を字幕(テロップ)として出すか。参考・編集例が字幕を出していればtrue。 */
+  showCaptions: z.boolean().nullable().optional(),
   /** AIに作らせる画像の画風。医療・美容・健康の話はイラスト必須(generateImage.ts参照)。 */
   generatedImageStyle: z.enum(["illustration", "photo"]).nullable().optional(),
   clips: z.array(rawClipSchema),
@@ -203,6 +216,8 @@ const imageItemSchema = {
 const shapeItemSchema = {
   type: Type.OBJECT,
   properties: {
+    kind: { type: Type.STRING, format: "enum", enum: ["rect", "circle"], nullable: true },
+    keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
     startOffsetSeconds: nullableNumber,
     durationInSeconds: nullableNumber,
     xPercent: nullableNumber,
@@ -235,6 +250,7 @@ export const autoEditResponseSchema = {
         fontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES },
         captionPosition: { type: Type.STRING, format: "enum", enum: CAPTION_POSITION_VALUES },
         captionStyle: { type: Type.STRING, format: "enum", enum: CAPTION_STYLE_VALUES },
+        captionFontSize: { type: Type.STRING, format: "enum", enum: CAPTION_FONT_SIZE_VALUES },
       },
     },
     hook: {
@@ -257,6 +273,7 @@ export const autoEditResponseSchema = {
     },
     globalShapes: { type: Type.ARRAY, nullable: true, items: shapeItemSchema },
     globalOverlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
+    showCaptions: { type: Type.BOOLEAN, nullable: true },
     generatedImageStyle: { type: Type.STRING, format: "enum", enum: ["illustration", "photo"], nullable: true },
     clips: {
       type: Type.ARRAY,
@@ -269,6 +286,9 @@ export const autoEditResponseSchema = {
           captionAnimation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
           emphasisWords: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
           emphasisColor: nullableString,
+          captionAccentColor: nullableString,
+          captionFontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES, nullable: true },
+          captionGlowColor: nullableString,
           zoom: {
             type: Type.OBJECT,
             nullable: true,
@@ -282,6 +302,7 @@ export const autoEditResponseSchema = {
           },
           overlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
           images: { type: Type.ARRAY, nullable: true, items: imageItemSchema },
+          shapes: { type: Type.ARRAY, nullable: true, items: shapeItemSchema },
           sfx: {
             type: Type.ARRAY,
             nullable: true,
@@ -305,8 +326,12 @@ export const autoEditResponseSchema = {
           "captionAnimation",
           "emphasisWords",
           "emphasisColor",
+          "captionAccentColor",
+          "captionFontFamily",
+          "captionGlowColor",
           "overlays",
           "images",
+          "shapes",
           "zoom",
           "sfx",
           "narration",
@@ -322,6 +347,7 @@ export const autoEditResponseSchema = {
     "globalShapes",
     "globalOverlays",
     "theme",
+    "showCaptions",
     "generatedImageStyle",
     "clips",
     "hook",

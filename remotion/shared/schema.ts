@@ -69,7 +69,7 @@ export const CAPTION_POSITION_OPTIONS: { value: CaptionPosition; label: string }
 ];
 
 export const captionFontSizeSchema = z
-  .enum(["small", "medium", "large"])
+  .enum(["small", "medium", "large", "xlarge"])
   .default("medium")
   .describe("テロップの文字サイズ");
 
@@ -79,6 +79,7 @@ export const CAPTION_FONT_SIZE_OPTIONS: { value: CaptionFontSize; label: string 
   { value: "small", label: "小" },
   { value: "medium", label: "中" },
   { value: "large", label: "大" },
+  { value: "xlarge", label: "特大" },
 ];
 
 /** captionFontSizeSchemaの各値に対する、基準フォントサイズ(px)への倍率。 */
@@ -86,6 +87,8 @@ export const CAPTION_FONT_SIZE_SCALE: Record<CaptionFontSize, number> = {
   small: 0.75,
   medium: 1,
   large: 1.3,
+  // 話している言葉をそのまま大きく出す字幕(比較・解説のショート動画によくある、画面中央の太い縁取り字幕)。
+  xlarge: 1.55,
 };
 
 export const hookSchema = z.object({
@@ -191,6 +194,17 @@ export const textOverlaySchema = z.object({
   italic: z.boolean().optional(),
   /** 見える縁取りの太さ(横1080pxの画面でのpx)。省略時は文字の大きさの約8%。 */
   strokeWidthPx: z.number().min(1).max(40).optional(),
+  /**
+   * 出る時に、この位置・大きさから今の位置・大きさへ動いてくる(冒頭に中央へ大きく出したタイトルが、縮みながら上へ移る等)。
+   * 指定した時は出現アニメーション(animation)の代わりにこの動きを使う。
+   */
+  moveFrom: z
+    .object({
+      xPercent: z.number().min(0).max(100),
+      yPercent: z.number().min(0).max(100),
+      fontSizePx: z.number().min(20).max(220),
+    })
+    .optional(),
 });
 
 export type TextOverlay = z.infer<typeof textOverlaySchema>;
@@ -232,6 +246,8 @@ export type ImageOverlay = z.infer<typeof imageOverlaySchema>;
  * 枠線だけ(fillColor無し)なら、後から同じ位置に入れた画像の縁取りとしても見える。
  */
 export const shapeOverlaySchema = z.object({
+  /** rect=角の丸い四角、circle=丸(widthPercentを直径として描き、heightPercentは使わない。正解・おすすめの丸印など)。 */
+  kind: z.enum(["rect", "circle"]).default("rect"),
   startOffsetSeconds: z.number().min(0).default(0).describe("カット先頭(動画全体の場合は動画先頭)から何秒後に出すか"),
   durationInSeconds: z.number().min(0.2).max(600).optional().describe("表示秒数。省略時は最後まで"),
   xPercent: z.number().min(0).max(100).default(50).describe("図形の中心の横位置(左端0〜右端100)"),
@@ -294,6 +310,12 @@ export const mediaItemBaseSchema = z.object({
   /** テロップ中で色を変えて大きく見せる単語(数字・キーワード)。自動編集が決める。 */
   emphasisWords: z.array(z.string()).optional(),
   emphasisColor: zColor().optional(),
+  /** このクリップだけテロップの差し色(縁取り/背景の色)を変える。結論の言葉だけ赤く縁取る等。省略時は全体の差し色。 */
+  captionAccentColor: zColor().optional(),
+  /** このクリップだけテロップの書体を変える(しみじみ語る所だけ明朝にする等)。 */
+  captionFontFamily: captionFontFamilySchema.removeDefault().optional(),
+  /** このクリップだけテロップの周りを光らせる(強い一言をオレンジに光らせる等)。 */
+  captionGlowColor: zColor().optional(),
   zoom: clipZoomSchema.optional(),
   overlays: z.array(textOverlaySchema).max(20).optional(),
   images: z.array(imageOverlaySchema).max(20).optional(),

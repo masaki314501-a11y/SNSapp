@@ -194,3 +194,18 @@ describe("図形の省略", () => {
     expect(bare.globalShapes[0]).toMatchObject({ yPercent: 25, borderColor: "#000000" });
   });
 });
+
+describe("改行", () => {
+  it("「\\n」の2文字で書かれた改行も改行にし、字幕は2行までにする", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([
+        { sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "日本の方が\\n通いやすい", overlays: [{ text: "知らないと\\n損する話" }] },
+        { sourceStartSeconds: 2, sourceEndSeconds: 4, speech: "一行目です\n二行目です\n三行目です" },
+      ]),
+      input
+    );
+    expect(plan.clips[0].speechText).toBe("日本の方が\n通いやすい");
+    expect(plan.clips[0].overlays?.[0].text).toBe("知らないと\n損する話");
+    expect(plan.clips[1].speechText).toBe("一行目です\n二行目です三行目です");
+  });
+});

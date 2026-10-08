@@ -54,6 +54,8 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
+  const filledShapes = (globalShapes ?? []).filter((shape) => shape.fillColor);
+  const outlineShapes = (globalShapes ?? []).filter((shape) => !shape.fillColor);
   const fadeOpacity = theme.fadeInOut
     ? interpolate(
         frame,
@@ -96,9 +98,11 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
         ))}
       </Series>
 
+      {/* 塗りのある図形(比べる物を並べる白いカードなど)は、中に置く画像の下に敷く。 */}
+      {filledShapes.length > 0 ? <ShapeOverlays shapes={filledShapes} /> : null}
       {globalImages && globalImages.length > 0 ? <ImageOverlays images={globalImages} /> : null}
-      {/* 図形(ランキングの枠など)は画像の上に重ね、枠に入れた画像の縁取りに見えるようにする。文字は図形より上。 */}
-      {globalShapes && globalShapes.length > 0 ? <ShapeOverlays shapes={globalShapes} /> : null}
+      {/* 線だけの図形(ランキングの枠・〇印など)は画像の上に重ね、枠に入れた画像の縁取りに見えるようにする。文字は図形より上。 */}
+      {outlineShapes.length > 0 ? <ShapeOverlays shapes={outlineShapes} /> : null}
 
       {/* クリップごとの強調テキストは、動画全体の画像・図形に隠れないよう、それより上の層に描く。 */}
       <Series>

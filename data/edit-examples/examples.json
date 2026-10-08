@@ -11,41 +11,179 @@
       "referenceNotes": "質問ごとにズームインと効果音（ポップ音）、画面中央へのラベル表示を行い、話題の切り替わりを明確にしている。テロップは縁取りのある丸ゴシック体を使用し、キーワードの色を変えて視認性を高めている。画面上部には常に動画のテーマを、下部には比較対象である日本と韓国のラベルを配置し、対比構造を分かりやすく示している。",
       "summary": "日本と韓国の矯正治療の比較について、「価格」「スピード」「仕上がり」「保証」「技術」の5項目でテンポよく答える構成。質問ごとにズームと効果音を入れて明確に場面を切り替え、言い淀みをカットして間を詰めている。",
       "theme": {
-        "primaryColor": "#00BFFF",
-        "fontFamily": "M PLUS Rounded 1c",
+        "primaryColor": "#1A9FD0",
+        "fontFamily": "Noto Sans JP",
         "captionPosition": "middle",
-        "captionStyle": "outline"
+        "captionStyle": "outline",
+        "captionFontSize": "xlarge"
       },
       "hook": null,
-      "cta": {
-        "text": "ご予約をお願いします！"
-      },
+      "cta": null,
       "globalOverlays": [
         {
-          "text": "日本vs韓国\n矯正治療どっちがいい？",
-          "xPercent": 50,
-          "yPercent": 20,
-          "fontSizePx": 80,
-          "animation": "pop"
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 1.6,
+          "animation": "pop",
+          "text": "日本",
+          "xPercent": 36.6,
+          "yPercent": 47.9,
+          "fontSizePx": 67,
+          "color": "#FFFFFF",
+          "backgroundColor": "#E01E1E"
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 1.6,
+          "animation": "pop",
+          "text": "vs",
+          "xPercent": 50.1,
+          "yPercent": 47.9,
+          "fontSizePx": 73,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000"
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 1.6,
+          "animation": "pop",
+          "text": "韓国",
+          "xPercent": 63.8,
+          "yPercent": 47.9,
+          "fontSizePx": 67,
+          "color": "#FFFFFF",
+          "backgroundColor": "#1F4FD6"
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 1.6,
+          "animation": "pop",
+          "text": "矯正治療",
+          "xPercent": 34.3,
+          "yPercent": 55.2,
+          "fontSizePx": 79,
+          "color": "#E8BE2E",
+          "strokeColor": "#000000"
+        },
+        {
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 1.6,
+          "animation": "pop",
+          "text": "どっちがいい？",
+          "xPercent": 68.6,
+          "yPercent": 55.2,
+          "fontSizePx": 67,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000"
+        },
+        {
+          "startOffsetSeconds": 1.6,
+          "durationInSeconds": null,
+          "animation": "pop",
+          "text": "日本",
+          "xPercent": 27.5,
+          "yPercent": 11.5,
+          "fontSizePx": 53,
+          "color": "#FFFFFF",
+          "backgroundColor": "#E01E1E"
+        },
+        {
+          "startOffsetSeconds": 1.6,
+          "durationInSeconds": null,
+          "animation": "pop",
+          "text": "vs",
+          "xPercent": 37.8,
+          "yPercent": 11.5,
+          "fontSizePx": 57,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000"
+        },
+        {
+          "startOffsetSeconds": 1.6,
+          "durationInSeconds": null,
+          "animation": "pop",
+          "text": "韓国",
+          "xPercent": 48,
+          "yPercent": 11.5,
+          "fontSizePx": 53,
+          "color": "#FFFFFF",
+          "backgroundColor": "#1F4FD6"
+        },
+        {
+          "startOffsetSeconds": 1.6,
+          "durationInSeconds": null,
+          "animation": "pop",
+          "text": "矯正治療",
+          "xPercent": 21.5,
+          "yPercent": 16.5,
+          "fontSizePx": 62,
+          "color": "#E8BE2E",
+          "strokeColor": "#000000"
+        },
+        {
+          "startOffsetSeconds": 1.6,
+          "durationInSeconds": null,
+          "animation": "pop",
+          "text": "どっちがいい？",
+          "xPercent": 51.5,
+          "yPercent": 16.5,
+          "fontSizePx": 53,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000"
         },
         {
           "text": "日本",
-          "xPercent": 25,
-          "yPercent": 85,
-          "fontSizePx": 50
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 76,
+          "xPercent": 28.1,
+          "yPercent": 83,
+          "fontSizePx": 52,
+          "color": "#111111",
+          "animation": "fade"
         },
         {
           "text": "韓国",
-          "xPercent": 75,
-          "yPercent": 85,
-          "fontSizePx": 50
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 76,
+          "xPercent": 71.9,
+          "yPercent": 83,
+          "fontSizePx": 52,
+          "color": "#111111",
+          "animation": "fade"
         }
       ],
       "clips": [
         {
           "sourceStartSeconds": 0,
           "sourceEndSeconds": 2,
-          "speech": "日本と韓国の矯正治療を教えてください"
+          "speech": "",
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "日本の国旗(日の丸)",
+              "name": "日本の国旗",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 76,
+              "xPercent": 28.2,
+              "yPercent": 74.4,
+              "widthPercent": 28.7,
+              "heightPercent": 11.7,
+              "cornerRadiusPx": 0,
+              "animation": "fade"
+            },
+            {
+              "imageNumber": null,
+              "description": "韓国の国旗(太極旗)",
+              "name": "韓国の国旗",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 76,
+              "xPercent": 72.8,
+              "yPercent": 74.4,
+              "widthPercent": 28.7,
+              "heightPercent": 11.7,
+              "cornerRadiusPx": 0,
+              "animation": "fade"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 2,
@@ -57,20 +195,23 @@
             "focusXPercent": 50,
             "focusYPercent": 40
           },
-          "overlays": [
-            {
-              "text": "価格",
-              "xPercent": 50,
-              "yPercent": 50,
-              "fontSizePx": 60,
-              "color": "#FFFFFF",
-              "backgroundColor": "#333333"
-            }
-          ],
           "sfx": [
             {
               "presetId": "pop",
               "offsetSeconds": 0
+            }
+          ],
+          "overlays": [
+            {
+              "text": "価格",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 21,
+              "xPercent": 50,
+              "yPercent": 60.2,
+              "fontSizePx": 56,
+              "color": "#111111",
+              "backgroundColor": "#FFFFFF",
+              "animation": "pop"
             }
           ]
         },
@@ -78,11 +219,18 @@
           "sourceStartSeconds": 2.5,
           "sourceEndSeconds": 3.5,
           "speech": "韓国の方が安いです",
-          "emphasisWords": [
-            "韓国",
-            "安い"
-          ],
-          "emphasisColor": "#00BFFF"
+          "shapes": [
+            {
+              "kind": "circle",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 20.5,
+              "xPercent": 71.9,
+              "yPercent": 75.8,
+              "widthPercent": 30.6,
+              "borderColor": "#FF3B30",
+              "borderWidthPx": 20
+            }
+          ]
         },
         {
           "sourceStartSeconds": 3.5,
@@ -102,21 +250,16 @@
         {
           "sourceStartSeconds": 6.5,
           "sourceEndSeconds": 8,
-          "speech": "韓国の方が全然安いです",
-          "emphasisWords": [
-            "韓国",
-            "安い"
-          ],
-          "emphasisColor": "#00BFFF"
+          "speech": "韓国の方が全然安いです"
         },
         {
           "sourceStartSeconds": 8,
           "sourceEndSeconds": 10,
           "speech": "日本より3分の1ぐらい安い",
           "emphasisWords": [
-            "3分の1"
+            "3"
           ],
-          "emphasisColor": "#FFD700"
+          "emphasisColor": "#FF3B3B"
         },
         {
           "sourceStartSeconds": 10,
@@ -126,36 +269,32 @@
         {
           "sourceStartSeconds": 12,
           "sourceEndSeconds": 14,
-          "speech": "日本で全体矯正しようと思うと"
+          "speech": "日本で全体矯正\nしようと思うと",
+          "emphasisWords": [
+            "全体矯正"
+          ],
+          "emphasisColor": "#FF3B3B"
         },
         {
           "sourceStartSeconds": 14,
           "sourceEndSeconds": 16,
-          "speech": "60万円から100万円ぐらいするけど",
-          "emphasisWords": [
-            "60万",
-            "100万円"
-          ],
-          "emphasisColor": "#00BFFF"
+          "speech": "【日本のマウスピース全体矯正】\n60〜100万円"
         },
         {
           "sourceStartSeconds": 16,
           "sourceEndSeconds": 20,
-          "speech": "韓国だったら高いところでも60万円ぐらい、安いところだと40万円ぐらい",
-          "emphasisWords": [
-            "40万",
-            "60万円"
-          ],
-          "emphasisColor": "#00BFFF"
+          "speech": "【韓国のマウスピース全体矯正】\n40〜60万円",
+          "captionAccentColor": "#D81E1E",
+          "captionGlowColor": "#FF8A00"
         },
         {
           "sourceStartSeconds": 20,
-          "sourceEndSeconds": 22,
-          "speech": "20万円から30万円ぐらい安そうな感じがしますね",
+          "sourceEndSeconds": 23,
+          "speech": "20〜30万円の\n差があります",
           "emphasisWords": [
             "20〜30万円"
           ],
-          "emphasisColor": "#FFD700"
+          "emphasisColor": "#FF3B3B"
         },
         {
           "sourceStartSeconds": 23,
@@ -167,41 +306,52 @@
             "focusXPercent": 50,
             "focusYPercent": 40
           },
-          "overlays": [
-            {
-              "text": "スピード",
-              "xPercent": 50,
-              "yPercent": 50,
-              "fontSizePx": 60,
-              "color": "#FFFFFF",
-              "backgroundColor": "#333333"
-            }
-          ],
           "sfx": [
             {
               "presetId": "pop",
               "offsetSeconds": 0
             }
-          ]
+          ],
+          "overlays": [
+            {
+              "text": "スピード",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 14,
+              "xPercent": 50,
+              "yPercent": 60.2,
+              "fontSizePx": 56,
+              "color": "#111111",
+              "backgroundColor": "#FFFFFF",
+              "animation": "pop"
+            }
+          ],
+          "captionAccentColor": "#000000",
+          "captionFontFamily": "Shippori Mincho"
         },
         {
           "sourceStartSeconds": 24,
           "sourceEndSeconds": 25,
-          "speech": "矯正は通わないといけない"
+          "speech": "矯正は通わない\nといけない",
+          "captionAccentColor": "#000000",
+          "captionFontFamily": "Shippori Mincho"
         },
         {
           "sourceStartSeconds": 25,
           "sourceEndSeconds": 27,
-          "speech": "ワイヤーは月1回は通院が必須"
+          "speech": "ワイヤーは月1回は\n通院が必須",
+          "emphasisWords": [
+            "ワイヤーは月1回は"
+          ],
+          "emphasisColor": "#FF3B3B"
         },
         {
           "sourceStartSeconds": 27,
-          "sourceEndSeconds": 29,
+          "sourceEndSeconds": 30,
           "speech": "毎月韓国に行く予定があるなら"
         },
         {
           "sourceStartSeconds": 30,
-          "sourceEndSeconds": 31,
+          "sourceEndSeconds": 32,
           "speech": "期間は変わらない"
         },
         {
@@ -211,13 +361,22 @@
         },
         {
           "sourceStartSeconds": 34,
-          "sourceEndSeconds": 36,
-          "speech": "日本の方が通いやすい",
-          "emphasisWords": [
-            "日本",
-            "通いやすい"
+          "sourceEndSeconds": 37,
+          "speech": "日本の方が\n通いやすい",
+          "shapes": [
+            {
+              "kind": "circle",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 3,
+              "xPercent": 28.1,
+              "yPercent": 75.8,
+              "widthPercent": 30.6,
+              "borderColor": "#FF3B30",
+              "borderWidthPx": 20
+            }
           ],
-          "emphasisColor": "#FFD700"
+          "captionAccentColor": "#D81E1E",
+          "captionGlowColor": "#FF8A00"
         },
         {
           "sourceStartSeconds": 37,
@@ -229,20 +388,23 @@
             "focusXPercent": 50,
             "focusYPercent": 40
           },
-          "overlays": [
-            {
-              "text": "仕上がり",
-              "xPercent": 50,
-              "yPercent": 50,
-              "fontSizePx": 60,
-              "color": "#FFFFFF",
-              "backgroundColor": "#333333"
-            }
-          ],
           "sfx": [
             {
               "presetId": "pop",
               "offsetSeconds": 0
+            }
+          ],
+          "overlays": [
+            {
+              "text": "仕上がり",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 26,
+              "xPercent": 50,
+              "yPercent": 60.2,
+              "fontSizePx": 56,
+              "color": "#111111",
+              "backgroundColor": "#FFFFFF",
+              "animation": "pop"
             }
           ]
         },
@@ -270,11 +432,8 @@
           "sourceStartSeconds": 46,
           "sourceEndSeconds": 49,
           "speech": "美容クリニックと連携",
-          "emphasisWords": [
-            "美容クリニック",
-            "連携"
-          ],
-          "emphasisColor": "#00BFFF"
+          "captionAccentColor": "#D81E1E",
+          "captionGlowColor": "#FF8A00"
         },
         {
           "sourceStartSeconds": 49,
@@ -289,7 +448,9 @@
         {
           "sourceStartSeconds": 52,
           "sourceEndSeconds": 54,
-          "speech": "日本はまだまだ"
+          "speech": "日本はまだまだ",
+          "captionAccentColor": "#000000",
+          "captionFontFamily": "Shippori Mincho"
         },
         {
           "sourceStartSeconds": 54,
@@ -298,85 +459,119 @@
         },
         {
           "sourceStartSeconds": 56,
-          "sourceEndSeconds": 59,
-          "speech": "様々なクリニックと提携をする予定"
+          "sourceEndSeconds": 60,
+          "speech": "様々なクリニックと\n提携をする予定",
+          "captionAccentColor": "#1F7A1F",
+          "captionGlowColor": "#3CD23C",
+          "captionFontFamily": "Shippori Mincho"
         },
         {
           "sourceStartSeconds": 60,
           "sourceEndSeconds": 63,
-          "speech": "正直、韓国は進んでいてすごいなと思う"
+          "speech": "正直、韓国は進んでいてすごいなと思う",
+          "shapes": [
+            {
+              "kind": "circle",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 3.5,
+              "xPercent": 71.9,
+              "yPercent": 75.8,
+              "widthPercent": 30.6,
+              "borderColor": "#FF3B30",
+              "borderWidthPx": 20
+            }
+          ]
         },
         {
           "sourceStartSeconds": 63,
           "sourceEndSeconds": 64,
-          "speech": "保証",
+          "speech": "",
           "zoom": {
             "scale": 1.2,
             "style": "punch",
             "focusXPercent": 50,
             "focusYPercent": 40
           },
-          "overlays": [
-            {
-              "text": "保証",
-              "xPercent": 50,
-              "yPercent": 50,
-              "fontSizePx": 60,
-              "color": "#FFFFFF",
-              "backgroundColor": "#333333"
-            }
-          ],
           "sfx": [
             {
               "presetId": "pop",
               "offsetSeconds": 0
+            }
+          ],
+          "overlays": [
+            {
+              "text": "保証",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 5,
+              "xPercent": 50,
+              "yPercent": 60.2,
+              "fontSizePx": 56,
+              "color": "#111111",
+              "backgroundColor": "#FFFFFF",
+              "animation": "pop"
             }
           ]
         },
         {
           "sourceStartSeconds": 64,
           "sourceEndSeconds": 65,
-          "speech": "基本的に韓国は保証なし"
+          "speech": "基本的に\n韓国は保証なし",
+          "captionAccentColor": "#000000",
+          "captionFontFamily": "Shippori Mincho"
         },
         {
           "sourceStartSeconds": 65,
           "sourceEndSeconds": 67,
           "speech": "保証は日本が安心",
-          "emphasisWords": [
-            "日本",
-            "安心"
-          ],
-          "emphasisColor": "#FFD700"
+          "shapes": [
+            {
+              "kind": "circle",
+              "startOffsetSeconds": 0.5,
+              "durationInSeconds": 3,
+              "xPercent": 71.9,
+              "yPercent": 75.8,
+              "widthPercent": 30.6,
+              "borderColor": "#FF3B30",
+              "borderWidthPx": 20
+            }
+          ]
         },
         {
           "sourceStartSeconds": 67,
           "sourceEndSeconds": 68,
-          "speech": "当院では保証期間が5年"
+          "speech": "当院では保証期間が5年",
+          "emphasisWords": [
+            "保証期間が5年"
+          ],
+          "emphasisColor": "#FF3B3B"
         },
         {
           "sourceStartSeconds": 68,
           "sourceEndSeconds": 69,
-          "speech": "技術はどうですか",
+          "speech": "",
           "zoom": {
             "scale": 1.2,
             "style": "punch",
             "focusXPercent": 50,
             "focusYPercent": 40
           },
-          "overlays": [
-            {
-              "text": "技術",
-              "xPercent": 50,
-              "yPercent": 50,
-              "fontSizePx": 60,
-              "color": "#FFFFFF",
-              "backgroundColor": "#333333"
-            }
-          ],
           "sfx": [
             {
               "presetId": "pop",
               "offsetSeconds": 0
+            }
+          ],
+          "overlays": [
+            {
+              "text": "技術",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 8,
+              "xPercent": 50,
+              "yPercent": 60.2,
+              "fontSizePx": 56,
+              "color": "#111111",
+              "backgroundColor": "#FFFFFF",
+              "animation": "pop"
             }
           ]
         },
@@ -393,7 +588,9 @@
         {
           "sourceStartSeconds": 72,
           "sourceEndSeconds": 73,
-          "speech": "日本であってほしい"
+          "speech": "日本であってほしい",
+          "captionAccentColor": "#000000",
+          "captionFontFamily": "Shippori Mincho"
         },
         {
           "sourceStartSeconds": 73,
@@ -404,14 +601,53 @@
             "style": "punch",
             "focusXPercent": 50,
             "focusYPercent": 40
-          }
+          },
+          "captionAccentColor": "#D81E1E",
+          "captionGlowColor": "#FF8A00"
         },
         {
           "sourceStartSeconds": 75,
-          "sourceEndSeconds": 79,
+          "sourceEndSeconds": 79.6,
           "speech": "歯のお悩みがある方はプロフィールのリンクからご予約をお願いします！"
         }
-      ]
+      ],
+      "showCaptions": true,
+      "framing": {
+        "scale": 1.27,
+        "focusXPercent": 49,
+        "focusYPercent": 33
+      },
+      "globalShapes": [
+        {
+          "kind": "rect",
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 76,
+          "xPercent": 28.1,
+          "yPercent": 75.4,
+          "widthPercent": 40.7,
+          "heightPercent": 22.2,
+          "borderColor": "#BDBDBD",
+          "borderWidthPx": 8,
+          "fillColor": "#FFFFFF",
+          "fillOpacity": 1,
+          "cornerRadiusPx": 6
+        },
+        {
+          "kind": "rect",
+          "startOffsetSeconds": 0,
+          "durationInSeconds": 76,
+          "xPercent": 71.9,
+          "yPercent": 75.4,
+          "widthPercent": 40.7,
+          "heightPercent": 22.2,
+          "borderColor": "#BDBDBD",
+          "borderWidthPx": 8,
+          "fillColor": "#FFFFFF",
+          "fillOpacity": 1,
+          "cornerRadiusPx": 6
+        }
+      ],
+      "generatedImageStyle": "illustration"
     },
     "createdAt": "2026-09-17T14:59:59.690Z"
   },

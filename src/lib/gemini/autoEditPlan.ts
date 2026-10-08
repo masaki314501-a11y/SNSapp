@@ -13,6 +13,7 @@ import {
   videoFramingSchema,
   type CaptionAnimation,
   type CaptionFontFamily,
+  type CaptionFontSize,
   type CaptionPosition,
   type CaptionStyle,
   type ClipZoom,
@@ -95,6 +96,9 @@ export type AutoEditClipPlan = {
   captionAnimation?: CaptionAnimation;
   emphasisWords?: string[];
   emphasisColor?: string;
+  captionAccentColor?: string;
+  captionFontFamily?: CaptionFontFamily;
+  captionGlowColor?: string;
   zoom?: ClipZoom;
   overlays?: TextOverlay[];
   images?: ImageOverlay[];
@@ -109,6 +113,7 @@ export type AutoEditPlan = {
     fontFamily?: CaptionFontFamily;
     captionPosition?: CaptionPosition;
     captionStyle?: CaptionStyle;
+    captionFontSize?: CaptionFontSize;
   };
   hook: { headline: string; subline?: string } | null;
   cta: { text: string } | null;
@@ -120,6 +125,8 @@ export type AutoEditPlan = {
   globalShapes: ShapeOverlay[];
   /** 動画全体の画角。寄せないならnull。 */
   framing: VideoFraming | null;
+  /** 話している言葉(speechText)を字幕として出すか。 */
+  showCaptions: boolean;
   /** AIが作って動画に使った画像の枚数(種類)。 */
   generatedImageCount: number;
   clips: AutoEditClipPlan[];
@@ -239,7 +246,9 @@ ${keepRangesList}
 1-3. globalShapes: 参考にずっと出ている図形(ランキングの空の枠・一覧の箱・帯など)を、同じ位置・大きさ・線の太さ・
    角の丸み・色で置く(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで)。xPercent/yPercentは図形の中心、
    widthPercentは画面幅に対する幅、heightPercentは画面の高さに対する高さ、borderWidthPxは横1080pxの画面での線の太さ。
-   枠の中に後から画像を入れるなら、塗り(fillColor)は付けず線だけにする。無ければ空にする。
+   枠の中に後から画像を入れるなら、塗り(fillColor)は付けず線だけにする。比べる物を並べるカード(白い箱に画像と名前)なら、
+   白い塗り(fillColor)と薄い線にし、画像(4-2)と名前の文字(3)を同じ位置に重ねる。kindは四角ならrect、丸ならcircle
+   (circleはwidthPercentを直径にし、heightPercentは使わない)。無ければ空にする。
 2. clips: 完成動画に使う区間を再生順に並べる。元動画上の秒数(sourceStartSeconds〜sourceEndSeconds)で指定する。
    - 間・言い淀み(「えーっと」「あの」)・言い直し・無音・話がだれる部分は容赦なく切って詰める。
      ただし本人がカット画面ですでに切ってあり、間が詰まっているなら、それ以上は切らない(完成動画の長さを変えず、
@@ -256,7 +265,13 @@ ${keepRangesList}
    クリップにだけ、同じ位置で置く。
    出てから動画の最後まで残る物は、出し始めるクリップに置いてkeepUntilEnd=trueにする(残す以外の物はnull)。
    話題の間ずっと出しておく物(今話している項目名のラベルなど)は、出し始めるクリップに置いてdurationInSecondsを
-   その話題の長さ(秒)にする(クリップより長くてよい)。
+   その話題の長さ(秒)にする(クリップより長くてよい)。比べる動画で、今どの項目の話か(「価格」「スピード」等)を
+   見出しで出しているなら、その項目の話が始まるクリップに置き、durationInSecondsをその項目の話の長さにする。
+   冒頭にタイトルを画面中央へ大きく出してから上部へ移しているなら、中央の大きいタイトル(durationInSecondsは出している長さ)と、
+   それが消える時刻から出す上部のタイトル(globalOverlays)を、同じ文言で別々に置く(移る動きはサーバー側で付ける)。
+4-1. shapes(図形): 参考が、結論の出た所で勝った方・おすすめの方に〇印などの図形を重ねているなら、結論を言ったクリップに置く。
+   位置・大きさ・線の太さ・色は参考と同じにし、durationInSecondsは次の項目の話が始まるまでの長さにする(クリップより長くてよい)。
+   kind・線の色などの項目は1-3と同じ。結論がはっきりしない項目(どちらとも言えない)には置かない。
    特にランキングで「1位」〜「〇位」の空の枠をずっと出すなら、順位が発表されたクリップで、その順位の枠を
    keepUntilEnd=trueの物で埋め、発表のたびに埋めていく(使える画像があれば4-2のとおり画像で、無ければ枠の中か
    すぐ横に項目名の文字で)。空の枠を出したまま埋めないのは不可。
@@ -269,7 +284,10 @@ ${captionAnimationHints}
 ${imageSection}
 
 ### 手順② テロップ
-5. speech: そのクリップで本人が話している言葉をそのまま書き起こす(テロップになる)。
+4-9. showCaptions: 参考・編集例が、本人の話している言葉をそのまま字幕で出しているならtrue(speechがそのまま字幕になる)。
+   字幕を出さず、要点をまとめた強調テキストだけを出しているならfalse。
+5. speech: そのクリップで本人が話している言葉をそのまま書き起こす(テロップになる)。字幕として読みやすい長さ
+   (1〜2行、全角25文字くらいまで)に収まるよう、長く話す所はクリップを分ける。
 6. theme: テロップの見た目。全体の差し色(primaryColor、#RRGGBB)・フォント・テロップの位置・背景の付き方。参考スクショに合わせる。
    手順①で置いた物と重ならない位置を選ぶ。
    fontFamily候補:
@@ -277,12 +295,18 @@ ${fontFamilyHints}
    captionPosition候補: ${CAPTION_POSITION_VALUES.join(" / ")}
    captionStyle候補:
 ${captionStyleHints}
+   captionFontSize(字幕の大きさ): small / medium / large / xlarge。字幕を画面中央に大きく出す参考ならlarge〜xlarge。
 7. captionAnimation: テロップの出現演出(候補は4と同じ)。
 
 ### 手順③ テロップの強調
 8. emphasisWords / emphasisColor: テロップの中で色を変えて大きく見せる単語と、その色(#RRGGBB)。
    話の要になる数字・結論・キーワードがあるクリップだけ。1クリップ1〜2語まで、無ければ付けない。
    emphasisWordsはspeechの中に実際に出てくる語にすること。
+8-2. captionAccentColor / captionFontFamily / captionGlowColor: 参考が、場面の気持ちに合わせて特定の字幕だけ見た目を変えているなら、
+   そのクリップだけ変える。縁取りの色(強い結論は赤など)・書体(しみじみ語る所や本音は明朝など)・光(強い一言はオレンジ、
+   前向きな話は緑など)。参考で場面ごとに字幕の見た目が変わっているなら、本人の動画でも同じ気持ちの場面で同じように変える。
+   全体と同じならnull。
+   字幕を2行にする時は、speechの中の意味の切れ目に「\n」を1つだけ入れてよい(例:「日本の方が\n通いやすい」)。
 9. overlays(強調): テロップとは別に画面へ出す強調テキスト(「実は3倍!」「ここ重要」「え?」など)。テロップだけでは
    伝わり切らない数字・結論・ツッコミ・問いかけがある所にだけ、手順①の物に足す。同じ時間に出すのは1〜2個まで。
    項目は4と同じ。参考スクショに似た見た目にし、顔や手順①の物・テロップを隠さない位置に置く。
@@ -354,6 +378,8 @@ JSON以外の文字列は出力しないでください。
 const MIN_LINE_CHARS = 3;
 const tidyLineBreaks = (text: string): string => {
   const lines = text
+    // Geminiは改行を「\n」の2文字のまま書いてくることがあり、そのまま画面に「\n」と出ていた。
+    .replace(/\\n/g, "\n")
     .replace(/\r\n?/g, "\n")
     .split("\n")
     .map((line) => line.trim())
@@ -368,6 +394,12 @@ const tidyLineBreaks = (text: string): string => {
     }
   }
   return merged.join("\n");
+};
+
+/** 改行を最初の1つだけ残す(字幕は2行まで)。 */
+const keepFirstLineBreak = (text: string): string => {
+  const [first, ...rest] = text.split("\n");
+  return rest.length > 0 ? `${first}\n${rest.join("")}` : first;
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
@@ -579,6 +611,7 @@ const normalizeShapes = (rawShapes: RawAutoEditShape[] | null | undefined, video
     };
     const startOffsetSeconds = clamp(raw.startOffsetSeconds ?? 0, 0, Math.max(0, videoDuration - 0.2));
     const parsed = shapeOverlaySchema.safeParse({
+      kind: raw.kind ?? "rect",
       startOffsetSeconds,
       durationInSeconds:
         raw.durationInSeconds != null
@@ -700,6 +733,26 @@ const linkImageMoves = (globalImages: ImageOverlay[], clips: AutoEditClipPlan[])
 };
 
 /**
+ * 冒頭に大きく出していた文字が消えるのと同時に、同じ文字が別の所(上部など)に出たら、前の位置・大きさから動いてくるようにする
+ * (比較動画の手本では、冒頭に中央へ大きく出したタイトルが、縮みながら上へ移っていく)。画像のlinkImageMovesと同じ考え方。
+ */
+const linkTextMoves = (overlays: TextOverlay[]): TextOverlay[] =>
+  overlays.map((overlay) => {
+    if (overlay.moveFrom) return overlay;
+    const previous = overlays.find(
+      (other) =>
+        other !== overlay &&
+        other.durationInSeconds !== undefined &&
+        comparableText(other.text) === comparableText(overlay.text) &&
+        other.startOffsetSeconds < overlay.startOffsetSeconds &&
+        Math.abs(other.startOffsetSeconds + other.durationInSeconds - overlay.startOffsetSeconds) <= MOVE_LINK_GAP_SECONDS
+    );
+    return previous
+      ? { ...overlay, moveFrom: { xPercent: previous.xPercent, yPercent: previous.yPercent, fontSizePx: previous.fontSizePx } }
+      : overlay;
+  });
+
+/**
  * Geminiの編集案(生のJSON)を、プロジェクトにそのまま書き込める形に直す。足りない画像はここで作る。
  * 学習データの書き起こしも同じ形なので、手本がどう描かれるかの確認にも使える。
  */
@@ -721,6 +774,8 @@ export const finalizeAutoEditPlan = async (
   // 出すクリップの完成動画上の開始秒に足して、全体の文字・画像へ移す。
   const liftedOverlays: NonNullable<RawAutoEditClip["overlays"]> = [];
   const liftedImages: RawAutoEditImage[] = [];
+  // クリップに置いた図形(〇印など)は描画側にクリップごとの図形が無いので、すべて全体の図形へ移す。
+  const liftedShapes: RawAutoEditShape[] = [];
   let outputStartSeconds = 0;
   for (const raw of data.clips) {
     if (clips.length >= MAX_CLIPS) break;
@@ -733,15 +788,28 @@ export const finalizeAutoEditPlan = async (
     for (const image of raw.images ?? []) {
       if (outlivesClip(image, clipDuration)) liftedImages.push(toWholeVideoTiming(image, outputStartSeconds, clipDuration));
     }
+    for (const shape of raw.shapes ?? []) {
+      const lifted = toWholeVideoTiming(shape, outputStartSeconds, clipDuration);
+      // 長さの指定が無ければ、そのクリップの終わりまで出す。
+      liftedShapes.push(
+        shape.keepUntilEnd || shape.durationInSeconds != null
+          ? lifted
+          : { ...lifted, durationInSeconds: Math.max(0.2, clipDuration - (shape.startOffsetSeconds ?? 0)) }
+      );
+    }
     outputStartSeconds += clipDuration;
     const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
     clips.push({
       ...fitted,
-      // テロップは描画側で文節の切れ目で折り返すので、Geminiが入れた改行は外す。
-      speechText: raw.speech?.replace(/\s*\n\s*/g, "").trim() ?? "",
+      // テロップは描画側で文節の切れ目で折り返すが、参考に合わせて意味の切れ目で2行にしたい時のために、
+      // Geminiが入れた改行は最初の1つだけ残す(変な所の改行・短すぎる行はtidyLineBreaksで直す)。
+      speechText: keepFirstLineBreak(tidyLineBreaks(raw.speech ?? "")),
       captionAnimation: (raw.captionAnimation ?? undefined) as CaptionAnimation | undefined,
       emphasisWords: emphasisWords.length > 0 ? emphasisWords : undefined,
       emphasisColor: hexOrUndefined(raw.emphasisColor),
+      captionAccentColor: hexOrUndefined(raw.captionAccentColor),
+      captionFontFamily: (raw.captionFontFamily ?? undefined) as CaptionFontFamily | undefined,
+      captionGlowColor: hexOrUndefined(raw.captionGlowColor),
       zoom: normalizeZoom(raw),
       overlays: normalizeOverlays(
         raw.overlays?.filter((overlay) => !outlivesClip(overlay, clipDuration)),
@@ -774,8 +842,8 @@ export const finalizeAutoEditPlan = async (
       .map((image) => image.src)
       .filter((src) => generatedPaths.has(src))
   );
-  const globalOverlays =
-    normalizeOverlays([...(data.globalOverlays ?? []), ...liftedOverlays], outputStartSeconds, MAX_GLOBAL_OVERLAYS) ?? [];
+  const globalOverlays = linkTextMoves(
+    normalizeOverlays([...(data.globalOverlays ?? []), ...liftedOverlays], outputStartSeconds, MAX_GLOBAL_OVERLAYS) ?? []);
   if (usedGeneratedPaths.size > 0) {
     // 注意書きは上限で切られないよう先頭に入れる。
     globalOverlays.unshift(GENERATED_IMAGE_NOTICE);
@@ -813,12 +881,18 @@ export const finalizeAutoEditPlan = async (
       fontFamily: (theme.fontFamily ?? undefined) as CaptionFontFamily | undefined,
       captionPosition: (theme.captionPosition ?? undefined) as CaptionPosition | undefined,
       captionStyle: (theme.captionStyle ?? undefined) as CaptionStyle | undefined,
+      captionFontSize: (theme.captionFontSize ?? undefined) as CaptionFontSize | undefined,
     },
     hook,
     cta,
     globalOverlays,
     globalImages,
-    globalShapes: normalizeShapes(data.globalShapes, outputStartSeconds),
+    // 省いた見た目の引き継ぎ(normalizeShapes)は、ずっと出す枠とクリップの〇印のように役割の違う図形の間では行わない。
+    globalShapes: [
+      ...normalizeShapes(data.globalShapes, outputStartSeconds),
+      ...normalizeShapes(liftedShapes, outputStartSeconds),
+    ].slice(0, MAX_GLOBAL_SHAPES),
+    showCaptions: Boolean(data.showCaptions),
     framing: normalizeFraming(data.framing),
     generatedImageCount: usedGeneratedPaths.size,
     clips,

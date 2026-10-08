@@ -49,6 +49,10 @@ export type ProjectSegment = {
   /** 以下は自動編集(Gemini)が決める演出。手動で作ったクリップには無い。 */
   emphasisWords?: string[];
   emphasisColor?: string;
+  /** このクリップだけテロップの差し色・書体・光を変える(自動編集が決める)。 */
+  captionAccentColor?: string;
+  captionFontFamily?: CaptionFontFamily;
+  captionGlowColor?: string;
   zoom?: ClipZoom;
   overlays?: TextOverlay[];
   /** 利用者が差し込んだ画像(ロゴ・商品写真等)。 */
@@ -299,6 +303,9 @@ export const buildStandardVideoProps = (params: {
       volume: narratedSegmentKeys.has(segment.key) ? 0 : segment.volume,
       emphasisWords: segment.emphasisWords,
       emphasisColor: segment.emphasisColor,
+      captionAccentColor: segment.captionAccentColor,
+      captionFontFamily: segment.captionFontFamily,
+      captionGlowColor: segment.captionGlowColor,
       zoom: segment.zoom,
       overlays: segment.overlays,
       images: segment.images,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CaptionFontFamily, CaptionPosition, CaptionStyle } from "@video/shared/schema";
+import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "@video/shared/schema";
 import type { ProjectSegment, ProjectSfxClip, VideoProject } from "@/lib/videoProject";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
@@ -16,6 +16,7 @@ export type AutoEditPlanSummary = {
     fontFamily?: CaptionFontFamily;
     captionPosition?: CaptionPosition;
     captionStyle?: CaptionStyle;
+    captionFontSize?: CaptionFontSize;
   };
   hook: VideoProject["hook"];
   cta: VideoProject["cta"];

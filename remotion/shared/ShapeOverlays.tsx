@@ -22,7 +22,9 @@ const OverlayShape: React.FC<{ shape: ShapeOverlay }> = ({ shape }) => {
         left: `${shape.xPercent}%`,
         top: `${shape.yPercent}%`,
         width: `${shape.widthPercent}%`,
-        height: `${shape.heightPercent}%`,
+        // 丸は横幅を直径にする(画面の縦横の長さが違うので、高さを%で決めると楕円になる)。
+        height: shape.kind === "circle" ? undefined : `${shape.heightPercent}%`,
+        aspectRatio: shape.kind === "circle" ? "1 / 1" : undefined,
         // 位置は図形の中心で指定させているため、自分の大きさの半分だけ戻して中心を合わせる。
         transform: "translate(-50%, -50%)",
       }}
@@ -37,7 +39,7 @@ const OverlayShape: React.FC<{ shape: ShapeOverlay }> = ({ shape }) => {
           filter,
           clipPath,
           border: shape.borderColor ? `${shape.borderWidthPx}px solid ${shape.borderColor}` : undefined,
-          borderRadius: shape.cornerRadiusPx,
+          borderRadius: shape.kind === "circle" ? "50%" : shape.cornerRadiusPx,
           backgroundColor: shape.fillColor ? hexToRgba(shape.fillColor, shape.fillOpacity) : undefined,
         }}
       />

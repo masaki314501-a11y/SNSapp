@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Sequence, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { getCaptionAnimationStyle } from "./captionAnimations";
 import type { TextOverlay } from "./schema";
 import { VIDEO_WIDTH } from "./constants";
@@ -51,11 +51,29 @@ export const resolveOverlayLayout = (overlay: TextOverlay): { fontSizePx: number
   return { fontSizePx, xPercent };
 };
 
+/** moveFromから今の位置へ動く時間(秒)。 */
+const MOVE_SECONDS = 0.4;
+
 const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> = ({ overlay, fontFamilyStack }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(overlay.animation, frame, fps);
-  const { fontSizePx, xPercent } = resolveOverlayLayout(overlay);
+  const moveFrom = overlay.moveFrom;
+  // 動いてくる文字は、出現アニメーションの代わりに位置・大きさの移動で出す。
+  const { transform, opacity, clipPath, filter } = moveFrom
+    ? { transform: undefined, opacity: undefined, clipPath: undefined, filter: undefined }
+    : getCaptionAnimationStyle(overlay.animation, frame, fps);
+  const layout = resolveOverlayLayout(overlay);
+  const progress = moveFrom
+    ? interpolate(frame, [0, Math.max(1, Math.round(MOVE_SECONDS * fps))], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+        easing: Easing.inOut(Easing.cubic),
+      })
+    : 1;
+  const lerp = (from: number, to: number) => from + (to - from) * progress;
+  const fontSizePx = moveFrom ? lerp(resolveOverlayLayout({ ...overlay, ...moveFrom }).fontSizePx, layout.fontSizePx) : layout.fontSizePx;
+  const xPercent = moveFrom ? lerp(moveFrom.xPercent, layout.xPercent) : layout.xPercent;
+  const yPercent = moveFrom ? lerp(moveFrom.yPercent, overlay.yPercent) : overlay.yPercent;
   // この文字だけ書体を変える時は、その書体も読み込む(テロップの書体はテロップ側で読み込まれる)。
   if (overlay.fontFamily) void ensureCaptionFontLoaded(overlay.fontFamily);
   const textShadow = overlay.glowColor
@@ -72,10 +90,13 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
       style={{
         position: "absolute",
         left: `${xPercent}%`,
-        top: `${overlay.yPercent}%`,
+        top: `${yPercent}%`,
         // 位置は文字の中心で指定させているため、自分の大きさの半分だけ戻して中心を合わせる。
         // 画面端に寄せた指定でもはみ出しにくいよう、最大幅は画面の9割に抑える。
         transform: `translate(-50%, -50%) rotate(${overlay.rotationDeg}deg)`,
+        // 位置を画面の右寄りにすると、絶対配置の箱の幅が「右端までの残り」に縮められ、収まる長さの文字でも
+        // 途中で折り返されていた。文字の長さぶんの幅を取り、画面の9割を超える時だけ折り返す。
+        width: "max-content",
         maxWidth: "90%",
         textAlign: "center",
       }}

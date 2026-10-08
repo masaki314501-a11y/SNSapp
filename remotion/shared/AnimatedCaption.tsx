@@ -18,6 +18,8 @@ type Props = {
   /** テロップ中で色を変えて大きく見せる単語。 */
   emphasisWords?: string[];
   emphasisColor?: string;
+  /** 文字の周りの光(にじみ)の色。省略時は黒い影。 */
+  glowColor?: string;
 };
 
 /**
@@ -59,6 +61,7 @@ export const AnimatedCaption: React.FC<Props> = ({
   fontSize = "medium",
   emphasisWords,
   emphasisColor = "#FFE600",
+  glowColor,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -80,13 +83,17 @@ export const AnimatedCaption: React.FC<Props> = ({
       ? {
           display: "inline-block",
           color: "white",
-          WebkitTextStroke: `2.5px ${accentColor}`,
+          // 縁取りの内側半分は文字に隠れるので、見える太さはこの半分(文字の約9%)。以前の2.5px固定では
+          // 細すぎて、ショート動画でよく見る太い縁取りの字幕にならなかった。
+          WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18)}px ${accentColor}`,
           paintOrder: "stroke fill",
           fontFamily: fontFamilyStack,
           fontSize: 48 * sizeScale,
           fontWeight: 900,
           lineHeight: 1.35,
-          textShadow: "0 4px 12px rgba(0,0,0,0.5)",
+          textShadow: glowColor
+            ? `0 0 ${Math.round(48 * sizeScale * 0.2)}px ${glowColor}, 0 0 ${Math.round(48 * sizeScale * 0.45)}px ${glowColor}`
+            : "0 4px 12px rgba(0,0,0,0.5)",
         }
       : {
           display: "inline-block",
@@ -111,7 +118,8 @@ export const AnimatedCaption: React.FC<Props> = ({
       }}
     >
       <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
-        <span lang="ja" style={{ ...textStyle, ...JAPANESE_WRAP_STYLE, clipPath }}>
+        {/* 自動編集が意味の切れ目に入れた改行(「日本の方が\n通いやすい」)はそのまま改行する */}
+        <span lang="ja" style={{ ...textStyle, ...JAPANESE_WRAP_STYLE, whiteSpace: "pre-line", clipPath }}>
           {splitByEmphasis(text, emphasisWords ?? []).map((part, i) =>
             part.emphasized ? (
               <span key={i} style={{ color: emphasisColor, fontSize: "1.25em" }}>

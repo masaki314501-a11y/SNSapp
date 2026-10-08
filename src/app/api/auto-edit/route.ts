@@ -92,8 +92,9 @@ export async function POST(request: Request) {
         const key = randomUUID();
         segments.push({
           key,
-          // 字幕を付けるかどうかは編集画面で決める(「字幕を一括生成」でspeechTextを流し込む)。
-          caption: "",
+          // 参考・編集例が話している言葉を字幕で出しているなら、書き起こしをそのまま字幕にする。
+          // そうでなければ、字幕を付けるかどうかは編集画面で決める(「字幕を一括生成」でspeechTextを流し込む)。
+          caption: plan.showCaptions ? clip.speechText : "",
           speechText: clip.speechText,
           startFromSeconds: clip.startFromSeconds,
           durationInSeconds: clip.durationInSeconds,
@@ -101,6 +102,9 @@ export async function POST(request: Request) {
           volume: DEFAULT_CLIP_VOLUME,
           emphasisWords: clip.emphasisWords,
           emphasisColor: clip.emphasisColor,
+          captionAccentColor: clip.captionAccentColor,
+          captionFontFamily: clip.captionFontFamily,
+          captionGlowColor: clip.captionGlowColor,
           zoom: clip.zoom,
           overlays: clip.overlays,
           images: clip.images,
