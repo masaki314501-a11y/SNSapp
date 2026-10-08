@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
+import { estimateOverlayBox } from "@video/shared/textWrap";
 import { fillMissingRankImages, finalizeAutoEditPlan, similarityToExamples } from "./autoEditPlan";
 import type { RawAutoEditPlan } from "./autoEditTypes";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
@@ -237,7 +238,11 @@ describe("ランキングの枠への配置", () => {
       input
     );
     expect(plan.globalImages[0]).toMatchObject({ xPercent: 24, yPercent: 37, widthPercent: 26, heightPercent: 10 });
-    expect(plan.globalOverlays.find((o) => o.text === "開咬")).toMatchObject({ xPercent: 24, yPercent: 25 });
+    // 文字は1位の枠の中(上寄り)に入り、「1位」の文字とは重ならない
+    const name = plan.globalOverlays.find((o) => o.text === "開咬")!;
+    expect(name.yPercent).toBeGreaterThan(20);
+    expect(name.yPercent).toBeLessThan(25);
+    expect(Math.abs(name.xPercent - 24)).toBeLessThan(6);
   });
 
   it("「第3位」「３位」のような書き方の順位の文字も枠として扱う", async () => {
@@ -298,5 +303,45 @@ describe("fillMissingRankImages", () => {
     const notRanking = { ...plan, globalOverlays: [] };
     const filled = await fillMissingRankImages(fakeAi({ items: [{ topic: 0, rank: 2, clip: 1 }] }), notRanking);
     expect(filled).toBe(notRanking);
+  });
+});
+
+describe("ずっと出る文字との重なり", () => {
+  it("強調テキストがずっと出る文字に重なるなら、重ならない所へずらす", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [{ sourceStartSeconds: 0, sourceEndSeconds: 4, overlays: [{ text: "ここ重要", xPercent: 50, yPercent: 12, fontSizePx: 80 }] }],
+        { globalOverlays: [{ text: "矯正した方がいい歯の症状", xPercent: 50, yPercent: 12, fontSizePx: 60 }] }
+      ),
+      input
+    );
+    const title = estimateOverlayBox(plan.globalOverlays[0]);
+    const moved = estimateOverlayBox(plan.clips[0].overlays![0]);
+    expect(moved.top >= title.bottom - 0.5 || moved.bottom <= title.top + 0.5).toBe(true);
+  });
+
+  it("ずっと出る文字どうしが重なるなら、後の方をずらし、先の方は動かさない", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 4 }], {
+        globalOverlays: [
+          { text: "タイトル", xPercent: 50, yPercent: 10, fontSizePx: 60 },
+          { text: "サブタイトル", xPercent: 50, yPercent: 11, fontSizePx: 60 },
+        ],
+      }),
+      input
+    );
+    expect(plan.globalOverlays[0]).toMatchObject({ xPercent: 50, yPercent: 10 });
+    const [a, b] = plan.globalOverlays.map((o) => estimateOverlayBox(o));
+    expect(b.top >= a.bottom - 0.5 || b.bottom <= a.top + 0.5 || b.left >= a.right - 1 || b.right <= a.left + 1).toBe(true);
+  });
+
+  it("重なっていない文字は動かさない", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 4, overlays: [{ text: "ここ重要", xPercent: 50, yPercent: 60 }] }], {
+        globalOverlays: [{ text: "タイトル", xPercent: 50, yPercent: 10 }],
+      }),
+      input
+    );
+    expect(plan.clips[0].overlays![0]).toMatchObject({ xPercent: 50, yPercent: 60 });
   });
 });

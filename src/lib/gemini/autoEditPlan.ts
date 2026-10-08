@@ -24,6 +24,8 @@ import {
   type VideoFraming,
 } from "@video/shared/schema";
 import { MAX_CLIPS } from "@video/templates/standard/schema";
+import { VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
+import { estimateOverlayBox, type BoxPercent } from "@video/shared/textWrap";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { runWithGeminiRateLimit, type GeminiRateLimitLane } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
@@ -812,7 +814,17 @@ const snapToRankSlots = <T extends { slotRank?: number | null; xPercent?: number
   if (item.slotRank == null) return item;
   const slot = slots.get(item.slotRank);
   if (!slot) return item;
-  if (kind === "text") return { ...item, xPercent: slot.xPercent, yPercent: slot.yPercent };
+  if (kind === "text") {
+    // 枠の中には「N位」の文字もあるので、名前は枠の高さに収まる大きさにして、枠の上寄りに置く
+    const textItem = item as T & { fontSizePx?: number | null };
+    const maxFontSizePx = slot.heightPercent != null ? Math.round((slot.heightPercent / 100) * VIDEO_HEIGHT * 0.35) : undefined;
+    return {
+      ...item,
+      xPercent: slot.xPercent,
+      yPercent: slot.heightPercent != null ? slot.yPercent - slot.heightPercent * 0.18 : slot.yPercent,
+      ...(maxFontSizePx !== undefined ? { fontSizePx: Math.min(textItem.fontSizePx ?? 80, maxFontSizePx) } : {}),
+    };
+  }
   return {
     ...item,
     xPercent: slot.xPercent,
@@ -820,6 +832,164 @@ const snapToRankSlots = <T extends { slotRank?: number | null; xPercent?: number
     ...(slot.widthPercent != null ? { widthPercent: slot.widthPercent } : {}),
     ...(slot.heightPercent != null ? { heightPercent: slot.heightPercent } : {}),
   };
+};
+
+type TimedBox = BoxPercent & { start: number; end: number };
+
+/** 重なりとみなす最小の食い込み(%)。見積もりの誤差で、ぴったり並べた文字どうしまで重なりと判定しないため。 */
+const OVERLAP_TOLERANCE_X = 1;
+const OVERLAP_TOLERANCE_Y = 0.5;
+/** 文字が画面の上下からはみ出さないための余白(%)。 */
+const SCREEN_MARGIN_PERCENT = 2;
+
+const boxesOverlap = (a: TimedBox, b: TimedBox): boolean =>
+  a.start < b.end &&
+  b.start < a.end &&
+  Math.min(a.right, b.right) - Math.max(a.left, b.left) > OVERLAP_TOLERANCE_X &&
+  Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > OVERLAP_TOLERANCE_Y;
+
+const textBox = (overlay: TextOverlay, start: number, end: number): TimedBox => ({ ...estimateOverlayBox(overlay), start, end });
+
+/** 画像の範囲。高さの指定が無い画像は縦横比が分からないので、幅の3/4の高さ(4:3)とみなす。 */
+const imageBox = (image: ImageOverlay, start: number, end: number): TimedBox => {
+  const heightPercent = image.heightPercent ?? (image.widthPercent * 0.75 * VIDEO_WIDTH) / VIDEO_HEIGHT;
+  return {
+    left: image.xPercent - image.widthPercent / 2,
+    right: image.xPercent + image.widthPercent / 2,
+    top: image.yPercent - heightPercent / 2,
+    bottom: image.yPercent + heightPercent / 2,
+    start,
+    end,
+  };
+};
+
+const shapeBox = (shape: ShapeOverlay, start: number, end: number): TimedBox => {
+  const heightPercent = shape.kind === "circle" ? (shape.widthPercent * VIDEO_WIDTH) / VIDEO_HEIGHT : shape.heightPercent;
+  return {
+    left: shape.xPercent - shape.widthPercent / 2,
+    right: shape.xPercent + shape.widthPercent / 2,
+    top: shape.yPercent - heightPercent / 2,
+    bottom: shape.yPercent + heightPercent / 2,
+    start,
+    end,
+  };
+};
+
+/**
+ * 文字を、ほかの物と重ならない一番近い位置・大きさへ直す。元の位置で重ならなければそのまま。
+ * 少し小さくする・上下左右にずらす、の組み合わせから、元の見た目から一番変わらない物を選ぶ。どうしても空きが無ければそのまま。
+ */
+const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, obstacles: TimedBox[]): TextOverlay => {
+  const fits = (candidate: TextOverlay) => {
+    const box = textBox(candidate, start, end);
+    return (
+      box.top >= SCREEN_MARGIN_PERCENT &&
+      box.bottom <= 100 - SCREEN_MARGIN_PERCENT &&
+      !obstacles.some((obstacle) => boxesOverlap(box, obstacle))
+    );
+  };
+  if (!obstacles.some((obstacle) => boxesOverlap(textBox(overlay, start, end), obstacle))) return overlay;
+
+  let best: { overlay: TextOverlay; cost: number } | null = null;
+  for (const scale of [1, 0.9, 0.8, 0.7]) {
+    for (let dy = 0; dy <= 45; dy += 0.5) {
+      for (const signY of dy === 0 ? [1] : [1, -1]) {
+        for (const dx of [0, 3, -3, 6, -6, 10, -10, 15, -15, 20, -20]) {
+          const cost = dy + Math.abs(dx) * 1.2 + (1 - scale) * 40;
+          if (best && cost >= best.cost) continue;
+          const candidate: TextOverlay = {
+            ...overlay,
+            fontSizePx: Math.max(20, Math.round(overlay.fontSizePx * scale)),
+            xPercent: clamp(overlay.xPercent + dx, 0, 100),
+            yPercent: clamp(overlay.yPercent + signY * dy, 0, 100),
+          };
+          if (fits(candidate)) best = { overlay: candidate, cost };
+        }
+      }
+    }
+  }
+  if (!best) {
+    console.info(`[autoEditPlan] 文字「${overlay.text}」の重ならない置き場所が見つからなかったため、そのままにします`);
+    return overlay;
+  }
+  if (process.env.AUTO_EDIT_DEBUG_DIR) {
+    console.info(
+      `[autoEditPlan] 重なりを避けて「${overlay.text.replace(/\n/g, "")}」を (${overlay.xPercent},${overlay.yPercent},${overlay.fontSizePx}px)` +
+        ` → (${best.overlay.xPercent},${best.overlay.yPercent},${best.overlay.fontSizePx}px) へ`
+    );
+  }
+  return best.overlay;
+};
+
+/**
+ * ずっと出る文字(タイトル・順位の文字など)に、ほかの文字が重ならないようにする(ルール)。
+ * 1. ずっと出る文字どうし: 先に置いた方を優先し、後の方をずらす
+ * 2. それ以外の文字(話題の見出し・強調テキストなど): ずっと出る文字・枠・画像・先に置いた文字と重ならない所へずらす
+ * Geminiに「重ねないで」と頼んでも、文字の大きさの見積もりが苦手で重なることがあったため、最後にここで確かめて直す。
+ * 冒頭の見出し(hook)・締めの一言(cta)・字幕は決まった位置に出るので、ここでは動かさない。
+ */
+export const avoidTextOverlaps = (
+  globalOverlays: TextOverlay[],
+  clips: AutoEditClipPlan[],
+  globalShapes: ShapeOverlay[],
+  globalImages: ImageOverlay[],
+  totalSeconds: number
+): { globalOverlays: TextOverlay[]; clips: AutoEditClipPlan[] } => {
+  const endOf = (item: { startOffsetSeconds: number; durationInSeconds?: number }, fallbackEnd: number) =>
+    item.durationInSeconds !== undefined ? item.startOffsetSeconds + item.durationInSeconds : fallbackEnd;
+  // 「ずっと出る」は、最後まで出す物か、動画の半分以上出している物
+  const isPersistent = (item: { startOffsetSeconds: number; durationInSeconds?: number }) =>
+    item.durationInSeconds === undefined || item.durationInSeconds >= totalSeconds / 2;
+
+  const placedPersistent: TimedBox[] = [];
+  const resultGlobal: TextOverlay[] = globalOverlays.map((overlay) => overlay);
+  for (const [index, overlay] of globalOverlays.entries()) {
+    if (!isPersistent(overlay)) continue;
+    const end = endOf(overlay, totalSeconds);
+    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, placedPersistent);
+    resultGlobal[index] = placed;
+    placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
+  }
+
+  const obstacles: TimedBox[] = [
+    ...placedPersistent,
+    ...globalShapes
+      .filter((shape) => shape.kind !== "circle")
+      .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
+    ...globalImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
+  ];
+  let clipStart = 0;
+  const clipTimes = clips.map((clip) => {
+    const start = clipStart;
+    clipStart += clip.durationInSeconds;
+    return start;
+  });
+  clips.forEach((clip, clipIndex) => {
+    for (const image of clip.images ?? []) {
+      const start = clipTimes[clipIndex] + image.startOffsetSeconds;
+      obstacles.push(imageBox(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds)));
+    }
+  });
+
+  for (const [index, overlay] of globalOverlays.entries()) {
+    if (isPersistent(overlay)) continue;
+    const end = endOf(overlay, totalSeconds);
+    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles);
+    resultGlobal[index] = placed;
+    obstacles.push(textBox(placed, overlay.startOffsetSeconds, end));
+  }
+  const resultClips = clips.map((clip, clipIndex) => {
+    if (!clip.overlays) return clip;
+    const overlays = clip.overlays.map((overlay) => {
+      const start = clipTimes[clipIndex] + overlay.startOffsetSeconds;
+      const end = start + (overlay.durationInSeconds ?? clip.durationInSeconds - overlay.startOffsetSeconds);
+      const placed = placeWithoutOverlap(overlay, start, end, obstacles);
+      obstacles.push(textBox(placed, start, end));
+      return placed;
+    });
+    return { ...clip, overlays };
+  });
+  return { globalOverlays: resultGlobal, clips: resultClips };
 };
 
 /**
@@ -964,6 +1134,13 @@ export const finalizeAutoEditPlan = async (
   const endingTexts = clips.slice(-3).flatMap((clip) => (clip.overlays ?? []).map((overlay) => overlay.text));
   const cta = ctaText && !repeatsShownText(ctaText, endingTexts) ? { text: ctaText } : null;
 
+  // 省いた見た目の引き継ぎ(normalizeShapes)は、ずっと出す枠とクリップの〇印のように役割の違う図形の間では行わない。
+  const globalShapes = [
+    ...normalizeShapes(data.globalShapes, outputStartSeconds),
+    ...normalizeShapes(liftedShapes, outputStartSeconds),
+  ].slice(0, MAX_GLOBAL_SHAPES);
+  const arranged = avoidTextOverlaps(globalOverlays, clips, globalShapes, globalImages, outputStartSeconds);
+
   const theme = data.theme ?? {};
   return {
     summary: data.summary,
@@ -977,17 +1154,13 @@ export const finalizeAutoEditPlan = async (
     },
     hook,
     cta,
-    globalOverlays,
+    globalOverlays: arranged.globalOverlays,
     globalImages,
-    // 省いた見た目の引き継ぎ(normalizeShapes)は、ずっと出す枠とクリップの〇印のように役割の違う図形の間では行わない。
-    globalShapes: [
-      ...normalizeShapes(data.globalShapes, outputStartSeconds),
-      ...normalizeShapes(liftedShapes, outputStartSeconds),
-    ].slice(0, MAX_GLOBAL_SHAPES),
+    globalShapes,
     showCaptions: Boolean(data.showCaptions),
     framing: normalizeFraming(data.framing),
     generatedImageCount: usedGeneratedPaths.size,
-    clips,
+    clips: arranged.clips,
   };
 };
 

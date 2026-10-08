@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { VIDEO_FPS, VIDEO_WIDTH } from "@video/shared/constants";
 import { resolveClipSrc } from "@video/shared/resolveSrc";
-import { resolveOverlayLayout } from "@video/shared/TextOverlays";
+import { resolveOverlayLayout } from "@video/shared/textWrap";
 import type { ImageOverlay, TextOverlay } from "@video/shared/schema";
 import type { ProjectSegment } from "@/lib/videoProject";
 
