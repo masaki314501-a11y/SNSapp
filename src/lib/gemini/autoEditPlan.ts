@@ -1,5 +1,6 @@
-import { GoogleGenAI, PartMediaResolutionLevel, type Content, type Part } from "@google/genai";
+import { GoogleGenAI, PartMediaResolutionLevel, Type, type Content, type Part } from "@google/genai";
 import { readFile, writeFile } from "node:fs/promises";
+import { z } from "zod";
 import path from "node:path";
 import {
   CAPTION_ANIMATION_OPTIONS,
@@ -173,8 +174,9 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
   const canGenerate = input.generateMissingImages;
   const howToShowImages = `   - 本人がその物(症状・商品・場所など)の話を始めたクリップに、顔やテロップと重ならない所へ大きく出す(widthPercent 40〜60)。
      その話の間ずっと出すなら、出し始めるクリップに置いてdurationInSecondsをその話の長さ(秒)にする(クリップより長くてよい)。
-   - ランキングの枠をずっと出しているなら、順位が発表されたクリップで、その順位の枠の位置・大きさに合わせて同じ画像を置き、
-     keepUntilEnd=trueにして枠を画像で埋めていく。話の間出していた大きい画像は、そこで終わるようにdurationInSecondsを決める。
+   - ランキングの枠をずっと出しているなら、順位が発表されたクリップで同じ画像をもう1つ置き、keepUntilEnd=trueと、
+     slotRank(その画像が何位か。発表された順位の数)を必ず書いて枠を画像で埋めていく(位置・大きさは枠に合わせて自動で決まる)。
+     発表の順番と順位は違う(2位→3位→5位…と発表されることもある)ので、slotRankは話の中で言われた順位にする。話の間出していた大きい画像は、そこで終わるようにdurationInSecondsを決める。
    - 話の内容に合う画像が無い場面には出さない。同じ画像を関係ない話に使い回さない。
    位置(xPercent/yPercent、画像の中心)・幅(widthPercent、画面幅に対する割合)・角の丸み(cornerRadiusPx)・出すタイミングは自由。
    枠に入れる画像は、heightPercent(画面の高さに対する割合)も枠と同じにする(枠いっぱいに切り抜いて収まる)。`;
@@ -274,7 +276,7 @@ ${keepRangesList}
    kind・線の色などの項目は1-3と同じ。結論がはっきりしない項目(どちらとも言えない)には置かない。
    特にランキングで「1位」〜「〇位」の空の枠をずっと出すなら、順位が発表されたクリップで、その順位の枠を
    keepUntilEnd=trueの物で埋め、発表のたびに埋めていく(使える画像があれば4-2のとおり画像で、無ければ枠の中か
-   すぐ横に項目名の文字で)。空の枠を出したまま埋めないのは不可。
+   すぐ横に項目名の文字で)。埋める物には必ずslotRank(何位の枠か)を書く。空の枠を出したまま埋めないのは不可。
    文言・位置(xPercent/yPercent、文字の中心)・大きさ(fontSizePx、20〜220)・色・縁取り色・帯の色・傾き(rotationDeg)・
    出すタイミング(クリップ先頭からの秒)はすべて自由。参考の見た目を細かく再現するため、文字ごとに書体(fontFamily、
    候補は手順②と同じ。省略するとテロップと同じ)・光(glowColor、文字の周りのにじみ)・斜体(italic)・
@@ -489,6 +491,9 @@ const normalizeOverlays = (
 /** Geminiが置いた画像を、実際のファイル(使える画像 or AIが作った画像)に結び付ける。結び付けられなければundefined。 */
 type ImageSourceResolver = (raw: RawAutoEditImage) => string | undefined;
 
+/** ランキングの枠に入れる画像か(何位の枠か、または最後まで残す画像)。 */
+const isSlotImage = (image: RawAutoEditImage): boolean => image.slotRank != null || Boolean(image.keepUntilEnd);
+
 /** AIに作らせる画像の目印。同じ画像を2回出す時は同じnameを付けさせているので、nameで1枚にまとめる。 */
 const generatedImageKey = (raw: RawAutoEditImage): string => raw.name?.trim() || raw.description.trim();
 
@@ -507,6 +512,8 @@ const generateMissingImages = async (
   for (const clip of plan.clips) {
     for (const image of clip.images ?? []) {
       if (findMaterialImage(image, materialImages)) continue;
+      // 枠に入れる画像は、その前に大きく出していた画像を使い回す(finalizeAutoEditPlan)ので、別には作らない。
+      if (isSlotImage(image)) continue;
       const key = generatedImageKey(image);
       if (key && !descriptions.has(key) && descriptions.size < MAX_GENERATED_IMAGES) descriptions.set(key, image.description);
     }
@@ -752,6 +759,69 @@ const linkTextMoves = (overlays: TextOverlay[]): TextOverlay[] =>
       : overlay;
   });
 
+/** ランキングの枠1つの位置と大きさ(%)。 */
+type RankSlot = { xPercent: number; yPercent: number; widthPercent?: number; heightPercent?: number };
+
+/** 「1位」「第3位」「３位」のような順位の文字なら、その数。 */
+const rankOfLabel = (text: string): number | null => {
+  const normalized = text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0)).replace(/\s/g, "");
+  const match = /^第?(\d{1,2})位$/.exec(normalized);
+  return match ? Number(match[1]) : null;
+};
+
+/**
+ * ずっと出している「N位」の文字と枠の図形から、順位→枠の位置を作る。枠の図形があれば、その順位の文字に一番近い
+ * 図形を枠とし、無ければ文字の位置そのものを枠とする。
+ */
+const findRankSlots = (data: RawAutoEditPlan): Map<number, RankSlot> => {
+  const shapes = (data.globalShapes ?? []).filter((shape) => (shape.kind ?? "rect") === "rect" && shape.xPercent != null && shape.yPercent != null);
+  // 位置だけ書いて大きさを省いた枠は、大きさまで書いてある枠から引き継ぐ(normalizeShapesと同じ扱い)
+  const sized = shapes.find((shape) => shape.widthPercent != null && shape.heightPercent != null);
+  const slots = new Map<number, RankSlot>();
+  for (const label of data.globalOverlays ?? []) {
+    const rank = rankOfLabel(label.text);
+    if (rank === null || slots.has(rank) || label.xPercent == null || label.yPercent == null) continue;
+    const nearest = shapes
+      .map((shape) => ({ shape, distance: Math.hypot(shape.xPercent! - label.xPercent!, (shape.yPercent! - label.yPercent!) * 1.78) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    // 枠の大きさの半分くらいまでの近さなら、その枠のラベルとみなす
+    if (nearest && nearest.distance < 25) {
+      slots.set(rank, {
+        xPercent: nearest.shape.xPercent!,
+        yPercent: nearest.shape.yPercent!,
+        widthPercent: nearest.shape.widthPercent ?? sized?.widthPercent ?? undefined,
+        heightPercent: nearest.shape.heightPercent ?? sized?.heightPercent ?? undefined,
+      });
+    } else {
+      slots.set(rank, { xPercent: label.xPercent, yPercent: label.yPercent });
+    }
+  }
+  return slots;
+};
+
+/**
+ * 「何位の枠に入れるか(slotRank)」を書いた画像・文字を、その順位の枠の位置へ合わせる。
+ * Geminiに座標で書かせると、発表の順番(2位→3位→5位…)と枠の並び(1位が一番上)の取り違えで、
+ * 別の順位の枠に入ってしまうことがあった。順位だけ書かせ、位置はここで決める。
+ */
+const snapToRankSlots = <T extends { slotRank?: number | null; xPercent?: number | null; yPercent?: number | null }>(
+  item: T,
+  slots: Map<number, RankSlot>,
+  kind: "image" | "text"
+): T => {
+  if (item.slotRank == null) return item;
+  const slot = slots.get(item.slotRank);
+  if (!slot) return item;
+  if (kind === "text") return { ...item, xPercent: slot.xPercent, yPercent: slot.yPercent };
+  return {
+    ...item,
+    xPercent: slot.xPercent,
+    yPercent: slot.yPercent,
+    ...(slot.widthPercent != null ? { widthPercent: slot.widthPercent } : {}),
+    ...(slot.heightPercent != null ? { heightPercent: slot.heightPercent } : {}),
+  };
+};
+
 /**
  * Geminiの編集案(生のJSON)を、プロジェクトにそのまま書き込める形に直す。足りない画像はここで作る。
  * 学習データの書き起こしも同じ形なので、手本がどう描かれるかの確認にも使える。
@@ -764,10 +834,18 @@ export const finalizeAutoEditPlan = async (
   const generatedImagePaths = input.generateMissingImages
     ? await generateMissingImages(data, input.materialImages)
     : new Map<string, string>();
+  // 枠に入れる画像のうち、番号も作った画像も結び付かない物は、直前に大きく出していた画像を使う。
+  // 枠用の画像を、大きく出した画像と違う説明・名前で書いてくることがあり、以前はそのまま別の画像として作ろうとして
+  // (作る数の上限で)作られず、枠が空のままになっていた。
+  const slotFallbackSrc = new WeakMap<RawAutoEditImage, string>();
   const resolveImageSrc: ImageSourceResolver = (raw) =>
     options.resolveImage?.(raw) ??
     findMaterialImage(raw, input.materialImages)?.path ??
-    (raw.imageNumber == null ? generatedImagePaths.get(generatedImageKey(raw)) : undefined);
+    (raw.imageNumber == null ? generatedImagePaths.get(generatedImageKey(raw)) : undefined) ??
+    slotFallbackSrc.get(raw);
+  let lastShownImageSrc: string | undefined;
+
+  const rankSlots = findRankSlots(data);
 
   const clips: AutoEditClipPlan[] = [];
   // クリップの外まで出し続ける文字・画像(最後まで残す物、話題の間ずっと出す物)。
@@ -782,11 +860,25 @@ export const finalizeAutoEditPlan = async (
     const fitted = fitClipToKeepRanges(raw, input.keepRanges);
     if (!fitted) continue;
     const clipDuration = fitted.durationInSeconds;
-    for (const overlay of raw.overlays ?? []) {
+    const overlays = (raw.overlays ?? []).map((overlay) => snapToRankSlots(overlay, rankSlots, "text"));
+    const images = (raw.images ?? []).map((image) => snapToRankSlots(image, rankSlots, "image"));
+    for (const image of images) {
+      if (isSlotImage(image)) {
+        if (lastShownImageSrc) slotFallbackSrc.set(image, lastShownImageSrc);
+      } else {
+        lastShownImageSrc = resolveImageSrc(image) ?? lastShownImageSrc;
+      }
+    }
+    for (const overlay of overlays) {
       if (outlivesClip(overlay, clipDuration)) liftedOverlays.push(toWholeVideoTiming(overlay, outputStartSeconds, clipDuration));
     }
-    for (const image of raw.images ?? []) {
-      if (outlivesClip(image, clipDuration)) liftedImages.push(toWholeVideoTiming(image, outputStartSeconds, clipDuration));
+    for (const image of images) {
+      if (!outlivesClip(image, clipDuration)) continue;
+      const lifted = toWholeVideoTiming(image, outputStartSeconds, clipDuration);
+      // 使い回す画像の結び付けは、全体へ移した後の物にも引き継ぐ
+      const fallback = slotFallbackSrc.get(image);
+      if (fallback) slotFallbackSrc.set(lifted, fallback);
+      liftedImages.push(lifted);
     }
     for (const shape of raw.shapes ?? []) {
       const lifted = toWholeVideoTiming(shape, outputStartSeconds, clipDuration);
@@ -812,12 +904,12 @@ export const finalizeAutoEditPlan = async (
       captionGlowColor: hexOrUndefined(raw.captionGlowColor),
       zoom: normalizeZoom(raw),
       overlays: normalizeOverlays(
-        raw.overlays?.filter((overlay) => !outlivesClip(overlay, clipDuration)),
+        overlays.filter((overlay) => !outlivesClip(overlay, clipDuration)),
         clipDuration,
         MAX_CLIP_OVERLAYS
       ),
       images: normalizeImages(
-        raw.images?.filter((image) => !outlivesClip(image, clipDuration)),
+        images.filter((image) => !outlivesClip(image, clipDuration)),
         clipDuration,
         MAX_CLIP_IMAGES,
         resolveImageSrc
@@ -897,6 +989,110 @@ export const finalizeAutoEditPlan = async (
     generatedImageCount: usedGeneratedPaths.size,
     clips,
   };
+};
+
+/** 枠の順位を聞き直す軽いモデル(書き起こしの文字を読むだけなので、Proでなくてよい)。 */
+const RANK_FILL_MODEL = "gemini-flash-latest";
+
+const rankAnswerSchema = z.object({
+  items: z.array(z.object({ topic: z.number().int(), rank: z.number().int().nullable(), clip: z.number().int().nullable() })),
+});
+
+/**
+ * ランキングの枠をずっと出しているのに、話題ごとに大きく出した画像が枠に入っていない(枠に入れる画像を書き忘れた)答えのとき、
+ * 書き起こしから「どの話題が何位で、どのクリップで発表されたか」を軽いモデルに聞き、その話題の画像を枠に入れる。
+ * 本番で、同じ依頼でも枠に入れる画像を丸ごと書かない答えが返り、枠が最後まで空のままになったため。
+ * 失敗しても自動編集は止めない(元の答えのまま返す)。
+ */
+export const fillMissingRankImages = async (ai: GoogleGenAI, data: RawAutoEditPlan): Promise<RawAutoEditPlan> => {
+  const rankCount = (data.globalOverlays ?? []).filter((overlay) => rankOfLabel(overlay.text) !== null).length;
+  if (rankCount < 2) return data;
+  const topics = data.clips.flatMap((clip, clipIndex) =>
+    (clip.images ?? []).filter((image) => !isSlotImage(image)).map((image) => ({ image, clipIndex }))
+  );
+  // 同じ画像を何度も出していても、話題としては1つにまとめる
+  const uniqueTopics = topics.filter(
+    (topic, index) => topics.findIndex((other) => generatedImageKey(other.image) === generatedImageKey(topic.image)) === index
+  );
+  const filled = new Set(
+    data.clips.flatMap((clip) => (clip.images ?? []).filter(isSlotImage).map((image) => generatedImageKey(image)))
+  );
+  const missing = uniqueTopics.filter((topic) => !filled.has(generatedImageKey(topic.image)));
+  if (missing.length === 0) return data;
+
+  const transcript = data.clips.map((clip, index) => `${index}: ${(clip.speech ?? "").replace(/\n/g, "")}`).join("\n");
+  const topicList = missing
+    .map((topic, index) => `${index}: ${topic.image.name ?? ""} ${topic.image.description}(クリップ${topic.clipIndex}から話し始める)`)
+    .join("\n");
+  try {
+    const response = await runWithGeminiRateLimit(() =>
+      ai.models.generateContent({
+        model: RANK_FILL_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `ランキング形式のショート動画の書き起こし(クリップ番号: 話している言葉)と、話題の一覧です。
+各話題が何位と発表されたか(rank)と、その順位を言ったクリップの番号(clip)を答えてください。
+順位がはっきり言われていない話題はrankとclipをnullにしてください。
+
+## 書き起こし
+${transcript}
+
+## 話題
+${topicList}`,
+              },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              items: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    topic: { type: Type.INTEGER },
+                    rank: { type: Type.INTEGER, nullable: true },
+                    clip: { type: Type.INTEGER, nullable: true },
+                  },
+                  required: ["topic", "rank", "clip"],
+                },
+              },
+            },
+            required: ["items"],
+          },
+        },
+      })
+    );
+    const parsed = rankAnswerSchema.safeParse(JSON.parse(response.text ?? "{}"));
+    if (!parsed.success) throw new Error("順位の答えを読み取れませんでした");
+    const clips = data.clips.map((clip) => ({ ...clip, images: [...(clip.images ?? [])] }));
+    let added = 0;
+    for (const item of parsed.data.items) {
+      const topic = missing[item.topic];
+      if (!topic || item.rank == null || item.clip == null) continue;
+      // 発表は話し始めより後のはず。範囲外のクリップ番号は、話し始めのクリップに丸める
+      const clipIndex = Math.min(Math.max(item.clip, topic.clipIndex), clips.length - 1);
+      clips[clipIndex].images.push({
+        ...topic.image,
+        startOffsetSeconds: 0,
+        durationInSeconds: null,
+        keepUntilEnd: true,
+        slotRank: item.rank,
+      });
+      added++;
+    }
+    console.info(`[autoEditPlan] 枠に入っていなかった${missing.length}件のうち${added}件を、順位を聞き直して枠に入れました`);
+    return { ...data, clips };
+  } catch (error) {
+    console.warn("[autoEditPlan] 枠の順位の聞き直しに失敗したため、そのまま使います", error);
+    return data;
+  }
 };
 
 /** 一度に作る自動編集の案の数(1か2)。案の数だけ料金がかかる。 */
@@ -1078,6 +1274,9 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     const results = await Promise.allSettled(
       lanes.map((lane, index) => requestRawPlan(ai, model, contents, lane, `案${index + 1}`))
     );
+    for (const [index, result] of results.entries()) {
+      if (result.status === "rejected") console.warn(`[autoEditPlan] 案${index + 1}の作成に失敗しました`, result.reason);
+    }
     const candidates = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
     if (candidates.length === 0) {
       throw toFriendlyGeminiError((results[0] as PromiseRejectedResult).reason);
@@ -1098,7 +1297,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
       `[autoEditPlan] ${candidates.length}案の手本との近さ: ${scored.map((s) => s.score.toFixed(2)).join(" / ")} → ${best.score.toFixed(2)}の案を使う`
     );
 
-    const plan = await finalizeAutoEditPlan(best.candidate, input);
+    const plan = await finalizeAutoEditPlan(await fillMissingRankImages(ai, best.candidate), input);
     // Geminiが出した数と、丸め込み後に残った数。形の崩れた要素を捨てすぎていないかをログで追えるようにする。
     console.info(
       `[autoEditPlan] 図形${best.candidate.globalShapes?.length ?? 0}→${plan.globalShapes.length}` +

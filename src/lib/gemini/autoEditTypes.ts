@@ -40,6 +40,8 @@ const rawOverlaySchema = z.object({
   glowColor: z.string().nullable().optional(),
   italic: z.boolean().nullable().optional(),
   strokeWidthPx: z.number().nullable().optional(),
+  /** ランキングの何位の枠に入れる文字か。位置はサーバー側で枠に合わせる(autoEditPlan.tsのsnapToRankSlots)。 */
+  slotRank: z.number().int().nullable().optional(),
   /**
    * クリップの強調テキストで、出てから動画の最後まで残す物(ランキングの空枠に入る項目名など)。
    * 動画全体の先頭からの秒数をGeminiに計算させるとずれるので、出すクリップに置かせたまま印だけ付けさせ、
@@ -68,6 +70,8 @@ const rawImageSchema = z.object({
   cornerRadiusPx: z.number().nullable().optional(),
   animation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
   keepUntilEnd: z.boolean().nullable().optional(),
+  /** ランキングの何位の枠に入れる画像か。位置・大きさはサーバー側で枠に合わせる。 */
+  slotRank: z.number().int().nullable().optional(),
 });
 
 /** 動画全体に重ねる図形(ランキングの空の枠など)。秒数は動画全体の先頭から。 */
@@ -189,6 +193,7 @@ const overlayItemSchema = {
     glowColor: nullableString,
     italic: { type: Type.BOOLEAN, nullable: true },
     strokeWidthPx: nullableNumber,
+    slotRank: { type: Type.INTEGER, nullable: true },
     keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
   },
   required: ["text"],
@@ -209,6 +214,7 @@ const imageItemSchema = {
     cornerRadiusPx: nullableNumber,
     animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
     keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
+    slotRank: { type: Type.INTEGER, nullable: true },
   },
   required: ["description"],
 } as const;

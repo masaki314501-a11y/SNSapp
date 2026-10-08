@@ -72,7 +72,7 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
   descriptionに何の画像かを具体的に書く(例: 「八重歯の口元のアップ写真」)。xPercent/yPercentは画像の中心、
   widthPercentは画面幅に対する画像の幅、cornerRadiusPxは角の丸み、startOffsetSecondsはクリップ先頭からの秒、
   durationInSecondsは出ている長さ(クリップより長くてよい)。最後まで残る画像(ランキングの枠に入った写真など)は
-  keepUntilEnd=true。画像が大きく出てから小さくなって別の場所(枠など)へ移る場合は、別々の2つの画像として書く。
+  keepUntilEnd=true、ランキングの枠に入れた物はslotRank(何位の枠か)も書く。画像が大きく出てから小さくなって別の場所(枠など)へ移る場合は、別々の2つの画像として書く。
 - framing: 正解動画の映像が素材より寄っていて、人物が片側に寄せられているなら、全体の寄せ方。scaleは素材に対する倍率、
   focusXPercent/focusYPercentは拡大の中心(その点は動かず、ほかは点から離れる方向へ広がる)。素材の背景の物(額・ハンガー等)が
   正解動画のどこに映っているかから計算する。寄せていなければnull。

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { finalizeAutoEditPlan, similarityToExamples } from "./autoEditPlan";
+import type { GoogleGenAI } from "@google/genai";
+import { fillMissingRankImages, finalizeAutoEditPlan, similarityToExamples } from "./autoEditPlan";
 import type { RawAutoEditPlan } from "./autoEditTypes";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
 
@@ -207,5 +208,95 @@ describe("改行", () => {
     expect(plan.clips[0].speechText).toBe("日本の方が\n通いやすい");
     expect(plan.clips[0].overlays?.[0].text).toBe("知らないと\n損する話");
     expect(plan.clips[1].speechText).toBe("一行目です\n二行目です三行目です");
+  });
+});
+
+describe("ランキングの枠への配置", () => {
+  const slots = {
+    globalShapes: [25, 37, 49].map((y) => ({ xPercent: 24, yPercent: y, widthPercent: 26, heightPercent: 10, borderColor: "#000000" })),
+    globalOverlays: [1, 2, 3].map((rank, i) => ({ text: `${rank}位`, xPercent: 17, yPercent: [25, 37, 49][i] + 3 })),
+  };
+
+  it("座標を書き間違えても、slotRankの順位の枠の位置・大きさに入る", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          {
+            sourceStartSeconds: 0,
+            sourceEndSeconds: 2,
+            images: [{ imageNumber: 1, description: "2位の写真", keepUntilEnd: true, slotRank: 2, xPercent: 24, yPercent: 25, widthPercent: 40 }],
+          },
+          {
+            sourceStartSeconds: 2,
+            sourceEndSeconds: 4,
+            overlays: [{ text: "開咬", keepUntilEnd: true, slotRank: 1, xPercent: 24, yPercent: 49 }],
+          },
+        ],
+        slots
+      ),
+      input
+    );
+    expect(plan.globalImages[0]).toMatchObject({ xPercent: 24, yPercent: 37, widthPercent: 26, heightPercent: 10 });
+    expect(plan.globalOverlays.find((o) => o.text === "開咬")).toMatchObject({ xPercent: 24, yPercent: 25 });
+  });
+
+  it("「第3位」「３位」のような書き方の順位の文字も枠として扱う", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          {
+            sourceStartSeconds: 0,
+            sourceEndSeconds: 2,
+            images: [{ imageNumber: 1, description: "3位", keepUntilEnd: true, slotRank: 3, xPercent: 80, yPercent: 80 }],
+          },
+        ],
+        { globalOverlays: [{ text: "第３位", xPercent: 20, yPercent: 60 }] }
+      ),
+      input
+    );
+    expect(plan.globalImages[0]).toMatchObject({ xPercent: 20, yPercent: 60 });
+  });
+});
+
+describe("枠に入れる画像の使い回し", () => {
+  it("枠用の画像が大きく出した画像と違う説明で書かれていても、直前に大きく出した画像を枠に入れる", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([
+        { sourceStartSeconds: 0, sourceEndSeconds: 2, images: [{ imageNumber: 1, description: "八重歯の写真", durationInSeconds: 2 }] },
+        {
+          sourceStartSeconds: 2,
+          sourceEndSeconds: 4,
+          images: [{ imageNumber: null, description: "八重歯の写真(順位の枠に入れたもの)", keepUntilEnd: true, slotRank: 2 }],
+        },
+      ]),
+      input
+    );
+    const slotImage = plan.globalImages.find((image) => image.durationInSeconds === undefined);
+    expect(slotImage?.src).toBe(material.path);
+  });
+});
+
+describe("fillMissingRankImages", () => {
+  const fakeAi = (answer: unknown) =>
+    ({ models: { generateContent: async () => ({ text: JSON.stringify(answer) }) } }) as unknown as GoogleGenAI;
+  const plan = basePlan(
+    [
+      { sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "八重歯は", images: [{ imageNumber: 1, description: "八重歯", durationInSeconds: 3 }] },
+      { sourceStartSeconds: 2, sourceEndSeconds: 4, speech: "2位です" },
+    ],
+    { globalOverlays: [{ text: "1位" }, { text: "2位" }] }
+  );
+
+  it("枠に入れる画像が無い答えは、聞き直した順位とクリップで枠に入れる", async () => {
+    const filled = await fillMissingRankImages(fakeAi({ items: [{ topic: 0, rank: 2, clip: 1 }] }), plan);
+    expect(filled.clips[1].images).toEqual([
+      expect.objectContaining({ imageNumber: 1, keepUntilEnd: true, slotRank: 2, startOffsetSeconds: 0, durationInSeconds: null }),
+    ]);
+  });
+
+  it("順位の文字が無い動画(ランキングでない)では聞き直さない", async () => {
+    const notRanking = { ...plan, globalOverlays: [] };
+    const filled = await fillMissingRankImages(fakeAi({ items: [{ topic: 0, rank: 2, clip: 1 }] }), notRanking);
+    expect(filled).toBe(notRanking);
   });
 });
