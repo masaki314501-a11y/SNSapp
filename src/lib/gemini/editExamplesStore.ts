@@ -291,6 +291,7 @@ export const loadEditFewShotContext = async (
         parts.push({
           text: `この正解動画を、上の学習動画(素材)に対する今回と同じ形のJSONに書き起こすと次のとおりです(秒数は学習動画上の秒数)。
 今回の依頼でも、この書き起こしと同じくらいの細かさ・量・見た目の値で答えてください。
+ただし書き起こしの文言(テロップ・タイトル・強調テキスト・ナレーション)は「${description}」の動画の内容です。今回の動画には持ち込まないでください。
 
 ${JSON.stringify(example.breakdown)}`,
         });

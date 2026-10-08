@@ -116,15 +116,18 @@ const pickResponseSchema = z.object({
 });
 
 /**
- * 自動編集に見せる手本を選ぶ。手本が上限以下なら全部見せればよいので、Geminiには聞かない
- * (余計な呼び出しで時間とお金を使わないため)。選ぶのに失敗しても自動編集自体は止めず、
- * 以前と同じ「新しい順」に戻す。
+ * 自動編集に見せる手本を、今回の動画に近い順に選ぶ(先頭が一番近い)。
+ * 手本が上限以下でも毎回選ぶ。以前は上限以下なら全部見せていたが、型の違う手本(比較の動画など)まで
+ * 見せると、ランキングの動画に「日本」「韓国」のような別の動画の文言が持ち込まれたため、
+ * 当てはまらない手本は外す(1つも当てはまらなければ手本無しで編集する)。
+ * 選ぶのは手本の説明文(profile)を比べるだけの軽い呼び出しなので、毎回行っても負担は小さい。
+ * 選ぶのに失敗しても自動編集自体は止めず、以前と同じ「新しい順」に戻す。
  * userVideoPartは自動編集本体に渡すのと同じアップロード済みの動画(二重にアップロードしない)。
  */
 export const selectEditExamples = async (ai: GoogleGenAI, userVideoPart: Part): Promise<EditExample[]> => {
   const all = await listEditExamples();
   const newest = all.slice(-MAX_EDIT_FEW_SHOT_EXAMPLES).reverse();
-  if (all.length <= MAX_EDIT_FEW_SHOT_EXAMPLES) return newest;
+  if (all.length === 0) return [];
 
   // 番号で答えさせる(UUIDをそのまま書き写させると、1文字違いで一致しないことがあるため)
   const candidates = all
@@ -152,6 +155,7 @@ export const selectEditExamples = async (ai: GoogleGenAI, userVideoPart: Part): 
 近い順に最大${MAX_EDIT_FEW_SHOT_EXAMPLES}個選び、番号で答えてください。
 「近い」は、題材・ジャンルよりも、動画の型(ランキング・比較・解説など)と話し手の映り方・話し方が似ていて、
 同じような編集がそのまま当てはまりそうかどうかを重視してください。
+動画の型が違い、同じような編集が当てはまらない手本は選ばないでください(1つも当てはまらなければ空の配列で答える)。
 
 ${candidates}`,
                 },
@@ -181,13 +185,9 @@ ${candidates}`,
       if (example && !picked.includes(example)) picked.push(example);
       if (picked.length >= MAX_EDIT_FEW_SHOT_EXAMPLES) break;
     }
-    // 選ばれた数が足りなければ新しい順で埋める(見せる手本の数は減らさない)
-    for (const example of newest) {
-      if (picked.length >= MAX_EDIT_FEW_SHOT_EXAMPLES) break;
-      if (!picked.includes(example)) picked.push(example);
-    }
+    // 選ばれなかった手本で数を埋めない(型の違う手本を見せると、その動画の文言まで持ち込まれるため)
     console.info(
-      `[editExampleSelection] 手本を選択: ${picked.map((example) => example.label).join(" / ")}` +
+      `[editExampleSelection] 手本を選択: ${picked.length > 0 ? picked.map((example) => example.label).join(" / ") : "なし"}` +
         (parsed.data.reason ? ` (理由: ${parsed.data.reason})` : "")
     );
     return picked;
