@@ -70,7 +70,6 @@ export type AutoEditClipPlan = {
   zoom?: ClipZoom;
   overlays?: TextOverlay[];
   sfx: { presetId: string; offsetSeconds: number }[];
-  narration: string | null;
 };
 
 export type AutoEditPlan = {
@@ -123,7 +122,7 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
     hasExamples
       ? "3. 次に添付した編集例(学習動画=編集前、正解動画=編集後、正解動画の書き起こしJSON)から、編集者がどこを切り、どこで寄り、どんな文字や効果音を足したかの癖を学び、手本にすること。書き起こしがある編集例は、文字の位置・色・大きさ・量、寄りの倍率、効果音の付け方の数値までそのまま真似してよい。本人の動画で「必要な所」を判断するときも、この編集者が正解動画で入れている所(同じような場面)を基準にする。ただし編集例は本人とは別の動画なので、真似するのは見た目・量・タイミングだけ。編集例に出てくる文言・タイトル・題材・固有の言葉(国名・商品名・項目名など)は本人の動画に持ち込まない。"
       : "3. 編集例は今回ありません。",
-    "4. 最後に添付した動画が、今回あなたが編集する本人の動画です。テロップ・タイトル・強調テキスト・ナレーションなど画面に出す言葉は、すべてこの動画で本人が話している内容から作ること。",
+    "4. 最後に添付した動画が、今回あなたが編集する本人の動画です。テロップ・タイトル・強調テキストなど画面に出す言葉は、すべてこの動画で本人が話している内容から作ること。",
   ].join("\n");
 
   const templateSection = input.template
@@ -142,7 +141,7 @@ ${input.template.instructions}
 最後まで見てしまう「違和感が無いのにバズる」編集です。派手さより自然さを優先し、必要な所にだけしっかり手を入れてください。
 
 ## 一番大事な決まり: 必要だと思った箇所だけ編集する
-- 文字・強調・効果音・寄り・ナレーション・タイトルなど、足す演出はすべて「ここに入れると見ている人にとって
+- 文字・強調・効果音・寄り・タイトルなど、足す演出はすべて「ここに入れると見ている人にとって
   良くなる理由」(伝わりやすくなる・驚きや笑いが強まる・話の区切りがわかる・続きを見たくなる)がある所にだけ入れる。
 - 理由を言えない演出は入れない。「間が空いたから」「数をそろえたいから」「他のクリップに入っているから」は理由にならない。
 - 何も足さないクリップがあってよい(むしろ多くて当然)。空の配列やnullは失敗ではない。
@@ -215,9 +214,8 @@ ${captionStyleHints}
     オチなど、音があると気持ちよく伝わる所だけ。意味の無い所では鳴らさない。意味に合うものを選ぶ
     (問いかけ→はてな、良い結果→成功、残念な事実→残念、場面転換→スワイプ/切り替え、発表→決定/ポップ、衝撃→グリッチ)。候補:
 ${sfxPresetHints}
-12. narration: 本人の声とは別にAIナレーションで足す一言。本人の話だけでは足りない説明・ツッコミ・フックの後押しが
-    必要な所だけ。数の上限は無いが、必要が無ければ1つも入れなくてよい
-    (本人の話し声は編集画面で消せるので、話している所に重ねてもよい)。不要ならnull。
+12. narration: 常にnull。AIナレーション(読み上げ音声)は本人が編集画面で必要な所にだけ付けるので、自動編集では入れない。
+    編集例の書き起こしにnarrationが入っていても真似しない。
 13. hook: 冒頭0〜3秒に本人の映像の上へ重ねる大見出し(スクロールを止める一言。数字・意外性)。subline(補足)は任意。
     冒頭の本人の一言だけで十分に引きがあるならnullでよい。
 14. cta: 最後の数秒に重ねる一言(「保存して見返してね」など)。不要ならnull。
@@ -370,7 +368,7 @@ const uploadFileAsPart = async (
 
 /**
  * 本人の動画・参考スクショ/動画・編集例(学習動画+正解動画のペア)をGeminiに見せ、切り方・寄り・
- * 強調テキスト・効果音・ナレーション・フック・CTA・全体の見た目まで、編集の判断をすべて任せる。
+ * 強調テキスト・効果音・フック・CTA・全体の見た目まで(AIナレーションは付けない)、編集の判断をすべて任せる。
  * 手本の優先順位は「参考スクショ > 選んだテンプレート > 編集例 > 一般的なバズ動画の定石」。
  * フォールバックは持たない(失敗時は呼び出し元でエラー表示し、常にスキップできるようにする)。
  */
@@ -473,7 +471,6 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           if (clips.length >= MAX_CLIPS) break;
           const fitted = fitClipToKeepRanges(raw, input.keepRanges);
           if (!fitted) continue;
-          const narration = raw.narration?.trim() || null;
           const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
           clips.push({
             ...fitted,
@@ -488,7 +485,6 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
               presetId: s.presetId,
               offsetSeconds: clamp(s.offsetSeconds ?? 0, 0, Math.max(0, fitted.durationInSeconds - 0.1)),
             })),
-            narration,
           });
         }
         if (clips.length === 0) {

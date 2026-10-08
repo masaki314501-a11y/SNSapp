@@ -5,9 +5,7 @@ import { CAPTION_ANIMATION_OPTIONS } from "@video/shared/schema";
 import { MAX_SFX_CLIPS } from "@video/templates/standard/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
-import { DEFAULT_VOICE_NAME } from "@/lib/gemini/voiceOptions";
 import { generateAutoEditPlan } from "@/lib/gemini/autoEditPlan";
-import { getOrGenerateVoiceover } from "@/lib/gemini/voiceoverCache";
 import { createAutoEditJob, updateAutoEditJob } from "@/lib/gemini/autoEditJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { isStyleReferencePath, resolveStyleReference } from "@/lib/styleReference";
@@ -36,7 +34,7 @@ const requestSchema = z.object({
 
 /**
  * カット後・手動編集(/edit)に入る前の「自動編集(バズる動画)」機能。本人の動画・参考スクショ・
- * 編集例をGeminiに見せ、切り方・寄り・強調テキスト・効果音・ナレーション・フック・CTAまで
+ * 編集例をGeminiに見せ、切り方・寄り・強調テキスト・効果音・フック・CTAまで
  * 編集の判断をすべて任せる(autoEditPlan.ts参照)。結果はそのままプロジェクトに書き込める
  * クリップ列(segments)と音声クリップ(generatedClips)に組み立てて返す。
  * 生成には数分かかりうるため、他のGemini系エンドポイントと同じくジョブ化してポーリングする。
@@ -74,7 +72,7 @@ export async function POST(request: Request) {
         template,
       });
 
-      // 効果音・ナレーションの配置は、書き出し後の動画上での累積開始秒(クリップ尺の合計)を使う。
+      // 効果音の配置は、書き出し後の動画上での累積開始秒(クリップ尺の合計)を使う。
       const segments: ProjectSegment[] = [];
       const generatedClips: ProjectSfxClip[] = [];
       let cumulativeStart = 0;
@@ -105,21 +103,6 @@ export async function POST(request: Request) {
             label: preset.label,
             startFromSeconds: cumulativeStart + sfx.offsetSeconds,
             volume: DEFAULT_CLIP_VOLUME,
-          });
-        }
-
-        if (clip.narration && generatedClips.length < MAX_SFX_CLIPS) {
-          // TTSは専用の列で直列実行される前提(rateLimiter.ts)のため、あえて逐次待つ。
-          const { path } = await getOrGenerateVoiceover(clip.narration, DEFAULT_VOICE_NAME);
-          generatedClips.push({
-            key: randomUUID(),
-            src: path,
-            label: clip.narration.slice(0, 12),
-            startFromSeconds: cumulativeStart,
-            volume: DEFAULT_CLIP_VOLUME,
-            narrationSegmentKey: key,
-            narrationVoice: DEFAULT_VOICE_NAME,
-            narrationText: clip.narration,
           });
         }
 

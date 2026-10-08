@@ -25,7 +25,7 @@ const EmptyState: React.FC = () => (
 const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
   ranges.reduce((sum, range) => sum + range.durationInSeconds, 0);
 
-const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "効果音", "ナレーション", "冒頭の見出し", "締めの一言"];
+const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "効果音", "冒頭の見出し", "締めの一言"];
 
 /**
  * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
@@ -86,7 +86,7 @@ export const AutoEditScreen: React.FC = () => {
       hook: plan.hook,
       cta: plan.cta,
       globalOverlays: plan.globalOverlays,
-      // クリップの切り方が変わると、以前の効果音・ナレーションの秒位置は意味を失うため作り直す。
+      // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });
     router.push("/edit");
@@ -225,12 +225,11 @@ export const AutoEditScreen: React.FC = () => {
                 強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
               </li>
               <li>
-                効果音: {autoEditState.generatedClips.filter((c) => !c.narrationSegmentKey).length}個 / ナレーション:{" "}
-                {autoEditState.generatedClips.filter((c) => c.narrationSegmentKey).length}個
+                効果音: {autoEditState.generatedClips.length}個
               </li>
             </ul>
             <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-              この案を使うと、クリップ構成・効果音・ナレーションが置き換わります(BGMはそのまま)。
+              この案を使うと、クリップ構成と効果音が置き換わり、付けてあったAI音声は外れます(BGMはそのまま)。
             </p>
           </div>
         ) : null}
