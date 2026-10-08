@@ -51,6 +51,8 @@ const rawOverlaySchema = z.object({
 const rawImageSchema = z.object({
   imageNumber: z.number().int().nullable().optional(),
   description: z.string(),
+  /** AIに作らせる画像の短い名前。同じ画像を2回出す(大きく出す→枠に入れる)ときに同じ1枚を使うための目印。 */
+  name: z.string().nullable().optional(),
   startOffsetSeconds: z.number().nullable().optional(),
   durationInSeconds: z.number().nullable().optional(),
   xPercent: z.number().nullable().optional(),
@@ -112,6 +114,8 @@ export const rawAutoEditPlanSchema = z.object({
   cta: z.object({ text: z.string() }).nullable().optional(),
   /** 動画全体に重ね続ける文字(参考投稿の上部タイトル等)。 */
   globalOverlays: z.array(rawOverlaySchema).nullable().optional(),
+  /** AIに作らせる画像の画風。医療・美容・健康の話はイラスト必須(generateImage.ts参照)。 */
+  generatedImageStyle: z.enum(["illustration", "photo"]).nullable().optional(),
   clips: z.array(rawClipSchema),
 });
 
@@ -146,6 +150,7 @@ const imageItemSchema = {
   properties: {
     imageNumber: { type: Type.INTEGER, nullable: true },
     description: { type: Type.STRING },
+    name: nullableString,
     startOffsetSeconds: nullableNumber,
     durationInSeconds: nullableNumber,
     xPercent: nullableNumber,
@@ -191,6 +196,7 @@ export const autoEditResponseSchema = {
       required: ["text"],
     },
     globalOverlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
+    generatedImageStyle: { type: Type.STRING, format: "enum", enum: ["illustration", "photo"], nullable: true },
     clips: {
       type: Type.ARRAY,
       items: {
@@ -249,6 +255,6 @@ export const autoEditResponseSchema = {
     },
   },
   // 参考スクショの読み取り→ずっと置く物→テーマ(テロップの見た目)→クリップ→仕上げ、の順。
-  propertyOrdering: ["referenceNotes", "globalOverlays", "theme", "clips", "hook", "cta", "summary"],
+  propertyOrdering: ["referenceNotes", "globalOverlays", "theme", "generatedImageStyle", "clips", "hook", "cta", "summary"],
   required: ["summary", "clips"],
 } as const;

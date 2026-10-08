@@ -13,6 +13,9 @@ export type MaterialImage = { path: string; name: string };
 type Props = {
   images: MaterialImage[];
   onChange: (images: MaterialImage[]) => void;
+  /** 画像が足りない所に、AIで画像を作るか。 */
+  generateMissing: boolean;
+  onChangeGenerateMissing: (value: boolean) => void;
   disabled: boolean;
 };
 
@@ -21,7 +24,13 @@ type Props = {
  * (ランキングなら、話している間は大きく出し、順位が決まったら枠に入れて最後まで残す)。
  * 名前は任意。付けておくと、どの話でどの画像を使うかの取り違えが減る。
  */
-export const MaterialImagesPanel: React.FC<Props> = ({ images, onChange, disabled }) => {
+export const MaterialImagesPanel: React.FC<Props> = ({
+  images,
+  onChange,
+  generateMissing,
+  onChangeGenerateMissing,
+  disabled,
+}) => {
   const [uploading, setUploading] = useState(false);
   const canAddMore = images.length < MAX_MATERIAL_IMAGES;
 
@@ -113,6 +122,23 @@ export const MaterialImagesPanel: React.FC<Props> = ({ images, onChange, disable
           void handleAddFiles(selected);
         }}
       />
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={generateMissing}
+          disabled={disabled}
+          onChange={(e) => onChangeGenerateMissing(e.target.checked)}
+          className="mt-1"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span>画像が足りない所は、AIで画像を作る</span>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            医療・美容・健康の話は、本物の写真と誤解されないようイラスト風で作り、「※画像はイメージです」を添えます。
+            1枚につき数円〜十円ほどかかります(同じ画像は使い回します)
+          </span>
+        </span>
+      </label>
+
       {canAddMore ? (
         <label
           htmlFor="material-image-file"

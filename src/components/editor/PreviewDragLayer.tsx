@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { VIDEO_FPS, VIDEO_WIDTH } from "@video/shared/constants";
 import { resolveClipSrc } from "@video/shared/resolveSrc";
+import { resolveOverlayLayout } from "@video/shared/TextOverlays";
 import type { ImageOverlay, TextOverlay } from "@video/shared/schema";
 import type { ProjectSegment } from "@/lib/videoProject";
 
@@ -102,7 +103,9 @@ export const PreviewDragLayer: React.FC<Props> = ({
     event.preventDefault();
     const rect = layer.getBoundingClientRect();
     // つかんだ点と文字の中心のずれを保ち、つかんだ瞬間に中心が指の位置へ飛ばないようにする
-    const grabOffsetX = event.clientX - (rect.left + (item.overlay.xPercent / 100) * rect.width);
+    const shownXPercent =
+      item.kind === "image" ? item.overlay.xPercent : resolveOverlayLayout(item.overlay as TextOverlay).xPercent;
+    const grabOffsetX = event.clientX - (rect.left + (shownXPercent / 100) * rect.width);
     const grabOffsetY = event.clientY - (rect.top + (item.overlay.yPercent / 100) * rect.height);
     const target: DragTarget = { clipKey: item.clipKey, kind: item.kind, index: item.index };
     const handle = event.currentTarget;
@@ -150,8 +153,10 @@ export const PreviewDragLayer: React.FC<Props> = ({
         >
           {items.map((item) => {
             const overlay = item.overlay;
+            // 文字は描画側で画面からはみ出さない位置・収まる大きさに直して描くので、枠も同じ位置・大きさにする
+            const textLayout = item.kind === "image" ? null : resolveOverlayLayout(overlay as TextOverlay);
             const common: React.CSSProperties = {
-              left: `${overlay.xPercent}%`,
+              left: `${textLayout?.xPercent ?? overlay.xPercent}%`,
               top: `${overlay.yPercent}%`,
               transform: `translate(-50%, -50%) rotate(${overlay.rotationDeg}deg)`,
             };
@@ -175,7 +180,7 @@ export const PreviewDragLayer: React.FC<Props> = ({
                   <span
                     style={{
                       fontFamily: fontFamilyStack,
-                      fontSize: (overlay as TextOverlay).fontSizePx,
+                      fontSize: textLayout?.fontSizePx ?? (overlay as TextOverlay).fontSizePx,
                       padding: (overlay as TextOverlay).backgroundColor ? "0.12em 0.4em" : undefined,
                     }}
                   >

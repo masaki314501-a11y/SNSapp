@@ -32,6 +32,7 @@ import {
 } from "./autoEditTypes";
 import type { EditTemplate } from "@/lib/editTemplates";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
+import { getOrGenerateImage, type GeneratedImageStyle } from "./generateImage";
 
 /**
  * 自動編集は「どこを切り、どこで寄り、何を画面に出すか」という演出判断そのものなので、
@@ -55,6 +56,8 @@ const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const MAX_CLIP_OVERLAYS = 20;
 const MAX_CLIP_IMAGES = 20;
 const MAX_GLOBAL_IMAGES = 24;
+/** 1回の自動編集でAIに作らせる画像の種類の上限(1枚数円〜十円かかるため。ランキング6〜8項目が収まる数)。 */
+const MAX_GENERATED_IMAGES = 8;
 /** 自動編集で寄る倍率の上限。 */
 const MAX_AUTO_ZOOM_SCALE = 1.35;
 /** ランキングの空枠(6個)と、そこを埋める項目名(6個)、タイトルが同時に置けるだけの数。描画側の上限と合わせる。 */
@@ -70,6 +73,8 @@ export type AutoEditPlanInput = {
   template: EditTemplate | null;
   /** 本人が渡した「使える画像」(症例写真・商品写真など)。番号(1始まり)で指定させて動画に重ねる。 */
   materialImages: ResolvedMaterialImage[];
+  /** 使える画像が足りない所に、AIに画像を作らせてよいか(generateImage.ts)。 */
+  generateMissingImages: boolean;
 };
 
 export type AutoEditClipPlan = {
@@ -101,6 +106,8 @@ export type AutoEditPlan = {
   globalOverlays: TextOverlay[];
   /** 動画全体に重ねる画像(ランキングの枠に入れて最後まで残す写真、話題の間ずっと出す写真など)。 */
   globalImages: ImageOverlay[];
+  /** AIが作って動画に使った画像の枚数(種類)。 */
+  generatedImageCount: number;
   clips: AutoEditClipPlan[];
 };
 
@@ -142,18 +149,35 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
   ].join("\n");
 
   const materialImageCount = input.materialImages.length;
-  const imageSection =
-    materialImageCount > 0
-      ? `4-2. images(画像): 本人の動画の直前に添付した「使える画像」(${materialImageCount}枚)だけを使える。imageNumberでその番号を指定し、
-   descriptionに何の画像かを書く。名前の無い画像は、画像を見て何が写っているかを判断する。
-   - 本人がその物(症状・商品・場所など)の話を始めたクリップに、顔やテロップと重ならない所へ大きく出す(widthPercent 40〜60)。
+  const canGenerate = input.generateMissingImages;
+  const howToShowImages = `   - 本人がその物(症状・商品・場所など)の話を始めたクリップに、顔やテロップと重ならない所へ大きく出す(widthPercent 40〜60)。
      その話の間ずっと出すなら、出し始めるクリップに置いてdurationInSecondsをその話の長さ(秒)にする(クリップより長くてよい)。
    - ランキングの枠をずっと出しているなら、順位が発表されたクリップで、その順位の枠の位置・大きさに合わせて同じ画像を置き、
      keepUntilEnd=trueにして枠を画像で埋めていく。話の間出していた大きい画像は、そこで終わるようにdurationInSecondsを決める。
    - 話の内容に合う画像が無い場面には出さない。同じ画像を関係ない話に使い回さない。
-   位置(xPercent/yPercent、画像の中心)・幅(widthPercent、画面幅に対する割合)・角の丸み(cornerRadiusPx)・出すタイミングは自由。`
-      : `4-2. images(画像): 使える画像は今回ありません。imagesは空にする。編集例の書き起こしに画像が出てきても、
-   その役割は文字で代わりにする(ランキングの枠は、順位が発表されたクリップで項目名の文字をkeepUntilEnd=trueで置いて埋める)。`;
+   位置(xPercent/yPercent、画像の中心)・幅(widthPercent、画面幅に対する割合)・角の丸み(cornerRadiusPx)・出すタイミングは自由。`;
+  const materialLine =
+    materialImageCount > 0
+      ? `本人の動画の直前に添付した「使える画像」(${materialImageCount}枚)は、imageNumberでその番号を指定して使う
+   (descriptionには何の画像かを書く。名前の無い画像は、画像を見て何が写っているかを判断する)。`
+      : "使える画像は今回ありません。";
+  const generateLine = canGenerate
+    ? `使える画像に合う物が無いが、画像があると伝わりやすくなる場面(ランキングの各項目、話している物の見た目など)は、
+   AIに画像を作らせてよい。imageNumberをnullにし、descriptionに描いてほしい内容を具体的に書き(何を・どの向きから・
+   どこが特徴か。文字は入れない前提で)、nameにその画像の短い名前を付ける。同じ画像を2回出す(大きく出す→枠に入れる)
+   ときは、nameとdescriptionを同じにする。作れるのは最大${MAX_GENERATED_IMAGES}種類(name単位)まで。
+   画像を作るなら、generatedImageStyleで画風を選ぶ: 医療・歯科・美容・健康・薬・体の話はillustration(図解風イラスト)必須。
+   作った画像を本物の症例写真のように見せると誤解を招くため。それ以外(料理・商品・場所など)はphoto(写真風)でもよい。
+   画像を作らないならgeneratedImageStyleはnull。`
+    : `使える画像が無い場面には画像を出さない(imageNumberをnullにしない)。編集例の書き起こしに画像が出てきても、
+   その役割は文字で代わりにする(ランキングの枠は、順位が発表されたクリップで項目名の文字をkeepUntilEnd=trueで置いて埋める)。
+   generatedImageStyleはnull。`;
+  const imageSection =
+    materialImageCount > 0 || canGenerate
+      ? `4-2. images(画像): ${materialLine}
+   ${generateLine}
+${howToShowImages}`
+      : `4-2. images(画像): ${materialLine}imagesは空にする。${generateLine}`;
 
   const templateSection = input.template
     ? `
@@ -371,21 +395,72 @@ const normalizeOverlays = (
   return overlays.length > 0 ? overlays.slice(0, maxCount) : undefined;
 };
 
-/** Geminiが置いた画像を、使える画像の番号から実際のファイルに結び付け、描画側のスキーマに合わせて丸め込む。 */
+/** Geminiが置いた画像を、実際のファイル(使える画像 or AIが作った画像)に結び付ける。結び付けられなければundefined。 */
+type ImageSourceResolver = (raw: RawAutoEditImage) => string | undefined;
+
+/** AIに作らせる画像の目印。同じ画像を2回出す時は同じnameを付けさせているので、nameで1枚にまとめる。 */
+const generatedImageKey = (raw: RawAutoEditImage): string => raw.name?.trim() || raw.description.trim();
+
+const findMaterialImage = (raw: RawAutoEditImage, materialImages: ResolvedMaterialImage[]) =>
+  raw.imageNumber != null ? materialImages[raw.imageNumber - 1] : undefined;
+
+/**
+ * 使える画像に無い画像(imageNumberがnull)をAIに作らせ、目印→画像のパスを返す。1枚失敗しても他は続け、
+ * 作れなかった画像はその場所に出さない(自動編集全体は止めない)。
+ */
+const generateMissingImages = async (
+  plan: { clips: RawAutoEditClip[]; generatedImageStyle?: GeneratedImageStyle | null },
+  materialImages: ResolvedMaterialImage[]
+): Promise<Map<string, string>> => {
+  const descriptions = new Map<string, string>();
+  for (const clip of plan.clips) {
+    for (const image of clip.images ?? []) {
+      if (findMaterialImage(image, materialImages)) continue;
+      const key = generatedImageKey(image);
+      if (key && !descriptions.has(key) && descriptions.size < MAX_GENERATED_IMAGES) descriptions.set(key, image.description);
+    }
+  }
+  // 画風の指定が無ければ、誤解を招きにくいイラストにする。
+  const style = plan.generatedImageStyle ?? "illustration";
+  const paths = new Map<string, string>();
+  for (const [key, description] of descriptions) {
+    try {
+      paths.set(key, (await getOrGenerateImage(description, style)).path);
+    } catch (error) {
+      console.warn(`[autoEditPlan] 画像「${key}」を作れなかったため、その画像は出しません`, error);
+    }
+  }
+  return paths;
+};
+
+/** AIが作った画像を使った動画に添える注意書き。作った画像を本物の写真と誤解させないため。 */
+const GENERATED_IMAGE_NOTICE: TextOverlay = {
+  text: "※画像はイメージです",
+  startOffsetSeconds: 0,
+  xPercent: 14,
+  yPercent: 97.5,
+  fontSizePx: 26,
+  color: "#FFFFFF",
+  strokeColor: "#000000",
+  rotationDeg: 0,
+  animation: "fade",
+};
+
+/** Geminiが置いた画像を実際のファイルに結び付け、描画側のスキーマに合わせて丸め込む。 */
 const normalizeImages = (
   rawImages: RawAutoEditImage[] | null | undefined,
   clipDuration: number,
   maxCount: number,
-  materialImages: ResolvedMaterialImage[]
+  resolveSrc: ImageSourceResolver
 ): ImageOverlay[] | undefined => {
   const images: ImageOverlay[] = [];
   for (const raw of rawImages ?? []) {
-    // 書き起こしの手本と違い、自動編集では渡された画像しか置けない(番号が無い・範囲外の物は捨てる)。
-    const material = raw.imageNumber != null ? materialImages[raw.imageNumber - 1] : undefined;
-    if (!material) continue;
+    // 書き起こしの手本と違い、自動編集では実際のファイルが無い画像は置けない(捨てる)。
+    const src = resolveSrc(raw);
+    if (!src) continue;
     const startOffsetSeconds = clamp(raw.startOffsetSeconds ?? 0, 0, Math.max(0, clipDuration - 0.2));
     const parsed = imageOverlaySchema.safeParse({
-      src: material.path,
+      src,
       startOffsetSeconds,
       durationInSeconds:
         raw.durationInSeconds != null
@@ -575,6 +650,13 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
         }
 
+        const generatedImagePaths = input.generateMissingImages
+          ? await generateMissingImages(parsed.data, input.materialImages)
+          : new Map<string, string>();
+        const resolveImageSrc: ImageSourceResolver = (raw) =>
+          findMaterialImage(raw, input.materialImages)?.path ??
+          (raw.imageNumber == null ? generatedImagePaths.get(generatedImageKey(raw)) : undefined);
+
         const clips: AutoEditClipPlan[] = [];
         // クリップの外まで出し続ける文字・画像(最後まで残す物、話題の間ずっと出す物)。
         // 出すクリップの完成動画上の開始秒に足して、全体の文字・画像へ移す。
@@ -611,7 +693,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
               raw.images?.filter((image) => !outlivesClip(image, clipDuration)),
               clipDuration,
               MAX_CLIP_IMAGES,
-              input.materialImages
+              resolveImageSrc
             ),
             sfx: (raw.sfx ?? []).map((s) => ({
               presetId: s.presetId,
@@ -621,6 +703,21 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
         }
         if (clips.length === 0) {
           throw new Error("Geminiの編集案に使えるクリップがありませんでした。もう一度お試しください");
+        }
+
+        const globalImages = normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, resolveImageSrc) ?? [];
+        const generatedPaths = new Set(generatedImagePaths.values());
+        const usedGeneratedPaths = new Set(
+          [...globalImages, ...clips.flatMap((clip) => clip.images ?? [])]
+            .map((image) => image.src)
+            .filter((src) => generatedPaths.has(src))
+        );
+        const globalOverlays =
+          normalizeOverlays([...(parsed.data.globalOverlays ?? []), ...liftedOverlays], outputStartSeconds, MAX_GLOBAL_OVERLAYS) ?? [];
+        if (usedGeneratedPaths.size > 0) {
+          // 注意書きは上限で切られないよう先頭に入れる。
+          globalOverlays.unshift(GENERATED_IMAGE_NOTICE);
+          globalOverlays.splice(MAX_GLOBAL_OVERLAYS);
         }
 
         const theme = parsed.data.theme ?? {};
@@ -640,12 +737,9 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
               }
             : null,
           cta: parsed.data.cta && tidyLineBreaks(parsed.data.cta.text) ? { text: tidyLineBreaks(parsed.data.cta.text) } : null,
-          globalOverlays: normalizeOverlays(
-            [...(parsed.data.globalOverlays ?? []), ...liftedOverlays],
-            outputStartSeconds,
-            MAX_GLOBAL_OVERLAYS
-          ) ?? [],
-          globalImages: normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, input.materialImages) ?? [],
+          globalOverlays,
+          globalImages,
+          generatedImageCount: usedGeneratedPaths.size,
           clips,
         };
       } catch (error) {

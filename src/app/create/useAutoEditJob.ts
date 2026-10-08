@@ -21,6 +21,8 @@ export type AutoEditPlanSummary = {
   cta: VideoProject["cta"];
   globalOverlays: NonNullable<VideoProject["globalOverlays"]>;
   globalImages: NonNullable<VideoProject["globalImages"]>;
+  /** AIが作って使った画像の枚数(種類)。 */
+  generatedImageCount: number;
 };
 
 export type AutoEditJobState =
@@ -40,6 +42,8 @@ export type AutoEditRequest = {
   templateId: string | null;
   /** 自動編集で使ってよい画像。 */
   materialImages: { path: string; name: string }[];
+  /** 使える画像が足りない所に、AIに画像を作らせてよいか。 */
+  generateMissingImages: boolean;
 };
 
 /** 自動編集(Geminiに編集をすべて任せる)ジョブの開始+ポーリング。 */

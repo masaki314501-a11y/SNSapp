@@ -26,7 +26,7 @@ const EmptyState: React.FC = () => (
 const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
   ranges.reduce((sum, range) => sum + range.durationInSeconds, 0);
 
-const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "効果音", "冒頭の見出し", "締めの一言"];
+const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "画像", "効果音", "冒頭の見出し", "締めの一言"];
 
 /**
  * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
@@ -69,6 +69,7 @@ export const AutoEditScreen: React.FC = () => {
       styleReferencePaths: (project.styleReferences ?? []).map((reference) => reference.path),
       templateId,
       materialImages: project.materialImages ?? [],
+      generateMissingImages: project.generateMissingImages ?? true,
     });
   };
 
@@ -113,6 +114,12 @@ export const AutoEditScreen: React.FC = () => {
   const changeMaterialImages = (materialImages: MaterialImage[]) => {
     // やり直すたびに選び直さなくて済むよう、変えた時点で保存する。
     const next = { ...project, materialImages };
+    setProject(next);
+    saveProject(next);
+  };
+
+  const changeGenerateMissingImages = (generateMissingImages: boolean) => {
+    const next = { ...project, generateMissingImages };
     setProject(next);
     saveProject(next);
   };
@@ -193,6 +200,8 @@ export const AutoEditScreen: React.FC = () => {
         <MaterialImagesPanel
           images={project.materialImages ?? []}
           onChange={changeMaterialImages}
+          generateMissing={project.generateMissingImages ?? true}
+          onChangeGenerateMissing={changeGenerateMissingImages}
           disabled={isProcessing}
         />
 
@@ -253,6 +262,9 @@ export const AutoEditScreen: React.FC = () => {
                 {autoEditState.segments.reduce((sum, s) => sum + (s.images?.length ?? 0), 0) +
                   autoEditState.plan.globalImages.length}
                 か所
+                {autoEditState.plan.generatedImageCount > 0
+                  ? `(うちAIで作った画像${autoEditState.plan.generatedImageCount}種類)`
+                  : ""}
               </li>
               <li>
                 効果音: {autoEditState.generatedClips.length}個

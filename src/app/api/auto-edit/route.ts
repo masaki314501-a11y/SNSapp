@@ -35,6 +35,7 @@ const requestSchema = z.object({
     .array(z.object({ path: z.string().regex(MATERIAL_IMAGE_PATH_PATTERN), name: z.string().max(100) }))
     .max(MAX_MATERIAL_IMAGES)
     .default([]),
+  generateMissingImages: z.boolean().default(false),
 });
 
 /**
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
         styleReferences,
         template,
         materialImages,
+        generateMissingImages: parsed.data.generateMissingImages,
       });
 
       // 効果音の配置は、書き出し後の動画上での累積開始秒(クリップ尺の合計)を使う。
@@ -130,6 +132,7 @@ export async function POST(request: Request) {
           cta: plan.cta,
           globalOverlays: plan.globalOverlays,
           globalImages: plan.globalImages,
+          generatedImageCount: plan.generatedImageCount,
         },
         segments,
         generatedClips,

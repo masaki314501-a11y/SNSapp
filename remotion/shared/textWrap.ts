@@ -20,6 +20,10 @@ const charWidthEm = (char: string): number => (/[ -~｡-ﾟ]/.test(char) ? 0.55 
 
 const lineWidthEm = (line: string): number => Array.from(line).reduce((sum, char) => sum + charWidthEm(char), 0);
 
+/** 一番長い行の幅(px)の見積もり。折り返しが起きない前提の目安。 */
+export const estimateTextWidthPx = (text: string, fontSizePx: number): number =>
+  Math.max(1, ...text.split("\n").map(lineWidthEm)) * fontSizePx;
+
 /**
  * 1行ずつ(明示した改行の単位で)、指定の幅に収まる文字の大きさを返す。大きすぎる文字は
  * 言葉の途中で折り返されてしまうため、収まる大きさまで縮める。ただし長文を無理に1行へ詰めて
