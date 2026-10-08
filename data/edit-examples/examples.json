@@ -448,33 +448,57 @@
         },
         {
           "text": "1位",
-          "xPercent": 15,
-          "yPercent": 25
+          "xPercent": 17,
+          "yPercent": 28.5,
+          "fontSizePx": 44,
+          "color": "#F5C542",
+          "strokeColor": "#000000",
+          "backgroundColor": null
         },
         {
           "text": "2位",
-          "xPercent": 15,
-          "yPercent": 38
+          "xPercent": 17,
+          "yPercent": 40.5,
+          "fontSizePx": 44,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000",
+          "backgroundColor": null
         },
         {
           "text": "3位",
-          "xPercent": 15,
-          "yPercent": 51
+          "xPercent": 17,
+          "yPercent": 52.5,
+          "fontSizePx": 44,
+          "color": "#D9893B",
+          "strokeColor": "#000000",
+          "backgroundColor": null
         },
         {
           "text": "4位",
-          "xPercent": 15,
-          "yPercent": 64
+          "xPercent": 17,
+          "yPercent": 64,
+          "fontSizePx": 44,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000",
+          "backgroundColor": null
         },
         {
           "text": "5位",
-          "xPercent": 15,
-          "yPercent": 77
+          "xPercent": 17,
+          "yPercent": 75.5,
+          "fontSizePx": 44,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000",
+          "backgroundColor": null
         },
         {
           "text": "6位",
-          "xPercent": 15,
-          "yPercent": 90
+          "xPercent": 17,
+          "yPercent": 87,
+          "fontSizePx": 44,
+          "color": "#FFFFFF",
+          "strokeColor": "#000000",
+          "backgroundColor": null
         }
       ],
       "clips": [
@@ -486,7 +510,7 @@
           "emphasisWords": null,
           "emphasisColor": null,
           "zoom": null,
-          "overlays": null,
+          "overlays": [],
           "sfx": null,
           "narration": null
         },
@@ -501,13 +525,31 @@
           "overlays": [
             {
               "text": "八重歯",
-              "xPercent": 75,
-              "yPercent": 80,
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 7,
+              "xPercent": 66,
+              "yPercent": 87,
+              "fontSizePx": 64,
+              "color": "#000000",
+              "backgroundColor": "#FFFFFF",
               "animation": "pop"
             }
           ],
           "sfx": null,
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "八重歯の口元のアップ写真(歯並び)",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 1,
+              "xPercent": 66,
+              "yPercent": 74,
+              "widthPercent": 50,
+              "cornerRadiusPx": 24,
+              "animation": "pop"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 3,
@@ -528,17 +570,6 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
-            },
-            {
-              "text": "八重歯",
-              "startOffsetSeconds": 0,
-              "xPercent": 15,
-              "yPercent": 43,
-              "fontSizePx": 44,
-              "color": "#FFFFFF",
-              "strokeColor": "#000000",
-              "animation": "pop",
-              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -547,7 +578,20 @@
               "offsetSeconds": 0
             }
           ],
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "八重歯の口元のアップ写真(歯並び)(順位の枠に入れたもの)",
+              "startOffsetSeconds": 0,
+              "xPercent": 25,
+              "yPercent": 37,
+              "widthPercent": 25,
+              "cornerRadiusPx": 16,
+              "animation": "pop",
+              "keepUntilEnd": true
+            }
+          ]
         },
         {
           "sourceStartSeconds": 4.5,
@@ -615,13 +659,31 @@
             },
             {
               "text": "出っ歯",
-              "xPercent": 75,
-              "yPercent": 80,
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 18,
+              "xPercent": 66,
+              "yPercent": 87,
+              "fontSizePx": 64,
+              "color": "#000000",
+              "backgroundColor": "#FFFFFF",
               "animation": "pop"
             }
           ],
           "sfx": null,
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "出っ歯の口元を横から写したアップ写真",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 16.5,
+              "xPercent": 66,
+              "yPercent": 74,
+              "widthPercent": 50,
+              "cornerRadiusPx": 24,
+              "animation": "pop"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 10,
@@ -801,17 +863,6 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
-            },
-            {
-              "text": "出っ歯",
-              "startOffsetSeconds": 0,
-              "xPercent": 15,
-              "yPercent": 56,
-              "fontSizePx": 44,
-              "color": "#FFFFFF",
-              "strokeColor": "#000000",
-              "animation": "pop",
-              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -820,7 +871,20 @@
               "offsetSeconds": 0.5
             }
           ],
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "出っ歯の口元を横から写したアップ写真(順位の枠に入れたもの)",
+              "startOffsetSeconds": 0,
+              "xPercent": 25,
+              "yPercent": 49,
+              "widthPercent": 25,
+              "cornerRadiusPx": 16,
+              "animation": "pop",
+              "keepUntilEnd": true
+            }
+          ]
         },
         {
           "sourceStartSeconds": 27.5,
@@ -833,13 +897,31 @@
           "overlays": [
             {
               "text": "バニーティース",
-              "xPercent": 75,
-              "yPercent": 80,
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 5,
+              "xPercent": 66,
+              "yPercent": 87,
+              "fontSizePx": 64,
+              "color": "#000000",
+              "backgroundColor": "#FFFFFF",
               "animation": "pop"
             }
           ],
           "sfx": null,
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "前歯2本が大きいバニーティースの口元のアップ写真",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 2.5,
+              "xPercent": 66,
+              "yPercent": 74,
+              "widthPercent": 50,
+              "cornerRadiusPx": 24,
+              "animation": "pop"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 28.5,
@@ -885,17 +967,6 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
-            },
-            {
-              "text": "バニーティース",
-              "startOffsetSeconds": 0,
-              "xPercent": 15,
-              "yPercent": 82,
-              "fontSizePx": 44,
-              "color": "#FFFFFF",
-              "strokeColor": "#000000",
-              "animation": "pop",
-              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -904,7 +975,20 @@
               "offsetSeconds": 0
             }
           ],
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "前歯2本が大きいバニーティースの口元のアップ写真(順位の枠に入れたもの)",
+              "startOffsetSeconds": 0,
+              "xPercent": 25,
+              "yPercent": 72,
+              "widthPercent": 25,
+              "cornerRadiusPx": 16,
+              "animation": "pop",
+              "keepUntilEnd": true
+            }
+          ]
         },
         {
           "sourceStartSeconds": 32.5,
@@ -917,13 +1001,31 @@
           "overlays": [
             {
               "text": "ガミースマイル",
-              "xPercent": 75,
-              "yPercent": 80,
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 7.5,
+              "xPercent": 66,
+              "yPercent": 87,
+              "fontSizePx": 64,
+              "color": "#000000",
+              "backgroundColor": "#FFFFFF",
               "animation": "pop"
             }
           ],
           "sfx": null,
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "笑うと歯ぐきが見えるガミースマイルの口元写真",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 5.5,
+              "xPercent": 66,
+              "yPercent": 74,
+              "widthPercent": 50,
+              "cornerRadiusPx": 24,
+              "animation": "pop"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 33.5,
@@ -974,17 +1076,6 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
-            },
-            {
-              "text": "ガミースマイル",
-              "startOffsetSeconds": 0,
-              "xPercent": 15,
-              "yPercent": 69,
-              "fontSizePx": 44,
-              "color": "#FFFFFF",
-              "strokeColor": "#000000",
-              "animation": "pop",
-              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -993,7 +1084,20 @@
               "offsetSeconds": 0
             }
           ],
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "笑うと歯ぐきが見えるガミースマイルの口元写真(順位の枠に入れたもの)",
+              "startOffsetSeconds": 0,
+              "xPercent": 25,
+              "yPercent": 60.5,
+              "widthPercent": 25,
+              "cornerRadiusPx": 16,
+              "animation": "pop",
+              "keepUntilEnd": true
+            }
+          ]
         },
         {
           "sourceStartSeconds": 40,
@@ -1006,13 +1110,31 @@
           "overlays": [
             {
               "text": "開咬",
-              "xPercent": 75,
-              "yPercent": 80,
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 20,
+              "xPercent": 66,
+              "yPercent": 87,
+              "fontSizePx": 64,
+              "color": "#000000",
+              "backgroundColor": "#FFFFFF",
               "animation": "pop"
             }
           ],
           "sfx": null,
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "前歯が噛み合わない開咬の口元のアップ写真",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 1,
+              "xPercent": 66,
+              "yPercent": 74,
+              "widthPercent": 50,
+              "cornerRadiusPx": 24,
+              "animation": "pop"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 41,
@@ -1033,17 +1155,6 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
-            },
-            {
-              "text": "開咬",
-              "startOffsetSeconds": 0,
-              "xPercent": 15,
-              "yPercent": 30,
-              "fontSizePx": 44,
-              "color": "#FFFFFF",
-              "strokeColor": "#000000",
-              "animation": "pop",
-              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -1052,7 +1163,20 @@
               "offsetSeconds": 0
             }
           ],
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "前歯が噛み合わない開咬の口元のアップ写真(順位の枠に入れたもの)",
+              "startOffsetSeconds": 0,
+              "xPercent": 25,
+              "yPercent": 25,
+              "widthPercent": 25,
+              "cornerRadiusPx": 16,
+              "animation": "pop",
+              "keepUntilEnd": true
+            }
+          ]
         },
         {
           "sourceStartSeconds": 43,
@@ -1194,13 +1318,31 @@
           "overlays": [
             {
               "text": "小さい歯",
-              "xPercent": 75,
-              "yPercent": 80,
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 8.5,
+              "xPercent": 66,
+              "yPercent": 87,
+              "fontSizePx": 64,
+              "color": "#000000",
+              "backgroundColor": "#FFFFFF",
               "animation": "pop"
             }
           ],
           "sfx": null,
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "前歯が小さい歯の口元のアップ写真",
+              "startOffsetSeconds": 0,
+              "durationInSeconds": 7,
+              "xPercent": 66,
+              "yPercent": 74,
+              "widthPercent": 50,
+              "cornerRadiusPx": 24,
+              "animation": "pop"
+            }
+          ]
         },
         {
           "sourceStartSeconds": 61,
@@ -1264,17 +1406,6 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
-            },
-            {
-              "text": "小さい歯",
-              "startOffsetSeconds": 0,
-              "xPercent": 15,
-              "yPercent": 95,
-              "fontSizePx": 44,
-              "color": "#FFFFFF",
-              "strokeColor": "#000000",
-              "animation": "pop",
-              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -1283,7 +1414,20 @@
               "offsetSeconds": 0
             }
           ],
-          "narration": null
+          "narration": null,
+          "images": [
+            {
+              "imageNumber": null,
+              "description": "前歯が小さい歯の口元のアップ写真(順位の枠に入れたもの)",
+              "startOffsetSeconds": 0,
+              "xPercent": 25,
+              "yPercent": 83.5,
+              "widthPercent": 25,
+              "cornerRadiusPx": 16,
+              "animation": "pop",
+              "keepUntilEnd": true
+            }
+          ]
         },
         {
           "sourceStartSeconds": 68.5,

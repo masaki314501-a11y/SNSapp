@@ -11,6 +11,7 @@ import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { isStyleReferencePath, resolveStyleReference } from "@/lib/styleReference";
 import { MAX_STYLE_REFERENCES } from "@/lib/styleReferenceLimits";
 import { findEditTemplate } from "@/lib/editTemplates";
+import { MATERIAL_IMAGE_PATH_PATTERN, MAX_MATERIAL_IMAGES, resolveMaterialImage } from "@/lib/materialImage";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export const runtime = "nodejs";
@@ -30,6 +31,10 @@ const requestSchema = z.object({
     .min(1),
   styleReferencePaths: z.array(z.string().refine(isStyleReferencePath)).max(MAX_STYLE_REFERENCES).default([]),
   templateId: z.string().nullable().optional(),
+  materialImages: z
+    .array(z.object({ path: z.string().regex(MATERIAL_IMAGE_PATH_PATTERN), name: z.string().max(100) }))
+    .max(MAX_MATERIAL_IMAGES)
+    .default([]),
 });
 
 /**
@@ -60,6 +65,10 @@ export async function POST(request: Request) {
   ).filter((reference) => reference !== null);
   // 知らないid(古い画面から送られた等)はテンプレート無しとして扱う。
   const template = findEditTemplate(parsed.data.templateId);
+  // 使える画像も参考スクショと同じく、消えていた分は除いて続行する。
+  const materialImages = (await Promise.all(parsed.data.materialImages.map(resolveMaterialImage))).filter(
+    (image) => image !== null
+  );
 
   const jobId = createAutoEditJob();
 
@@ -70,6 +79,7 @@ export async function POST(request: Request) {
         keepRanges: parsed.data.keepRanges,
         styleReferences,
         template,
+        materialImages,
       });
 
       // 効果音の配置は、書き出し後の動画上での累積開始秒(クリップ尺の合計)を使う。
@@ -91,6 +101,7 @@ export async function POST(request: Request) {
           emphasisColor: clip.emphasisColor,
           zoom: clip.zoom,
           overlays: clip.overlays,
+          images: clip.images,
         });
 
         for (const sfx of clip.sfx) {
@@ -118,6 +129,7 @@ export async function POST(request: Request) {
           hook: plan.hook,
           cta: plan.cta,
           globalOverlays: plan.globalOverlays,
+          globalImages: plan.globalImages,
         },
         segments,
         generatedClips,
@@ -131,5 +143,9 @@ export async function POST(request: Request) {
     }
   });
 
-  return NextResponse.json({ jobId, usedStyleReferenceCount: styleReferences.length });
+  return NextResponse.json({
+    jobId,
+    usedStyleReferenceCount: styleReferences.length,
+    usedMaterialImageCount: materialImages.length,
+  });
 }

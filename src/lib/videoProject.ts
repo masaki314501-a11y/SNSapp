@@ -120,6 +120,11 @@ export type VideoProject = {
   /** 自動編集で選んだテンプレート(editTemplates.tsのid)。nullならおまかせ。 */
   editTemplateId?: string | null;
   /**
+   * 自動編集で使ってよい画像(症例写真・商品写真など)。nameは何の画像か(空ならAIが画像を見て判断する)。
+   * やり直すたびに選び直さなくて済むよう保存しておく。
+   */
+  materialImages?: { path: string; name: string }[];
+  /**
    * カット画面で残した範囲(再生順)。自動編集はこの中から切り出す。自動編集の後はsegmentsが
    * Geminiの切ったクリップに置き換わるため、やり直すたびに範囲が縮んでいかないよう別に持つ。
    */
@@ -181,6 +186,7 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
   styleReferences: raw.styleReferences ?? (raw.styleReference ? [raw.styleReference] : []),
   styleReference: undefined,
   editTemplateId: raw.editTemplateId ?? null,
+  materialImages: raw.materialImages ?? [],
   cutKeepRanges: raw.cutKeepRanges ?? null,
   hook: raw.hook ?? null,
   cta: raw.cta ?? null,

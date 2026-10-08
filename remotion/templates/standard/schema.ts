@@ -36,7 +36,7 @@ export const standardVideoSchema = z.object({
   // 参考投稿によくある「動画の上部にずっと出ているタイトル」など、カットをまたいで表示する文字。
   // startOffsetSeconds/durationInSecondsは動画全体の先頭からの秒数。
   globalOverlays: z.array(textOverlaySchema).max(24).optional().describe("動画全体に重ねる文字(タイトル等)"),
-  globalImages: z.array(imageOverlaySchema).max(12).optional().describe("動画全体に重ねる画像(ロゴ等)"),
+  globalImages: z.array(imageOverlaySchema).max(24).optional().describe("動画全体に重ねる画像(ロゴ等)"),
 });
 
 export type ClipProps = z.infer<typeof clipSchema>;

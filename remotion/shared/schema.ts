@@ -173,7 +173,8 @@ export type ClipZoom = z.infer<typeof clipZoomSchema>;
 export const textOverlaySchema = z.object({
   text: z.string(),
   startOffsetSeconds: z.number().min(0).default(0).describe("カット先頭から何秒後に出すか"),
-  durationInSeconds: z.number().min(0.2).max(30).optional().describe("表示秒数。省略時はカットの終わりまで"),
+  // 動画全体に重ねる文字(globalOverlays)は話題の間ずっと出すことがあるので、カットの上限(30秒)より長く取れるようにする。
+  durationInSeconds: z.number().min(0.2).max(600).optional().describe("表示秒数。省略時はカットの終わりまで"),
   xPercent: z.number().min(0).max(100).default(50).describe("文字の中心の横位置(左端0〜右端100)"),
   yPercent: z.number().min(0).max(100).default(30).describe("文字の中心の縦位置(上端0〜下端100)"),
   fontSizePx: z.number().min(20).max(220).default(80),

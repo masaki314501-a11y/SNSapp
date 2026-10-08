@@ -62,6 +62,13 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
   rotationDegは傾き、startOffsetSeconds/durationInSecondsはクリップ先頭からの表示タイミング。animationは候補から選ぶ。
   途中で出てから動画の最後まで残り続ける文字(ランキングの空枠に、発表のたびに入っていく項目名など)は、
   出始めたクリップのoverlaysに書いてkeepUntilEnd=trueにする(それ以外はnull)。最後まで残る物を書き漏らさないこと。
+  クリップをまたいで出続ける文字(今話している項目名のラベルなど)は、出始めたクリップに書き、
+  durationInSecondsに出ている長さ(秒)を書く(クリップより長くてよい)。同じ文字をクリップごとに書き直さない。
+- images: 素材に無い画像(写真・図・イラスト)が重なっていれば、出始めたクリップに書く。imageNumberはnull、
+  descriptionに何の画像かを具体的に書く(例: 「八重歯の口元のアップ写真」)。xPercent/yPercentは画像の中心、
+  widthPercentは画面幅に対する画像の幅、cornerRadiusPxは角の丸み、startOffsetSecondsはクリップ先頭からの秒、
+  durationInSecondsは出ている長さ(クリップより長くてよい)。最後まで残る画像(ランキングの枠に入った写真など)は
+  keepUntilEnd=true。画像が大きく出てから小さくなって別の場所(枠など)へ移る場合は、別々の2つの画像として書く。
 - globalOverlays: 動画の最初からずっと出ている文字(上部のタイトル帯、ランキングの空枠の「1位」〜など)。秒数は動画の先頭から、最後まで出ているならdurationInSecondsはnull。
 - zoom: 素材より画面が寄っているクリップだけ。scaleは素材に対する倍率、punch=切り替わった瞬間から寄っている /
   slow=クリップの中でゆっくり寄っていく、focusXPercent/focusYPercentは寄っている中心。寄っていなければnull。

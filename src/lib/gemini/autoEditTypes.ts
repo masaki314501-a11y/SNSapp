@@ -42,6 +42,25 @@ const rawOverlaySchema = z.object({
   keepUntilEnd: z.boolean().nullable().optional(),
 });
 
+/**
+ * クリップに重ねる画像。自動編集では、本人が渡した「使える画像」をimageNumber(1始まり)で指定させる。
+ * 正解動画の書き起こしでは元の画像ファイルが無いので、imageNumberはnullにしてdescriptionに何の画像かを書かせる
+ * (自動編集の手本として「どんな画像を、いつ・どこに・どの大きさで出すか」を見せるため)。
+ * 表示の長さがクリップを超える物・最後まで残す物は、文字と同じく全体の画像へサーバー側で移す(autoEditPlan.ts)。
+ */
+const rawImageSchema = z.object({
+  imageNumber: z.number().int().nullable().optional(),
+  description: z.string(),
+  startOffsetSeconds: z.number().nullable().optional(),
+  durationInSeconds: z.number().nullable().optional(),
+  xPercent: z.number().nullable().optional(),
+  yPercent: z.number().nullable().optional(),
+  widthPercent: z.number().nullable().optional(),
+  cornerRadiusPx: z.number().nullable().optional(),
+  animation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
+  keepUntilEnd: z.boolean().nullable().optional(),
+});
+
 const rawClipSchema = z.object({
   /** 元動画上の開始・終了秒。Geminiが本人の動画を見て、使う区間を自由に切り出す。 */
   sourceStartSeconds: z.number(),
@@ -61,6 +80,7 @@ const rawClipSchema = z.object({
     .nullable()
     .optional(),
   overlays: z.array(rawOverlaySchema).nullable().optional(),
+  images: z.array(rawImageSchema).nullable().optional(),
   sfx: z
     .array(
       z.object({
@@ -97,6 +117,7 @@ export const rawAutoEditPlanSchema = z.object({
 
 export type RawAutoEditPlan = z.infer<typeof rawAutoEditPlanSchema>;
 export type RawAutoEditClip = z.infer<typeof rawClipSchema>;
+export type RawAutoEditImage = z.infer<typeof rawImageSchema>;
 
 const nullableString = { type: Type.STRING, nullable: true } as const;
 const nullableNumber = { type: Type.NUMBER, nullable: true } as const;
@@ -118,6 +139,23 @@ const overlayItemSchema = {
     keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
   },
   required: ["text"],
+} as const;
+
+const imageItemSchema = {
+  type: Type.OBJECT,
+  properties: {
+    imageNumber: { type: Type.INTEGER, nullable: true },
+    description: { type: Type.STRING },
+    startOffsetSeconds: nullableNumber,
+    durationInSeconds: nullableNumber,
+    xPercent: nullableNumber,
+    yPercent: nullableNumber,
+    widthPercent: nullableNumber,
+    cornerRadiusPx: nullableNumber,
+    animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
+    keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
+  },
+  required: ["description"],
 } as const;
 
 /**
@@ -176,6 +214,7 @@ export const autoEditResponseSchema = {
             required: ["scale"],
           },
           overlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
+          images: { type: Type.ARRAY, nullable: true, items: imageItemSchema },
           sfx: {
             type: Type.ARRAY,
             nullable: true,
@@ -200,6 +239,7 @@ export const autoEditResponseSchema = {
           "emphasisWords",
           "emphasisColor",
           "overlays",
+          "images",
           "zoom",
           "sfx",
           "narration",

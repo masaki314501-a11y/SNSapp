@@ -6,12 +6,14 @@ import {
   CAPTION_POSITION_OPTIONS,
   CAPTION_STYLE_OPTIONS,
   clipZoomSchema,
+  imageOverlaySchema,
   textOverlaySchema,
   type CaptionAnimation,
   type CaptionFontFamily,
   type CaptionPosition,
   type CaptionStyle,
   type ClipZoom,
+  type ImageOverlay,
   type TextOverlay,
 } from "@video/shared/schema";
 import { MAX_CLIPS } from "@video/templates/standard/schema";
@@ -22,8 +24,14 @@ import { waitForGeminiFileActive } from "./geminiFiles";
 import { loadEditFewShotContext } from "./editExamplesStore";
 import { selectEditExamples } from "./editExampleSelection";
 import { ensureEditExampleBreakdowns } from "./editExampleBreakdown";
-import { autoEditResponseSchema, rawAutoEditPlanSchema, type RawAutoEditClip } from "./autoEditTypes";
+import {
+  autoEditResponseSchema,
+  rawAutoEditPlanSchema,
+  type RawAutoEditClip,
+  type RawAutoEditImage,
+} from "./autoEditTypes";
 import type { EditTemplate } from "@/lib/editTemplates";
+import type { ResolvedMaterialImage } from "@/lib/materialImage";
 
 /**
  * 自動編集は「どこを切り、どこで寄り、何を画面に出すか」という演出判断そのものなので、
@@ -43,8 +51,10 @@ const MIN_CLIP_SECONDS = 0.3;
 const MAX_CLIP_SECONDS = 30;
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
-/** 1クリップ・動画全体に置ける強調テキストの数。描画側のスキーマ(remotionのschema.ts)の上限に合わせる。 */
+/** 1クリップ・動画全体に置ける強調テキスト・画像の数。描画側のスキーマ(remotionのschema.ts)の上限に合わせる。 */
 const MAX_CLIP_OVERLAYS = 20;
+const MAX_CLIP_IMAGES = 20;
+const MAX_GLOBAL_IMAGES = 24;
 /** 自動編集で寄る倍率の上限。 */
 const MAX_AUTO_ZOOM_SCALE = 1.35;
 /** ランキングの空枠(6個)と、そこを埋める項目名(6個)、タイトルが同時に置けるだけの数。描画側の上限と合わせる。 */
@@ -58,6 +68,8 @@ export type AutoEditPlanInput = {
   styleReferences: { absolutePath: string; mimeType: string; kind: "image" | "video" }[];
   /** 自動編集の画面で選んだテンプレート(よく見るバズ編集の型)。nullならおまかせ。 */
   template: EditTemplate | null;
+  /** 本人が渡した「使える画像」(症例写真・商品写真など)。番号(1始まり)で指定させて動画に重ねる。 */
+  materialImages: ResolvedMaterialImage[];
 };
 
 export type AutoEditClipPlan = {
@@ -70,6 +82,7 @@ export type AutoEditClipPlan = {
   emphasisColor?: string;
   zoom?: ClipZoom;
   overlays?: TextOverlay[];
+  images?: ImageOverlay[];
   sfx: { presetId: string; offsetSeconds: number }[];
 };
 
@@ -86,6 +99,8 @@ export type AutoEditPlan = {
   cta: { text: string } | null;
   /** 動画全体に重ね続ける文字(上部のタイトル等)。秒数は動画全体の先頭から。 */
   globalOverlays: TextOverlay[];
+  /** 動画全体に重ねる画像(ランキングの枠に入れて最後まで残す写真、話題の間ずっと出す写真など)。 */
+  globalImages: ImageOverlay[];
   clips: AutoEditClipPlan[];
 };
 
@@ -125,6 +140,20 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
       : "3. 編集例は今回ありません。",
     "4. 最後に添付した動画が、今回あなたが編集する本人の動画です。テロップ・タイトル・強調テキストなど画面に出す言葉は、すべてこの動画で本人が話している内容から作ること。",
   ].join("\n");
+
+  const materialImageCount = input.materialImages.length;
+  const imageSection =
+    materialImageCount > 0
+      ? `4-2. images(画像): 本人の動画の直前に添付した「使える画像」(${materialImageCount}枚)だけを使える。imageNumberでその番号を指定し、
+   descriptionに何の画像かを書く。名前の無い画像は、画像を見て何が写っているかを判断する。
+   - 本人がその物(症状・商品・場所など)の話を始めたクリップに、顔やテロップと重ならない所へ大きく出す(widthPercent 40〜60)。
+     その話の間ずっと出すなら、出し始めるクリップに置いてdurationInSecondsをその話の長さ(秒)にする(クリップより長くてよい)。
+   - ランキングの枠をずっと出しているなら、順位が発表されたクリップで、その順位の枠の位置・大きさに合わせて同じ画像を置き、
+     keepUntilEnd=trueにして枠を画像で埋めていく。話の間出していた大きい画像は、そこで終わるようにdurationInSecondsを決める。
+   - 話の内容に合う画像が無い場面には出さない。同じ画像を関係ない話に使い回さない。
+   位置(xPercent/yPercent、画像の中心)・幅(widthPercent、画面幅に対する割合)・角の丸み(cornerRadiusPx)・出すタイミングは自由。`
+      : `4-2. images(画像): 使える画像は今回ありません。imagesは空にする。編集例の書き起こしに画像が出てきても、
+   その役割は文字で代わりにする(ランキングの枠は、順位が発表されたクリップで項目名の文字をkeepUntilEnd=trueで置いて埋める)。`;
 
   const templateSection = input.template
     ? `
@@ -171,16 +200,20 @@ ${keepRangesList}
    - クリップ数は最大${MAX_CLIPS}個
 3. globalOverlays: 1で読み取った「ずっと画面に置いてある物」のうち、この動画にも必要な物を、同じ位置(左上なら左上)・
    同じ見た目で再現する(4の「最後まで残す物」と合わせて最大${MAX_GLOBAL_OVERLAYS}個)。参考スクショの上部に動画のテーマを表す
-   タイトルが常に出ているなら、文言は真似せず、この動画の内容に合わせたタイトルを作る。何の動画か映像だけで十分わかるなら無くてよい。1行ごとに別要素にして色を変えてもよい。画像やアイコンは用意できないので、
-   近い絵文字や短い文字で置き換える。項目はoverlaysと同じ(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで表示)。
+   タイトルが常に出ているなら、文言は真似せず、この動画の内容に合わせたタイトルを作る。何の動画か映像だけで十分わかるなら無くてよい。1行ごとに別要素にして色を変えてもよい。画像は4-2の「使える画像」だけ置ける。
+   それ以外のアイコンや図は、近い意味の短い文字で置き換える。項目はoverlaysと同じ(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで表示)。
 4. overlays(物): 参考スクショで一時的に出ている物(矢印・ラベル・アイコン等)は、本人の動画にも同じ役割の場面がある
    クリップにだけ、同じ位置で置く。
    出てから動画の最後まで残る物は、出し始めるクリップに置いてkeepUntilEnd=trueにする(残す以外の物はnull)。
-   特にランキングで「1位」〜「〇位」の空の枠をずっと出すなら、順位が発表されたクリップで、その順位の枠の
-   すぐ横(同じyPercent)に項目名をkeepUntilEnd=trueで置き、発表のたびに枠を埋めていく。空の枠を出したまま埋めないのは不可。
+   話題の間ずっと出しておく物(今話している項目名のラベルなど)は、出し始めるクリップに置いてdurationInSecondsを
+   その話題の長さ(秒)にする(クリップより長くてよい)。
+   特にランキングで「1位」〜「〇位」の空の枠をずっと出すなら、順位が発表されたクリップで、その順位の枠を
+   keepUntilEnd=trueの物で埋め、発表のたびに埋めていく(使える画像があれば4-2のとおり画像で、無ければ枠の中か
+   すぐ横に項目名の文字で)。空の枠を出したまま埋めないのは不可。
    文言・位置(xPercent/yPercent、文字の中心)・大きさ(fontSizePx、20〜220)・色・縁取り色・帯の色・傾き(rotationDeg)・
    出すタイミング(クリップ先頭からの秒)はすべて自由。animationは候補から選ぶ:
 ${captionAnimationHints}
+${imageSection}
 
 ### 手順② テロップ
 5. speech: そのクリップで本人が話している言葉をそのまま書き起こす(テロップになる)。
@@ -338,6 +371,63 @@ const normalizeOverlays = (
   return overlays.length > 0 ? overlays.slice(0, maxCount) : undefined;
 };
 
+/** Geminiが置いた画像を、使える画像の番号から実際のファイルに結び付け、描画側のスキーマに合わせて丸め込む。 */
+const normalizeImages = (
+  rawImages: RawAutoEditImage[] | null | undefined,
+  clipDuration: number,
+  maxCount: number,
+  materialImages: ResolvedMaterialImage[]
+): ImageOverlay[] | undefined => {
+  const images: ImageOverlay[] = [];
+  for (const raw of rawImages ?? []) {
+    // 書き起こしの手本と違い、自動編集では渡された画像しか置けない(番号が無い・範囲外の物は捨てる)。
+    const material = raw.imageNumber != null ? materialImages[raw.imageNumber - 1] : undefined;
+    if (!material) continue;
+    const startOffsetSeconds = clamp(raw.startOffsetSeconds ?? 0, 0, Math.max(0, clipDuration - 0.2));
+    const parsed = imageOverlaySchema.safeParse({
+      src: material.path,
+      startOffsetSeconds,
+      durationInSeconds:
+        raw.durationInSeconds != null
+          ? clamp(raw.durationInSeconds, 0.2, Math.max(0.2, clipDuration - startOffsetSeconds))
+          : undefined,
+      xPercent: clamp(raw.xPercent ?? 50, 0, 100),
+      yPercent: clamp(raw.yPercent ?? 50, 0, 100),
+      widthPercent: clamp(raw.widthPercent ?? 50, 5, 100),
+      cornerRadiusPx: clamp(raw.cornerRadiusPx ?? 0, 0, 200),
+      animation: raw.animation ?? "pop",
+    });
+    if (parsed.success) images.push(parsed.data);
+  }
+  return images.length > 0 ? images.slice(0, maxCount) : undefined;
+};
+
+/**
+ * クリップに置かれた文字・画像のうち、クリップの外まで出し続ける物(最後まで残す物、話題の間ずっと出す物)か。
+ * クリップの文字・画像はそのクリップの間しか出せないので、こういう物は全体の文字・画像に移す。
+ */
+const outlivesClip = (
+  item: { keepUntilEnd?: boolean | null; startOffsetSeconds?: number | null; durationInSeconds?: number | null },
+  clipDuration: number
+): boolean =>
+  Boolean(item.keepUntilEnd) ||
+  (item.durationInSeconds != null && (item.startOffsetSeconds ?? 0) + item.durationInSeconds > clipDuration + 0.05);
+
+/**
+ * クリップ先頭からの秒数で書かれた文字・画像を、完成動画の先頭からの秒数に直す。
+ * 動画全体の秒数をGeminiに数えさせるとずれるので、出し始めるクリップに置かせたまま、ここで計算する。
+ */
+const toWholeVideoTiming = <T extends { keepUntilEnd?: boolean | null; startOffsetSeconds?: number | null; durationInSeconds?: number | null }>(
+  item: T,
+  clipOutputStart: number,
+  clipDuration: number
+): T => ({
+  ...item,
+  startOffsetSeconds: clipOutputStart + clamp(item.startOffsetSeconds ?? 0, 0, Math.max(0, clipDuration - 0.2)),
+  // nullにすると描画側で動画の最後まで出す
+  durationInSeconds: item.keepUntilEnd ? null : item.durationInSeconds,
+});
+
 const normalizeZoom = (clip: RawAutoEditClip): ClipZoom | undefined => {
   if (!clip.zoom || clip.zoom.scale <= 1.001) return undefined;
   const parsed = clipZoomSchema.safeParse({
@@ -430,11 +520,26 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     uploadedFileNames.push(...fewShot.uploadedFileNames);
     contents.push(...fewShot.contents);
 
-    // 3. 本人の動画+依頼文。
+    // 3. 使える画像(あれば)+本人の動画+依頼文。画像は何が写っているか分かれば足りるので、中くらいの解像度で渡す。
+    const materialImageParts: Part[] = [];
+    if (input.materialImages.length > 0) {
+      materialImageParts.push({
+        text: `【使える画像】(${input.materialImages.length}枚。imagesではこの番号で指定する)`,
+      });
+      for (const [index, image] of input.materialImages.entries()) {
+        materialImageParts.push({
+          text: `画像${index + 1}: ${image.name || "(名前なし。何が写っているかは画像を見て判断する)"}`,
+        });
+        materialImageParts.push({
+          inlineData: { mimeType: image.mimeType, data: (await readFile(image.absolutePath)).toString("base64") },
+          mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM },
+        });
+      }
+    }
     const prompt = buildPrompt(input, fewShot.contents.length > 0);
     contents.push({
       role: "user",
-      parts: [{ text: "【今回編集する本人の動画】" }, videoPart, { text: prompt }],
+      parts: [...materialImageParts, { text: "【今回編集する本人の動画】" }, videoPart, { text: prompt }],
     });
 
     let lastError: unknown;
@@ -471,24 +576,23 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
         }
 
         const clips: AutoEditClipPlan[] = [];
-        // 「最後まで残す」印の付いた強調テキスト。出すクリップの完成動画上の開始秒に足して、全体の文字へ移す。
-        const keptUntilEnd: NonNullable<RawAutoEditClip["overlays"]> = [];
+        // クリップの外まで出し続ける文字・画像(最後まで残す物、話題の間ずっと出す物)。
+        // 出すクリップの完成動画上の開始秒に足して、全体の文字・画像へ移す。
+        const liftedOverlays: NonNullable<RawAutoEditClip["overlays"]> = [];
+        const liftedImages: RawAutoEditImage[] = [];
         let outputStartSeconds = 0;
         for (const raw of parsed.data.clips) {
           if (clips.length >= MAX_CLIPS) break;
           const fitted = fitClipToKeepRanges(raw, input.keepRanges);
           if (!fitted) continue;
+          const clipDuration = fitted.durationInSeconds;
           for (const overlay of raw.overlays ?? []) {
-            if (!overlay.keepUntilEnd) continue;
-            keptUntilEnd.push({
-              ...overlay,
-              startOffsetSeconds:
-                outputStartSeconds + clamp(overlay.startOffsetSeconds ?? 0, 0, Math.max(0, fitted.durationInSeconds - 0.2)),
-              // 省略すると描画側で動画の最後まで出す
-              durationInSeconds: null,
-            });
+            if (outlivesClip(overlay, clipDuration)) liftedOverlays.push(toWholeVideoTiming(overlay, outputStartSeconds, clipDuration));
           }
-          outputStartSeconds += fitted.durationInSeconds;
+          for (const image of raw.images ?? []) {
+            if (outlivesClip(image, clipDuration)) liftedImages.push(toWholeVideoTiming(image, outputStartSeconds, clipDuration));
+          }
+          outputStartSeconds += clipDuration;
           const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
           clips.push({
             ...fitted,
@@ -499,9 +603,15 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
             emphasisColor: hexOrUndefined(raw.emphasisColor),
             zoom: normalizeZoom(raw),
             overlays: normalizeOverlays(
-              raw.overlays?.filter((overlay) => !overlay.keepUntilEnd),
-              fitted.durationInSeconds,
+              raw.overlays?.filter((overlay) => !outlivesClip(overlay, clipDuration)),
+              clipDuration,
               MAX_CLIP_OVERLAYS
+            ),
+            images: normalizeImages(
+              raw.images?.filter((image) => !outlivesClip(image, clipDuration)),
+              clipDuration,
+              MAX_CLIP_IMAGES,
+              input.materialImages
             ),
             sfx: (raw.sfx ?? []).map((s) => ({
               presetId: s.presetId,
@@ -531,10 +641,11 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
             : null,
           cta: parsed.data.cta && tidyLineBreaks(parsed.data.cta.text) ? { text: tidyLineBreaks(parsed.data.cta.text) } : null,
           globalOverlays: normalizeOverlays(
-            [...(parsed.data.globalOverlays ?? []), ...keptUntilEnd],
+            [...(parsed.data.globalOverlays ?? []), ...liftedOverlays],
             outputStartSeconds,
             MAX_GLOBAL_OVERLAYS
           ) ?? [],
+          globalImages: normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, input.materialImages) ?? [],
           clips,
         };
       } catch (error) {

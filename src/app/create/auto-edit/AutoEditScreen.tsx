@@ -7,6 +7,7 @@ import { useAutoEditJob } from "../useAutoEditJob";
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
+import { MaterialImagesPanel, type MaterialImage } from "./MaterialImagesPanel";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -67,6 +68,7 @@ export const AutoEditScreen: React.FC = () => {
       keepRanges,
       styleReferencePaths: (project.styleReferences ?? []).map((reference) => reference.path),
       templateId,
+      materialImages: project.materialImages ?? [],
     });
   };
 
@@ -86,6 +88,7 @@ export const AutoEditScreen: React.FC = () => {
       hook: plan.hook,
       cta: plan.cta,
       globalOverlays: plan.globalOverlays,
+      globalImages: plan.globalImages,
       // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });
@@ -106,6 +109,15 @@ export const AutoEditScreen: React.FC = () => {
     setProject(next);
     saveProject(next);
   };
+
+  const changeMaterialImages = (materialImages: MaterialImage[]) => {
+    // やり直すたびに選び直さなくて済むよう、変えた時点で保存する。
+    const next = { ...project, materialImages };
+    setProject(next);
+    saveProject(next);
+  };
+
+  const materialImageCount = project.materialImages?.length ?? 0;
 
   return (
     <>
@@ -178,6 +190,12 @@ export const AutoEditScreen: React.FC = () => {
           </div>
         </div>
 
+        <MaterialImagesPanel
+          images={project.materialImages ?? []}
+          onChange={changeMaterialImages}
+          disabled={isProcessing}
+        />
+
         {isProcessing ? (
           <div className="panel flex flex-col gap-1 p-4">
             <span className="text-sm font-bold">AIが編集中…</span>
@@ -187,6 +205,12 @@ export const AutoEditScreen: React.FC = () => {
                   ? "見た目の手本がサーバー上に見つからなかったため、今回は手本無しで編集しています"
                   : `見た目の手本${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
                 (見た目の手本の画面からもう一度選んでください)
+              </span>
+            ) : null}
+            {autoEditState.usedMaterialImageCount !== null && autoEditState.usedMaterialImageCount < materialImageCount ? (
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                使う画像{materialImageCount}枚のうち{materialImageCount - autoEditState.usedMaterialImageCount}
+                枚がサーバー上に見つからなかったため、残りで編集しています(消えた画像は✕で外して選び直してください)
               </span>
             ) : null}
           </div>
@@ -223,6 +247,12 @@ export const AutoEditScreen: React.FC = () => {
               <li>寄り(ズーム): {autoEditState.segments.filter((s) => s.zoom).length}か所</li>
               <li>
                 強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
+              </li>
+              <li>
+                画像:{" "}
+                {autoEditState.segments.reduce((sum, s) => sum + (s.images?.length ?? 0), 0) +
+                  autoEditState.plan.globalImages.length}
+                か所
               </li>
               <li>
                 効果音: {autoEditState.generatedClips.length}個
