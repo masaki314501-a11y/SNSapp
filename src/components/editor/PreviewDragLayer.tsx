@@ -184,7 +184,11 @@ export const PreviewDragLayer: React.FC<Props> = ({
                       padding: (overlay as TextOverlay).backgroundColor ? "0.12em 0.4em" : undefined,
                     }}
                   >
-                    {(overlay as TextOverlay).text}
+                    {(textLayout?.lines ?? [(overlay as TextOverlay).text]).map((line, index) => (
+                      <span key={index} style={{ display: "block", whiteSpace: "nowrap" }}>
+                        {line}
+                      </span>
+                    ))}
                   </span>
                 )}
               </div>

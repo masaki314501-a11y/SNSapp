@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
 import { estimateOverlayBox } from "@video/shared/textWrap";
-import { fillMissingRankImages, finalizeAutoEditPlan, similarityToExamples } from "./autoEditPlan";
+import { fillMissingRankImages, finalizeAutoEditPlan, similarityToExamples, verifyComparisonMarks } from "./autoEditPlan";
 import type { RawAutoEditPlan } from "./autoEditTypes";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
 
@@ -343,5 +343,103 @@ describe("ずっと出る文字との重なり", () => {
       input
     );
     expect(plan.clips[0].overlays![0]).toMatchObject({ xPercent: 50, yPercent: 60 });
+  });
+});
+
+describe("比べる動画の〇印", () => {
+  const fakeAi = (answer: unknown) =>
+    ({ models: { generateContent: async () => ({ text: JSON.stringify(answer) }) } }) as unknown as GoogleGenAI;
+  const plan = basePlan(
+    [
+      { sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "保証は日本が安心", shapes: [{ kind: "circle", xPercent: 72, yPercent: 75, widthPercent: 30, borderColor: "#FF0000" }] },
+      { sourceStartSeconds: 2, sourceEndSeconds: 4, speech: "技術はどうかな", shapes: [{ kind: "circle", xPercent: 28, yPercent: 75, widthPercent: 30, borderColor: "#FF0000" }] },
+    ],
+    {
+      globalShapes: [28, 72].map((x) => ({ xPercent: x, yPercent: 75, widthPercent: 40, heightPercent: 22, fillColor: "#FFFFFF" })),
+      globalOverlays: [
+        { text: "日本", xPercent: 28, yPercent: 83 },
+        { text: "韓国", xPercent: 72, yPercent: 83 },
+      ],
+    }
+  );
+
+  it("話し手が良いと言った側のカードへ〇を動かし、どちらとも言っていない〇は外す", async () => {
+    const verified = await verifyComparisonMarks(
+      fakeAi({ items: [{ mark: 0, side: "日本" }, { mark: 1, side: null }] }),
+      plan
+    );
+    expect(verified.clips[0].shapes?.[0]).toMatchObject({ xPercent: 28, yPercent: 75 });
+    expect(verified.clips[1].shapes).toEqual([]);
+  });
+
+  it("同じ側の〇が少しだけ消えてまた出る時は、1つにつなげる", async () => {
+    const result = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          { sourceStartSeconds: 0, sourceEndSeconds: 2, shapes: [{ kind: "circle", xPercent: 72, yPercent: 75, borderColor: "#FF0000", durationInSeconds: 2 }] },
+          { sourceStartSeconds: 2, sourceEndSeconds: 3 },
+          { sourceStartSeconds: 3, sourceEndSeconds: 5, shapes: [{ kind: "circle", xPercent: 72, yPercent: 75, borderColor: "#FF0000", durationInSeconds: 2 }] },
+        ]
+      ),
+      input
+    );
+    const circles = result.globalShapes.filter((shape) => shape.kind === "circle");
+    expect(circles).toHaveLength(1);
+    expect(circles[0]).toMatchObject({ startOffsetSeconds: 0, durationInSeconds: 5 });
+  });
+});
+
+describe("ずっと出す画像と、ずっと出る文字", () => {
+  it("枠に入れた画像が「1位」の文字に重なるなら、文字の無い側へ画像を切り詰める", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          {
+            sourceStartSeconds: 0,
+            sourceEndSeconds: 4,
+            images: [{ imageNumber: 1, description: "1位", keepUntilEnd: true, xPercent: 24, yPercent: 25, widthPercent: 26, heightPercent: 10 }],
+          },
+        ],
+        { globalOverlays: [{ text: "1位", xPercent: 17, yPercent: 28.5, fontSizePx: 46 }] }
+      ),
+      input
+    );
+    const image = plan.globalImages[0];
+    const label = estimateOverlayBox(plan.globalOverlays.find((o) => o.text === "1位")!);
+    const imageBottom = image.yPercent + image.heightPercent! / 2;
+    const imageLeft = image.xPercent - image.widthPercent / 2;
+    expect(imageBottom <= label.top || imageLeft >= label.right).toBe(true);
+  });
+});
+
+describe("文字の空白", () => {
+  it("日本語の間に入った空白は消す", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "韓国の先生を全員 知っている", overlays: [{ text: "Top 3 の 理由" }] }]),
+      input
+    );
+    expect(plan.clips[0].speechText).toBe("韓国の先生を全員知っている");
+    expect(plan.clips[0].overlays?.[0].text).toBe("Top 3 の理由");
+  });
+});
+
+describe("長い文の置き場所", () => {
+  it("横に長すぎて空いている所に入らない文は、短く折り返し直して、左の枠に重ならない所へ置く", async () => {
+    const boxes = [25, 37, 49, 60, 72, 83].map((y) => ({ xPercent: 24, yPercent: y, widthPercent: 26, heightPercent: 10, borderColor: "#000000" }));
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          {
+            sourceStartSeconds: 0,
+            sourceEndSeconds: 3,
+            overlays: [{ text: "歯に関して気になる方はプロフィールの予約リンクへ！", xPercent: 66, yPercent: 56, fontSizePx: 70 }],
+          },
+        ],
+        { globalShapes: boxes }
+      ),
+      input
+    );
+    const placed = estimateOverlayBox(plan.clips[0].overlays![0]);
+    expect(placed.left).toBeGreaterThan(37);
   });
 });

@@ -25,7 +25,7 @@ import {
 } from "@video/shared/schema";
 import { MAX_CLIPS } from "@video/templates/standard/schema";
 import { VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
-import { estimateOverlayBox, type BoxPercent } from "@video/shared/textWrap";
+import { breakIntoLines, estimateOverlayBox, type BoxPercent } from "@video/shared/textWrap";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { runWithGeminiRateLimit, type GeminiRateLimitLane } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
@@ -190,7 +190,8 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
   const generateLine = canGenerate
     ? `使える画像に合う物が無いが、画像があると伝わりやすくなる場面(ランキングの各項目、話している物の見た目など)は、
    AIに画像を作らせてよい。imageNumberをnullにし、descriptionに描いてほしい内容を具体的に書き(何を・どの向きから・
-   どこが特徴か。文字は入れない前提で)、nameにその画像の短い名前を付ける。同じ画像を2回出す(大きく出す→枠に入れる)
+   どこが特徴か。文字は入れない前提で。「バニーティース」のような比喩の名前はそのまま書かず、「上の前歯2本が
+   ほかの歯より大きく長い口元」のように見た目で書く)、nameにその画像の短い名前を付ける。同じ画像を2回出す(大きく出す→枠に入れる)
    ときは、nameとdescriptionを同じにする。作れるのは最大${MAX_GENERATED_IMAGES}種類(name単位)まで。
    画像を作るなら、generatedImageStyleで画風を選ぶ: 医療・歯科・美容・健康・薬・体の話はillustration(図解風イラスト)必須。
    作った画像を本物の症例写真のように見せると誤解を招くため。それ以外(料理・商品・場所など)はphoto(写真風)でもよい。
@@ -276,6 +277,7 @@ ${keepRangesList}
 4-1. shapes(図形): 参考が、結論の出た所で勝った方・おすすめの方に〇印などの図形を重ねているなら、結論を言ったクリップに置く。
    位置・大きさ・線の太さ・色は参考と同じにし、durationInSecondsは次の項目の話が始まるまでの長さにする(クリップより長くてよい)。
    kind・線の色などの項目は1-3と同じ。結論がはっきりしない項目(どちらとも言えない)には置かない。
+   〇をどちらの側に付けるかは、本人の動画で話し手が良いと言った側で決める(手本の〇の位置は真似しない)。
    特にランキングで「1位」〜「〇位」の空の枠をずっと出すなら、順位が発表されたクリップで、その順位の枠を
    keepUntilEnd=trueの物で埋め、発表のたびに埋めていく(使える画像があれば4-2のとおり画像で、無ければ枠の中か
    すぐ横に項目名の文字で)。埋める物には必ずslotRank(何位の枠か)を書く。空の枠を出したまま埋めないのは不可。
@@ -385,6 +387,8 @@ const tidyLineBreaks = (text: string): string => {
     // Geminiは改行を「\n」の2文字のまま書いてくることがあり、そのまま画面に「\n」と出ていた。
     .replace(/\\n/g, "\n")
     .replace(/\r\n?/g, "\n")
+    // 日本語の間に入った空白(「全員 知っている」)は、画面で変な隙間・変な改行になるので消す
+    .replace(/([^\x00-\x7F])[ \u3000]+(?=[^\x00-\x7F])/g, "$1")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
@@ -493,8 +497,11 @@ const normalizeOverlays = (
 /** Geminiが置いた画像を、実際のファイル(使える画像 or AIが作った画像)に結び付ける。結び付けられなければundefined。 */
 type ImageSourceResolver = (raw: RawAutoEditImage) => string | undefined;
 
-/** ランキングの枠に入れる画像か(何位の枠か、または最後まで残す画像)。 */
-const isSlotImage = (image: RawAutoEditImage): boolean => image.slotRank != null || Boolean(image.keepUntilEnd);
+/**
+ * ランキングの枠に入れる画像か(何位の枠かが書いてある画像)。最後まで出すだけの画像(比べる動画のカードの国旗など)は
+ * 含めない(含めていた頃は、使い回す元の画像が無いので作られず、国旗が消えていた)。
+ */
+const isSlotImage = (image: RawAutoEditImage): boolean => image.slotRank != null;
 
 /** AIに作らせる画像の目印。同じ画像を2回出す時は同じnameを付けさせているので、nameで1枚にまとめる。 */
 const generatedImageKey = (raw: RawAutoEditImage): string => raw.name?.trim() || raw.description.trim();
@@ -842,11 +849,46 @@ const OVERLAP_TOLERANCE_Y = 0.5;
 /** 文字が画面の上下からはみ出さないための余白(%)。 */
 const SCREEN_MARGIN_PERCENT = 2;
 
-const boxesOverlap = (a: TimedBox, b: TimedBox): boolean =>
+const boxesOverlap = (a: TimedBox, b: TimedBox, gapPercent = 0): boolean =>
   a.start < b.end &&
   b.start < a.end &&
-  Math.min(a.right, b.right) - Math.max(a.left, b.left) > OVERLAP_TOLERANCE_X &&
-  Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > OVERLAP_TOLERANCE_Y;
+  Math.min(a.right, b.right) - Math.max(a.left, b.left) > OVERLAP_TOLERANCE_X - gapPercent &&
+  Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > OVERLAP_TOLERANCE_Y - gapPercent;
+
+/** ずらして置く文字と、ほかの物の間に空ける隙間(%)。見積もりの誤差で、ぎりぎりに置いた文字が描くと重なっていたため。 */
+const PLACEMENT_GAP_PERCENT = 0.8;
+
+/**
+ * 画像を、ずっと出る文字に重ならないよう切り詰める(ランキングの枠に入れた写真が「1位」の文字を隠していた)。
+ * 文字のある側を除いた残りのうち一番広い所に、画像を収め直す(高さを決めて枠いっぱいに切り抜くので、絵は歪まない)。
+ */
+const trimImageAwayFromText = (image: ImageOverlay, imageTimes: { start: number; end: number }, texts: TimedBox[]): ImageOverlay => {
+  let current = image;
+  for (const text of texts) {
+    const box = imageBox(current, imageTimes.start, imageTimes.end);
+    if (!boxesOverlap(box, text)) continue;
+    const gap = 0.4;
+    const candidates: BoxPercent[] = [
+      { ...box, bottom: Math.min(box.bottom, text.top - gap) },
+      { ...box, top: Math.max(box.top, text.bottom + gap) },
+      { ...box, right: Math.min(box.right, text.left - gap) },
+      { ...box, left: Math.max(box.left, text.right + gap) },
+    ].filter((candidate) => candidate.right - candidate.left > 2 && candidate.bottom - candidate.top > 1);
+    if (candidates.length === 0) continue;
+    const area = (b: BoxPercent) => ((b.right - b.left) * VIDEO_WIDTH) * ((b.bottom - b.top) * VIDEO_HEIGHT);
+    const best = candidates.reduce((a, b) => (area(b) > area(a) ? b : a));
+    // 元の半分より小さくなるなら、切り詰めずにそのまま(文字の方を動かす方がまし)
+    if (area(best) < area(box) * 0.5) continue;
+    current = {
+      ...current,
+      xPercent: (best.left + best.right) / 2,
+      yPercent: (best.top + best.bottom) / 2,
+      widthPercent: best.right - best.left,
+      heightPercent: best.bottom - best.top,
+    };
+  }
+  return current;
+};
 
 const textBox = (overlay: TextOverlay, start: number, end: number): TimedBox => ({ ...estimateOverlayBox(overlay), start, end });
 
@@ -885,25 +927,37 @@ const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, o
     return (
       box.top >= SCREEN_MARGIN_PERCENT &&
       box.bottom <= 100 - SCREEN_MARGIN_PERCENT &&
-      !obstacles.some((obstacle) => boxesOverlap(box, obstacle))
+      !obstacles.some((obstacle) => boxesOverlap(box, obstacle, PLACEMENT_GAP_PERCENT))
     );
   };
   if (!obstacles.some((obstacle) => boxesOverlap(textBox(overlay, start, end), obstacle))) return overlay;
 
+  // 行の折り返し方の候補: そのまま、または短い幅で折り返し直した物(長い文を、空いている狭い所へ収めるため)
+  const wrapVariants = [
+    { text: overlay.text, cost: 0 },
+    ...[640, 520, 420].map((widthPx, index) => ({
+      text: breakIntoLines(overlay.text, overlay.fontSizePx, widthPx).join("\n"),
+      cost: 4 + index * 2,
+    })),
+  ].filter((variant, index, all) => all.findIndex((other) => other.text === variant.text) === index);
+
   let best: { overlay: TextOverlay; cost: number } | null = null;
-  for (const scale of [1, 0.9, 0.8, 0.7]) {
-    for (let dy = 0; dy <= 45; dy += 0.5) {
-      for (const signY of dy === 0 ? [1] : [1, -1]) {
-        for (const dx of [0, 3, -3, 6, -6, 10, -10, 15, -15, 20, -20]) {
-          const cost = dy + Math.abs(dx) * 1.2 + (1 - scale) * 40;
-          if (best && cost >= best.cost) continue;
-          const candidate: TextOverlay = {
-            ...overlay,
-            fontSizePx: Math.max(20, Math.round(overlay.fontSizePx * scale)),
-            xPercent: clamp(overlay.xPercent + dx, 0, 100),
-            yPercent: clamp(overlay.yPercent + signY * dy, 0, 100),
-          };
-          if (fits(candidate)) best = { overlay: candidate, cost };
+  for (const wrap of wrapVariants) {
+    for (const scale of [1, 0.9, 0.8, 0.7]) {
+      for (let dy = 0; dy <= 45; dy += 0.5) {
+        for (const signY of dy === 0 ? [1] : [1, -1]) {
+          for (const dx of [0, 3, -3, 6, -6, 10, -10, 15, -15, 20, -20, 25, -25]) {
+            const cost = wrap.cost + dy + Math.abs(dx) * 1.2 + (1 - scale) * 40;
+            if (best && cost >= best.cost) continue;
+            const candidate: TextOverlay = {
+              ...overlay,
+              text: wrap.text,
+              fontSizePx: Math.max(20, Math.round(overlay.fontSizePx * scale)),
+              xPercent: clamp(overlay.xPercent + dx, 0, 100),
+              yPercent: clamp(overlay.yPercent + signY * dy, 0, 100),
+            };
+            if (fits(candidate)) best = { overlay: candidate, cost };
+          }
         }
       }
     }
@@ -934,7 +988,7 @@ export const avoidTextOverlaps = (
   globalShapes: ShapeOverlay[],
   globalImages: ImageOverlay[],
   totalSeconds: number
-): { globalOverlays: TextOverlay[]; clips: AutoEditClipPlan[] } => {
+): { globalOverlays: TextOverlay[]; clips: AutoEditClipPlan[]; globalImages: ImageOverlay[] } => {
   const endOf = (item: { startOffsetSeconds: number; durationInSeconds?: number }, fallbackEnd: number) =>
     item.durationInSeconds !== undefined ? item.startOffsetSeconds + item.durationInSeconds : fallbackEnd;
   // 「ずっと出る」は、最後まで出す物か、動画の半分以上出している物
@@ -951,12 +1005,19 @@ export const avoidTextOverlaps = (
     placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
 
+  // ずっと出す画像(ランキングの枠に入れた写真など)は、ずっと出る文字を隠さないよう切り詰める
+  const arrangedImages = globalImages.map((image) =>
+    isPersistent(image)
+      ? trimImageAwayFromText(image, { start: image.startOffsetSeconds, end: endOf(image, totalSeconds) }, placedPersistent)
+      : image
+  );
+
   const obstacles: TimedBox[] = [
     ...placedPersistent,
     ...globalShapes
       .filter((shape) => shape.kind !== "circle")
       .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
-    ...globalImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
+    ...arrangedImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
   ];
   let clipStart = 0;
   const clipTimes = clips.map((clip) => {
@@ -989,7 +1050,7 @@ export const avoidTextOverlaps = (
     });
     return { ...clip, overlays };
   });
-  return { globalOverlays: resultGlobal, clips: resultClips };
+  return { globalOverlays: resultGlobal, clips: resultClips, globalImages: arrangedImages };
 };
 
 /**
@@ -1135,10 +1196,10 @@ export const finalizeAutoEditPlan = async (
   const cta = ctaText && !repeatsShownText(ctaText, endingTexts) ? { text: ctaText } : null;
 
   // 省いた見た目の引き継ぎ(normalizeShapes)は、ずっと出す枠とクリップの〇印のように役割の違う図形の間では行わない。
-  const globalShapes = [
+  const globalShapes = mergeFlickeringMarks([
     ...normalizeShapes(data.globalShapes, outputStartSeconds),
     ...normalizeShapes(liftedShapes, outputStartSeconds),
-  ].slice(0, MAX_GLOBAL_SHAPES);
+  ]).slice(0, MAX_GLOBAL_SHAPES);
   const arranged = avoidTextOverlaps(globalOverlays, clips, globalShapes, globalImages, outputStartSeconds);
 
   const theme = data.theme ?? {};
@@ -1155,7 +1216,7 @@ export const finalizeAutoEditPlan = async (
     hook,
     cta,
     globalOverlays: arranged.globalOverlays,
-    globalImages,
+    globalImages: arranged.globalImages,
     globalShapes,
     showCaptions: Boolean(data.showCaptions),
     framing: normalizeFraming(data.framing),
@@ -1181,14 +1242,16 @@ export const fillMissingRankImages = async (ai: GoogleGenAI, data: RawAutoEditPl
   const rankCount = (data.globalOverlays ?? []).filter((overlay) => rankOfLabel(overlay.text) !== null).length;
   if (rankCount < 2) return data;
   const topics = data.clips.flatMap((clip, clipIndex) =>
-    (clip.images ?? []).filter((image) => !isSlotImage(image)).map((image) => ({ image, clipIndex }))
+    (clip.images ?? []).filter((image) => !isSlotImage(image) && !image.keepUntilEnd).map((image) => ({ image, clipIndex }))
   );
   // 同じ画像を何度も出していても、話題としては1つにまとめる
   const uniqueTopics = topics.filter(
     (topic, index) => topics.findIndex((other) => generatedImageKey(other.image) === generatedImageKey(topic.image)) === index
   );
   const filled = new Set(
-    data.clips.flatMap((clip) => (clip.images ?? []).filter(isSlotImage).map((image) => generatedImageKey(image)))
+    data.clips.flatMap((clip) =>
+      (clip.images ?? []).filter((image) => isSlotImage(image) || image.keepUntilEnd).map((image) => generatedImageKey(image))
+    )
   );
   const missing = uniqueTopics.filter((topic) => !filled.has(generatedImageKey(topic.image)));
   if (missing.length === 0) return data;
@@ -1266,6 +1329,148 @@ ${topicList}`,
     console.warn("[autoEditPlan] 枠の順位の聞き直しに失敗したため、そのまま使います", error);
     return data;
   }
+};
+
+const markAnswerSchema = z.object({
+  items: z.array(z.object({ mark: z.number().int(), side: z.string().nullable() })),
+});
+
+/** ずっと出しているカード(比べる物を並べる箱)と、その中に書いてある名前。 */
+const findComparisonCards = (data: RawAutoEditPlan): { label: string; xPercent: number; yPercent: number }[] => {
+  const persistentTexts = (data.globalOverlays ?? []).filter(
+    (overlay) => overlay.xPercent != null && overlay.yPercent != null && (overlay.durationInSeconds == null || overlay.durationInSeconds > 20)
+  );
+  const cards: { label: string; xPercent: number; yPercent: number }[] = [];
+  // 2つ目以降のカードは大きさを省いて書かれることがあるので、大きさまで書いてあるカードから引き継ぐ
+  const sized = (data.globalShapes ?? []).find((shape) => shape.widthPercent != null && shape.heightPercent != null);
+  for (const shape of data.globalShapes ?? []) {
+    if ((shape.kind ?? "rect") !== "rect" || shape.xPercent == null || shape.yPercent == null) continue;
+    const width = shape.widthPercent ?? sized?.widthPercent ?? 0;
+    const height = shape.heightPercent ?? sized?.heightPercent ?? 0;
+    if (width < 15 || height < 8) continue;
+    const label = persistentTexts.find(
+      (text) =>
+        Math.abs(text.xPercent! - shape.xPercent!) <= width / 2 &&
+        Math.abs(text.yPercent! - shape.yPercent!) <= height / 2 &&
+        rankOfLabel(text.text) === null
+    );
+    if (label) cards.push({ label: label.text.replace(/\n/g, ""), xPercent: shape.xPercent, yPercent: shape.yPercent });
+  }
+  return cards;
+};
+
+/**
+ * 比べる動画で、結論の所に付ける〇印を、話の中身どおりの側に付け直す。Geminiは手本の〇の位置をそのまま真似して、
+ * 話と逆の側(「保証は日本が安心」なのに韓国)に付けることがあったため、〇を付けたクリップごとに、
+ * 書き起こしから「話し手がどちらを良いと言ったか」だけを軽いモデルに聞き直し、その側のカードへ動かす
+ * (どちらとも言っていなければ〇を外す)。失敗しても自動編集は止めない。
+ */
+export const verifyComparisonMarks = async (ai: GoogleGenAI, data: RawAutoEditPlan): Promise<RawAutoEditPlan> => {
+  const cards = findComparisonCards(data);
+  if (cards.length < 2) return data;
+  const marks = data.clips.flatMap((clip, clipIndex) =>
+    (clip.shapes ?? []).map((shape, shapeIndex) => ({ clipIndex, shapeIndex, shape })).filter(({ shape }) => shape.kind === "circle")
+  );
+  if (marks.length === 0) return data;
+
+  const transcript = data.clips.map((clip, index) => `${index}: ${(clip.speech ?? "").replace(/\n/g, "")}`).join("\n");
+  const markList = marks.map((mark, index) => `${index}: クリップ${mark.clipIndex}`).join("\n");
+  const labels = cards.map((card) => card.label);
+  try {
+    const response = await runWithGeminiRateLimit(() =>
+      ai.models.generateContent({
+        model: RANK_FILL_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `「${labels.join("」と「")}」を比べるショート動画の書き起こし(クリップ番号: 話している言葉)です。
+次の各クリップの時点で、話し手が今の項目について「${labels.join("」「")}」のどちらの方が良い(勝ち)と言ったかを答えてください。
+そのクリップの前後の話の流れから判断し、どちらとも言っていない・判断できないならsideをnullにしてください。
+sideは「${labels.join("」「")}」のどれかをそのまま書いてください。
+
+## 書き起こし
+${transcript}
+
+## 確かめるクリップ
+${markList}`,
+              },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              items: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: { mark: { type: Type.INTEGER }, side: { type: Type.STRING, nullable: true } },
+                  required: ["mark", "side"],
+                },
+              },
+            },
+            required: ["items"],
+          },
+        },
+      })
+    );
+    const parsed = markAnswerSchema.safeParse(JSON.parse(response.text ?? "{}"));
+    if (!parsed.success) throw new Error("〇印の答えを読み取れませんでした");
+    const clips = data.clips.map((clip) => ({ ...clip, shapes: clip.shapes ? [...clip.shapes] : clip.shapes }));
+    const removed = new Set<string>();
+    let moved = 0;
+    for (const item of parsed.data.items) {
+      const mark = marks[item.mark];
+      if (!mark) continue;
+      const card = item.side ? cards.find((candidate) => candidate.label === item.side!.trim()) : undefined;
+      if (!card) {
+        removed.add(`${mark.clipIndex}:${mark.shapeIndex}`);
+        continue;
+      }
+      if (mark.shape.xPercent == null || Math.abs(mark.shape.xPercent - card.xPercent) > 10) moved++;
+      clips[mark.clipIndex].shapes![mark.shapeIndex] = { ...mark.shape, xPercent: card.xPercent, yPercent: card.yPercent };
+    }
+    clips.forEach((clip, clipIndex) => {
+      if (clip.shapes) clip.shapes = clip.shapes.filter((_, shapeIndex) => !removed.has(`${clipIndex}:${shapeIndex}`));
+    });
+    console.info(`[autoEditPlan] 〇印${marks.length}個を話の中身で確かめ、${moved}個を反対側へ動かし、${removed.size}個を外しました`);
+    return { ...data, clips };
+  } catch (error) {
+    console.warn("[autoEditPlan] 〇印の確かめ直しに失敗したため、そのまま使います", error);
+    return data;
+  }
+};
+
+/** 同じ場所の〇印が、少しだけ消えてまた出る(ちらつく)時は、1つにつなげる。 */
+const MARK_MERGE_GAP_SECONDS = 3;
+
+const mergeFlickeringMarks = (shapes: ShapeOverlay[]): ShapeOverlay[] => {
+  const circles = shapes.filter((shape) => shape.kind === "circle").sort((a, b) => a.startOffsetSeconds - b.startOffsetSeconds);
+  const merged: ShapeOverlay[] = [];
+  for (const circle of circles) {
+    const previous = merged[merged.length - 1];
+    const previousEnd = previous?.durationInSeconds !== undefined ? previous.startOffsetSeconds + previous.durationInSeconds : Infinity;
+    if (
+      previous &&
+      Math.abs(previous.xPercent - circle.xPercent) < 1 &&
+      Math.abs(previous.yPercent - circle.yPercent) < 1 &&
+      circle.startOffsetSeconds - previousEnd <= MARK_MERGE_GAP_SECONDS
+    ) {
+      const end = circle.durationInSeconds !== undefined ? circle.startOffsetSeconds + circle.durationInSeconds : Infinity;
+      const newEnd = Math.max(previousEnd, end);
+      merged[merged.length - 1] = {
+        ...previous,
+        durationInSeconds: Number.isFinite(newEnd) ? newEnd - previous.startOffsetSeconds : undefined,
+      };
+    } else {
+      merged.push(circle);
+    }
+  }
+  return [...shapes.filter((shape) => shape.kind !== "circle"), ...merged];
 };
 
 /** 一度に作る自動編集の案の数(1か2)。案の数だけ料金がかかる。 */
@@ -1470,7 +1675,10 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
       `[autoEditPlan] ${candidates.length}案の手本との近さ: ${scored.map((s) => s.score.toFixed(2)).join(" / ")} → ${best.score.toFixed(2)}の案を使う`
     );
 
-    const plan = await finalizeAutoEditPlan(await fillMissingRankImages(ai, best.candidate), input);
+    const plan = await finalizeAutoEditPlan(
+      await verifyComparisonMarks(ai, await fillMissingRankImages(ai, best.candidate)),
+      input
+    );
     // Geminiが出した数と、丸め込み後に残った数。形の崩れた要素を捨てすぎていないかをログで追えるようにする。
     console.info(
       `[autoEditPlan] 図形${best.candidate.globalShapes?.length ?? 0}→${plan.globalShapes.length}` +

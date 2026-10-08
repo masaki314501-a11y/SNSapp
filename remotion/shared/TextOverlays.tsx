@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, Easing, Sequence, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { getCaptionAnimationStyle } from "./captionAnimations";
 import type { TextOverlay } from "./schema";
-import { JAPANESE_WRAP_STYLE, resolveOverlayLayout } from "./textWrap";
+import { LINE_STYLE, resolveOverlayLayout } from "./textWrap";
 import { resolveFontFamilyStack } from "./schema";
 import { ensureCaptionFontLoaded } from "./font";
 
@@ -31,6 +31,7 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
     ? { transform: undefined, opacity: undefined, clipPath: undefined, filter: undefined }
     : getCaptionAnimationStyle(overlay.animation, frame, fps);
   const layout = resolveOverlayLayout(overlay);
+  const lines = layout.lines;
   const progress = moveFrom
     ? interpolate(frame, [0, Math.max(1, Math.round(MOVE_SECONDS * fps))], [0, 1], {
         extrapolateLeft: "clamp",
@@ -73,7 +74,6 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
         <span
           lang="ja"
           style={{
-            ...JAPANESE_WRAP_STYLE,
             display: "inline-block",
             clipPath,
             color: overlay.color,
@@ -92,11 +92,15 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
             fontSize: fontSizePx,
             fontWeight: 900,
             lineHeight: 1.2,
-            whiteSpace: "pre-wrap",
             textShadow,
           }}
         >
-          {overlay.text}
+          {/* 改行位置はresolveOverlayLayoutで決めた物を使い、1行ずつ描く(重なりの見積もりとも一致させる) */}
+          {lines.map((line, index) => (
+            <span key={index} style={LINE_STYLE}>
+              {line}
+            </span>
+          ))}
         </span>
       </div>
     </div>

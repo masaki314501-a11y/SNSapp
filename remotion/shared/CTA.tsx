@@ -1,5 +1,5 @@
 import React from "react";
-import { JAPANESE_WRAP_STYLE } from "./textWrap";
+import { LINE_STYLE, breakIntoLines } from "./textWrap";
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
 
 type Props = {
@@ -40,12 +40,15 @@ export const CTA: React.FC<Props> = ({ text, accentColor }) => {
             color: "white",
             fontSize: 48,
             fontWeight: 800,
-            whiteSpace: "pre-wrap",
-            ...JAPANESE_WRAP_STYLE,
           }}
           lang="ja"
         >
-          {text}
+          {/* 左右60pxの余白と、枠の内側の左右48pxずつを除いた幅で改行する */}
+          {breakIntoLines(text, 48, 1080 - 120 - 96 - 8).map((line, index) => (
+            <span key={index} style={LINE_STYLE}>
+              {line}
+            </span>
+          ))}
         </div>
         <div style={{ marginTop: 28, fontSize: 64, color: accentColor }}>↑</div>
       </div>

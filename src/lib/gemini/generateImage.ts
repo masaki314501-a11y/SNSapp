@@ -33,7 +33,7 @@ const STYLE_INSTRUCTIONS: Record<GeneratedImageStyle, string> = {
 const resolveModel = (): string => process.env.GEMINI_IMAGE_MODEL || DEFAULT_MODEL;
 
 /** 指示文(buildPrompt)を変えたら上げる。前の指示で作った画像を使い回さないように。 */
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 
 const cacheKeyFor = (description: string, style: GeneratedImageStyle): string =>
   createHash("sha256").update(`${resolveModel()} v${PROMPT_VERSION} ${style} ${description}`).digest("hex").slice(0, 32);
@@ -50,6 +50,8 @@ const buildPrompt = (description: string, style: GeneratedImageStyle): string =>
 画風: ${STYLE_INSTRUCTIONS[style]}
 - 動画では小さく、数秒しか映らない。描く内容の「普通とどこが違うか」が一目でわかるよう、その特徴を大げさなくらい
   誇張して、画面の真ん中に大きく描く。特徴と関係ない部分は省いて単純にする
+- 名前に動物・物の名前が比喩として入っていても(「バニーティース」=うさぎのような前歯、「出っ歯」等)、
+  その動物や物は描かない。体の部位の話なら、その部位そのものだけを描く
 - 文字・数字・記号・ロゴは一切入れない(動画側で文字を重ねるため)
 - 横長(4:3)の画面いっぱいに、描く内容だけを大きく描く。枠線や余白の飾りは付けない`;
 

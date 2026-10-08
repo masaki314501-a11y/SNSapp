@@ -4,7 +4,7 @@ import { getCaptionAnimationStyle } from "./captionAnimations";
 import { ensureCaptionFontLoaded } from "./font";
 import type { CaptionAnimation, CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "./schema";
 import { CAPTION_FONT_SIZE_SCALE, resolveFontFamilyStack } from "./schema";
-import { JAPANESE_WRAP_STYLE } from "./textWrap";
+import { LINE_STYLE, breakIntoLines } from "./textWrap";
 
 type Props = {
   text: string;
@@ -40,6 +40,11 @@ const splitByEmphasis = (text: string, words: string[]): { text: string; emphasi
 };
 
 const OFFSET_FROM_EDGE = 160;
+/** テロップの左右の余白(px)と、1行の最大幅。 */
+const CAPTION_SIDE_PADDING = 48;
+const CAPTION_MAX_WIDTH_PX = 1080 - CAPTION_SIDE_PADDING * 2;
+/** 強調する語の大きさ(倍)。 */
+const EMPHASIS_SCALE = 1.25;
 
 const POSITION_STYLE: Record<CaptionPosition, React.CSSProperties> = {
   top: { justifyContent: "flex-start", paddingTop: OFFSET_FROM_EDGE, paddingBottom: 0 },
@@ -113,22 +118,32 @@ export const AnimatedCaption: React.FC<Props> = ({
       style={{
         ...POSITION_STYLE[position],
         alignItems: "center",
-        paddingLeft: 48,
-        paddingRight: 48,
+        paddingLeft: CAPTION_SIDE_PADDING,
+        paddingRight: CAPTION_SIDE_PADDING,
       }}
     >
       <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
-        {/* 自動編集が意味の切れ目に入れた改行(「日本の方が\n通いやすい」)はそのまま改行する */}
-        <span lang="ja" style={{ ...textStyle, ...JAPANESE_WRAP_STYLE, whiteSpace: "pre-line", clipPath }}>
-          {splitByEmphasis(text, emphasisWords ?? []).map((part, i) =>
-            part.emphasized ? (
-              <span key={i} style={{ color: emphasisColor, fontSize: "1.25em" }}>
-                {part.text}
-              </span>
-            ) : (
-              <React.Fragment key={i}>{part.text}</React.Fragment>
-            )
-          )}
+        {/* 改行位置はbreakIntoLinesで決め、1行ずつ描く(自動編集が意味の切れ目に入れた改行も守る) */}
+        <span lang="ja" style={{ ...textStyle, clipPath }}>
+          {breakIntoLines(
+            text,
+            Number(textStyle.fontSize),
+            CAPTION_MAX_WIDTH_PX - (captionStyle === "outline" ? 0 : 64),
+            emphasisWords ?? [],
+            EMPHASIS_SCALE
+          ).map((line, lineIndex) => (
+            <span key={lineIndex} style={LINE_STYLE}>
+              {splitByEmphasis(line, emphasisWords ?? []).map((part, i) =>
+                part.emphasized ? (
+                  <span key={i} style={{ color: emphasisColor, fontSize: `${EMPHASIS_SCALE}em` }}>
+                    {part.text}
+                  </span>
+                ) : (
+                  <React.Fragment key={i}>{part.text}</React.Fragment>
+                )
+              )}
+            </span>
+          ))}
         </span>
       </div>
     </AbsoluteFill>
