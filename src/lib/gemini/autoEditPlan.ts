@@ -47,7 +47,8 @@ const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const MAX_CLIP_OVERLAYS = 20;
 /** 自動編集で寄る倍率の上限。 */
 const MAX_AUTO_ZOOM_SCALE = 1.35;
-const MAX_GLOBAL_OVERLAYS = 12;
+/** ランキングの空枠(6個)と、そこを埋める項目名(6個)、タイトルが同時に置けるだけの数。描画側の上限と合わせる。 */
+const MAX_GLOBAL_OVERLAYS = 24;
 
 export type AutoEditPlanInput = {
   video: { absolutePath: string; mimeType: string; durationInSeconds: number };
@@ -169,11 +170,14 @@ ${keepRangesList}
    - 範囲の順番は入れ替えてよい(冒頭に一番強い一言を持ってくる等)。ただし同じ区間を二度使わない
    - クリップ数は最大${MAX_CLIPS}個
 3. globalOverlays: 1で読み取った「ずっと画面に置いてある物」のうち、この動画にも必要な物を、同じ位置(左上なら左上)・
-   同じ見た目で再現する(最大${MAX_GLOBAL_OVERLAYS}個)。参考スクショの上部に動画のテーマを表す
+   同じ見た目で再現する(4の「最後まで残す物」と合わせて最大${MAX_GLOBAL_OVERLAYS}個)。参考スクショの上部に動画のテーマを表す
    タイトルが常に出ているなら、文言は真似せず、この動画の内容に合わせたタイトルを作る。何の動画か映像だけで十分わかるなら無くてよい。1行ごとに別要素にして色を変えてもよい。画像やアイコンは用意できないので、
    近い絵文字や短い文字で置き換える。項目はoverlaysと同じ(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで表示)。
 4. overlays(物): 参考スクショで一時的に出ている物(矢印・ラベル・アイコン等)は、本人の動画にも同じ役割の場面がある
    クリップにだけ、同じ位置で置く。
+   出てから動画の最後まで残る物は、出し始めるクリップに置いてkeepUntilEnd=trueにする(残す以外の物はnull)。
+   特にランキングで「1位」〜「〇位」の空の枠をずっと出すなら、順位が発表されたクリップで、その順位の枠の
+   すぐ横(同じyPercent)に項目名をkeepUntilEnd=trueで置き、発表のたびに枠を埋めていく。空の枠を出したまま埋めないのは不可。
    文言・位置(xPercent/yPercent、文字の中心)・大きさ(fontSizePx、20〜220)・色・縁取り色・帯の色・傾き(rotationDeg)・
    出すタイミング(クリップ先頭からの秒)はすべて自由。animationは候補から選ぶ:
 ${captionAnimationHints}
@@ -467,10 +471,24 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
         }
 
         const clips: AutoEditClipPlan[] = [];
+        // 「最後まで残す」印の付いた強調テキスト。出すクリップの完成動画上の開始秒に足して、全体の文字へ移す。
+        const keptUntilEnd: NonNullable<RawAutoEditClip["overlays"]> = [];
+        let outputStartSeconds = 0;
         for (const raw of parsed.data.clips) {
           if (clips.length >= MAX_CLIPS) break;
           const fitted = fitClipToKeepRanges(raw, input.keepRanges);
           if (!fitted) continue;
+          for (const overlay of raw.overlays ?? []) {
+            if (!overlay.keepUntilEnd) continue;
+            keptUntilEnd.push({
+              ...overlay,
+              startOffsetSeconds:
+                outputStartSeconds + clamp(overlay.startOffsetSeconds ?? 0, 0, Math.max(0, fitted.durationInSeconds - 0.2)),
+              // 省略すると描画側で動画の最後まで出す
+              durationInSeconds: null,
+            });
+          }
+          outputStartSeconds += fitted.durationInSeconds;
           const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
           clips.push({
             ...fitted,
@@ -480,7 +498,11 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
             emphasisWords: emphasisWords.length > 0 ? emphasisWords : undefined,
             emphasisColor: hexOrUndefined(raw.emphasisColor),
             zoom: normalizeZoom(raw),
-            overlays: normalizeOverlays(raw.overlays, fitted.durationInSeconds, MAX_CLIP_OVERLAYS),
+            overlays: normalizeOverlays(
+              raw.overlays?.filter((overlay) => !overlay.keepUntilEnd),
+              fitted.durationInSeconds,
+              MAX_CLIP_OVERLAYS
+            ),
             sfx: (raw.sfx ?? []).map((s) => ({
               presetId: s.presetId,
               offsetSeconds: clamp(s.offsetSeconds ?? 0, 0, Math.max(0, fitted.durationInSeconds - 0.1)),
@@ -509,8 +531,8 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
             : null,
           cta: parsed.data.cta && tidyLineBreaks(parsed.data.cta.text) ? { text: tidyLineBreaks(parsed.data.cta.text) } : null,
           globalOverlays: normalizeOverlays(
-            parsed.data.globalOverlays,
-            clips.reduce((sum, clip) => sum + clip.durationInSeconds, 0),
+            [...(parsed.data.globalOverlays ?? []), ...keptUntilEnd],
+            outputStartSeconds,
             MAX_GLOBAL_OVERLAYS
           ) ?? [],
           clips,

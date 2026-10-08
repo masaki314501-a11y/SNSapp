@@ -60,7 +60,9 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
   文言は画面の通りに書き、改行も画面の通り「\\n」で書く。xPercent/yPercentは文字の中心の位置(0〜100)、
   fontSizePxは横1080pxの画面での文字の高さ、color/strokeColor(縁取り)/backgroundColor(帯)は#RRGGBB、
   rotationDegは傾き、startOffsetSeconds/durationInSecondsはクリップ先頭からの表示タイミング。animationは候補から選ぶ。
-- globalOverlays: 動画全体を通してずっと出ている文字(上部のタイトル帯など)。秒数は動画の先頭から、最後まで出ているならdurationInSecondsはnull。
+  途中で出てから動画の最後まで残り続ける文字(ランキングの空枠に、発表のたびに入っていく項目名など)は、
+  出始めたクリップのoverlaysに書いてkeepUntilEnd=trueにする(それ以外はnull)。最後まで残る物を書き漏らさないこと。
+- globalOverlays: 動画の最初からずっと出ている文字(上部のタイトル帯、ランキングの空枠の「1位」〜など)。秒数は動画の先頭から、最後まで出ているならdurationInSecondsはnull。
 - zoom: 素材より画面が寄っているクリップだけ。scaleは素材に対する倍率、punch=切り替わった瞬間から寄っている /
   slow=クリップの中でゆっくり寄っていく、focusXPercent/focusYPercentは寄っている中心。寄っていなければnull。
 - sfx: 効果音が鳴っている所。一番近いものを候補から選び、offsetSecondsはクリップ先頭からの秒。候補:

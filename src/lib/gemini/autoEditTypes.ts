@@ -34,6 +34,12 @@ const rawOverlaySchema = z.object({
   backgroundColor: z.string().nullable().optional(),
   rotationDeg: z.number().nullable().optional(),
   animation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
+  /**
+   * クリップの強調テキストで、出てから動画の最後まで残す物(ランキングの空枠に入る項目名など)。
+   * 動画全体の先頭からの秒数をGeminiに計算させるとずれるので、出すクリップに置かせたまま印だけ付けさせ、
+   * 全体の文字(globalOverlays)への移し替えはサーバー側で行う(autoEditPlan.ts)。
+   */
+  keepUntilEnd: z.boolean().nullable().optional(),
 });
 
 const rawClipSchema = z.object({
@@ -109,6 +115,7 @@ const overlayItemSchema = {
     backgroundColor: nullableString,
     rotationDeg: nullableNumber,
     animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
+    keepUntilEnd: { type: Type.BOOLEAN, nullable: true },
   },
   required: ["text"],
 } as const;

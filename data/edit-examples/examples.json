@@ -528,6 +528,17 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
+            },
+            {
+              "text": "八重歯",
+              "startOffsetSeconds": 0,
+              "xPercent": 15,
+              "yPercent": 43,
+              "fontSizePx": 44,
+              "color": "#FFFFFF",
+              "strokeColor": "#000000",
+              "animation": "pop",
+              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -790,6 +801,17 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
+            },
+            {
+              "text": "出っ歯",
+              "startOffsetSeconds": 0,
+              "xPercent": 15,
+              "yPercent": 56,
+              "fontSizePx": 44,
+              "color": "#FFFFFF",
+              "strokeColor": "#000000",
+              "animation": "pop",
+              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -863,6 +885,17 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
+            },
+            {
+              "text": "バニーティース",
+              "startOffsetSeconds": 0,
+              "xPercent": 15,
+              "yPercent": 82,
+              "fontSizePx": 44,
+              "color": "#FFFFFF",
+              "strokeColor": "#000000",
+              "animation": "pop",
+              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -941,6 +974,17 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
+            },
+            {
+              "text": "ガミースマイル",
+              "startOffsetSeconds": 0,
+              "xPercent": 15,
+              "yPercent": 69,
+              "fontSizePx": 44,
+              "color": "#FFFFFF",
+              "strokeColor": "#000000",
+              "animation": "pop",
+              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -989,6 +1033,17 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
+            },
+            {
+              "text": "開咬",
+              "startOffsetSeconds": 0,
+              "xPercent": 15,
+              "yPercent": 30,
+              "fontSizePx": 44,
+              "color": "#FFFFFF",
+              "strokeColor": "#000000",
+              "animation": "pop",
+              "keepUntilEnd": true
             }
           ],
           "sfx": [
@@ -1209,6 +1264,17 @@
               "xPercent": 75,
               "yPercent": 50,
               "animation": "pop"
+            },
+            {
+              "text": "小さい歯",
+              "startOffsetSeconds": 0,
+              "xPercent": 15,
+              "yPercent": 95,
+              "fontSizePx": 44,
+              "color": "#FFFFFF",
+              "strokeColor": "#000000",
+              "animation": "pop",
+              "keepUntilEnd": true
             }
           ],
           "sfx": [
