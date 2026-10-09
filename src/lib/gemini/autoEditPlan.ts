@@ -89,6 +89,13 @@ export type AutoEditPlanInput = {
   materialImages: ResolvedMaterialImage[];
   /** 使える画像が足りない所に、AIに画像を作らせてよいか(generateImage.ts)。 */
   generateMissingImages: boolean;
+  /** 本人がAIへの要望として書いた文(「保証は日本の方に〇」等)。手本より優先する。 */
+  userRequest?: string;
+  /**
+   * 手直し。前回の案(Geminiの生の答え)と「ここを直して」の指示を渡すと、全部作り直さずに言われた所だけ変える。
+   * 作り直すと良かった所まで毎回変わってしまうため。手本はすでに前回の案に反映されているので、手本選び・編集例は省く。
+   */
+  revision?: { previousPlan: RawAutoEditPlan; instruction: string };
 };
 
 export type AutoEditClipPlan = {
@@ -133,6 +140,8 @@ export type AutoEditPlan = {
   /** AIが作って動画に使った画像の枚数(種類)。 */
   generatedImageCount: number;
   clips: AutoEditClipPlan[];
+  /** 丸め込む前のGeminiの答え。手直し(revision)のときに前回の案として渡し直す。 */
+  rawPlan: RawAutoEditPlan;
 };
 
 const CAPTION_POSITION_VALUES = CAPTION_POSITION_OPTIONS.map((option) => option.value);
@@ -206,6 +215,19 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
 ${howToShowImages}`
       : `4-2. images(画像): ${materialLine}imagesは空にする。${generateLine}`;
 
+  // 本人が書いた要望は、本人が「こうしたい」と言っている事なので、手本(参考スクショ・テンプレート・編集例)より優先する。
+  const userRequest = input.userRequest?.trim();
+  const userRequestSection = userRequest
+    ? `## 本人からの要望(手本より優先)
+本人がこの動画の編集について、次のように書いています。手本と食い違う所は、この要望に従ってください。
+ただし「使う範囲の中からだけ切り出す」決まりと、答えのJSONの形は守ってください。
+---
+${userRequest}
+---
+
+`
+    : "";
+
   const templateSection = input.template
     ? `
 ## テンプレート「${input.template.label}」(${input.template.description})
@@ -229,7 +251,7 @@ ${input.template.instructions}
 - 手本(参考スクショ・テンプレート・編集例)からは「入れるならどんな見た目・位置にするか」を学ぶ。
   手本が賑やかでも、入れる場所は本人の動画の中身を見て必要な所だけにする。
 
-## 手本の優先順位
+${userRequestSection}## 手本の優先順位
 ${priorityLines}
 
 ${templateSection}
@@ -1222,6 +1244,7 @@ export const finalizeAutoEditPlan = async (
     framing: normalizeFraming(data.framing),
     generatedImageCount: usedGeneratedPaths.size,
     clips: arranged.clips,
+    rawPlan: data,
   };
 };
 
@@ -1365,7 +1388,11 @@ const findComparisonCards = (data: RawAutoEditPlan): { label: string; xPercent: 
  * 書き起こしから「話し手がどちらを良いと言ったか」だけを軽いモデルに聞き直し、その側のカードへ動かす
  * (どちらとも言っていなければ〇を外す)。失敗しても自動編集は止めない。
  */
-export const verifyComparisonMarks = async (ai: GoogleGenAI, data: RawAutoEditPlan): Promise<RawAutoEditPlan> => {
+export const verifyComparisonMarks = async (
+  ai: GoogleGenAI,
+  data: RawAutoEditPlan,
+  userNotes = ""
+): Promise<RawAutoEditPlan> => {
   const cards = findComparisonCards(data);
   if (cards.length < 2) return data;
   const marks = data.clips.flatMap((clip, clipIndex) =>
@@ -1394,7 +1421,14 @@ sideは「${labels.join("」「")}」のどれかをそのまま書いてくだ�
 ${transcript}
 
 ## 確かめるクリップ
-${markList}`,
+${markList}${
+                  userNotes
+                    ? `
+
+## 本人からの指示(〇の付け方について書いてあれば、話の流れより優先してそのとおりに答える)
+${userNotes}`
+                    : ""
+                }`,
               },
             ],
           },
@@ -1564,6 +1598,68 @@ export const similarityToExamples = (plan: RawAutoEditPlan, breakdowns: RawAutoE
   return Math.max(...perExample);
 };
 
+/** 使える画像を、番号と名前付きでGeminiに渡すパーツにする。何が写っているか分かれば足りるので、中くらいの解像度で渡す。 */
+const buildMaterialImageParts = async (materialImages: ResolvedMaterialImage[]): Promise<Part[]> => {
+  const parts: Part[] = [];
+  if (materialImages.length === 0) return parts;
+  parts.push({ text: `【使える画像】(${materialImages.length}枚。imagesではこの番号で指定する)` });
+  for (const [index, image] of materialImages.entries()) {
+    parts.push({ text: `画像${index + 1}: ${image.name || "(名前なし。何が写っているかは画像を見て判断する)"}` });
+    parts.push({
+      inlineData: { mimeType: image.mimeType, data: (await readFile(image.absolutePath)).toString("base64") },
+      mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM },
+    });
+  }
+  return parts;
+};
+
+/** 本人が書いた要望と手直しの指示をまとめる(〇印の確かめ直しなど、後の補正でも指示を優先するため)。 */
+const userNotesOf = (input: AutoEditPlanInput): string =>
+  [input.userRequest?.trim(), input.revision?.instruction.trim()].filter(Boolean).join("\n");
+
+/**
+ * 手直し: 前回の案と「ここを直して」の指示を渡し、言われた所だけ変えさせる。案は1つだけ作る
+ * (前回の案が土台なので、手抜きの答えが混ざる心配が小さい)。手本選び・編集例は前回の案に反映済みなので省く。
+ */
+const reviseAutoEditPlan = async (
+  ai: GoogleGenAI,
+  model: string,
+  input: AutoEditPlanInput,
+  revision: NonNullable<AutoEditPlanInput["revision"]>,
+  uploadedFileNames: string[]
+): Promise<AutoEditPlan> => {
+  const videoPart = await uploadFileAsPart(ai, input.video.absolutePath, input.video.mimeType, uploadedFileNames);
+  const materialImageParts = await buildMaterialImageParts(input.materialImages);
+  const revisionText = `【前回の編集案】(あなたが前回この動画のために作った答えのJSON)
+${JSON.stringify(revision.previousPlan)}
+
+【本人からの手直しの指示】
+${revision.instruction.trim()}
+
+前回の編集案を、手直しの指示どおりに直してください。
+- 指示に関係する所だけを変える。それ以外(クリップの切り方・秒数・文字・位置・色・画像・図形・効果音など)は、
+  前回の値のまま1つも変えずに返す
+- 指示が話の中身や時刻に関わるときは、添付した本人の動画を見て判断する
+- 答えは前回と同じJSONの形で、省略せずに全体を返す`;
+  const contents: Content[] = [
+    {
+      role: "user",
+      parts: [
+        ...materialImageParts,
+        { text: "【今回編集する本人の動画】" },
+        videoPart,
+        { text: buildPrompt(input, false) },
+        { text: revisionText },
+      ],
+    },
+  ];
+  const revised = await requestRawPlan(ai, model, contents, "text", "手直し");
+  return finalizeAutoEditPlan(
+    await verifyComparisonMarks(ai, await fillMissingRankImages(ai, revised), userNotesOf(input)),
+    input
+  );
+};
+
 /**
  * 本人の動画・参考スクショ/動画・編集例(学習動画+正解動画のペア)をGeminiに見せ、切り方・寄り・
  * 強調テキスト・効果音・フック・CTA・全体の見た目まで(AIナレーションは付けない)、編集の判断をすべて任せる。
@@ -1584,6 +1680,8 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
 
   const uploadedFileNames: string[] = [];
   try {
+    if (input.revision) return await reviseAutoEditPlan(ai, model, input, input.revision, uploadedFileNames);
+
     const contents: Content[] = [];
 
     // 1. 参考スクショ/動画(最優先の手本、複数可)。スクショは縁取りの太さなど細部まで読めるよう高解像度で渡す。
@@ -1624,22 +1722,8 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     uploadedFileNames.push(...fewShot.uploadedFileNames);
     contents.push(...fewShot.contents);
 
-    // 3. 使える画像(あれば)+本人の動画+依頼文。画像は何が写っているか分かれば足りるので、中くらいの解像度で渡す。
-    const materialImageParts: Part[] = [];
-    if (input.materialImages.length > 0) {
-      materialImageParts.push({
-        text: `【使える画像】(${input.materialImages.length}枚。imagesではこの番号で指定する)`,
-      });
-      for (const [index, image] of input.materialImages.entries()) {
-        materialImageParts.push({
-          text: `画像${index + 1}: ${image.name || "(名前なし。何が写っているかは画像を見て判断する)"}`,
-        });
-        materialImageParts.push({
-          inlineData: { mimeType: image.mimeType, data: (await readFile(image.absolutePath)).toString("base64") },
-          mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM },
-        });
-      }
-    }
+    // 3. 使える画像(あれば)+本人の動画+依頼文。
+    const materialImageParts = await buildMaterialImageParts(input.materialImages);
     const prompt = buildPrompt(input, fewShot.contents.length > 0);
     contents.push({
       role: "user",
@@ -1676,7 +1760,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     );
 
     const plan = await finalizeAutoEditPlan(
-      await verifyComparisonMarks(ai, await fillMissingRankImages(ai, best.candidate)),
+      await verifyComparisonMarks(ai, await fillMissingRankImages(ai, best.candidate), userNotesOf(input)),
       input
     );
     // Geminiが出した数と、丸め込み後に残った数。形の崩れた要素を捨てすぎていないかをログで追えるようにする。

@@ -6,6 +6,7 @@ import { MAX_SFX_CLIPS } from "@video/templates/standard/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import { generateAutoEditPlan } from "@/lib/gemini/autoEditPlan";
+import { rawAutoEditPlanSchema } from "@/lib/gemini/autoEditTypes";
 import { createAutoEditJob, updateAutoEditJob } from "@/lib/gemini/autoEditJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { isStyleReferencePath, resolveStyleReference } from "@/lib/styleReference";
@@ -23,6 +24,9 @@ export const runtime = "nodejs";
 const DEFAULT_CLIP_VOLUME = 1;
 const DEFAULT_CAPTION_ANIMATION = CAPTION_ANIMATION_OPTIONS[0].value;
 
+/** 要望・手直しの指示の長さの上限。画面(AutoEditScreen.tsx)と合わせる。 */
+const MAX_USER_TEXT_LENGTH = 1000;
+
 const requestSchema = z.object({
   videoPath: z.string().regex(VIDEO_PATH_PATTERN),
   videoDurationInSeconds: z.number().positive(),
@@ -36,6 +40,13 @@ const requestSchema = z.object({
     .max(MAX_MATERIAL_IMAGES)
     .default([]),
   generateMissingImages: z.boolean().default(false),
+  /** AIへの要望(なくてもよい)。 */
+  userRequest: z.string().max(MAX_USER_TEXT_LENGTH).default(""),
+  /** 手直し。前回の案(Geminiの生の答え)と、直してほしいこと。 */
+  revision: z
+    .object({ previousPlan: rawAutoEditPlanSchema, instruction: z.string().trim().min(1).max(MAX_USER_TEXT_LENGTH) })
+    .nullable()
+    .optional(),
 });
 
 /**
@@ -82,6 +93,8 @@ export async function POST(request: Request) {
         template,
         materialImages,
         generateMissingImages: parsed.data.generateMissingImages,
+        userRequest: parsed.data.userRequest,
+        revision: parsed.data.revision ?? undefined,
       });
 
       // 効果音の配置は、書き出し後の動画上での累積開始秒(クリップ尺の合計)を使う。
@@ -140,6 +153,7 @@ export async function POST(request: Request) {
           framing: plan.framing,
           generatedImageCount: plan.generatedImageCount,
         },
+        rawPlan: plan.rawPlan,
         segments,
         generatedClips,
       });

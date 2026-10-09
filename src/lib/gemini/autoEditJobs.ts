@@ -1,13 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import type { AutoEditPlan } from "./autoEditPlan";
+import type { RawAutoEditPlan } from "./autoEditTypes";
 
 /** 画面に見せる編集案の概要(クリップ自体はsegmentsとして組み立て済みで返す)。 */
 export type AutoEditPlanSummary = Pick<AutoEditPlan, "summary" | "referenceNotes" | "theme" | "hook" | "cta" | "globalOverlays" | "globalImages" | "globalShapes" | "framing" | "generatedImageCount">;
 
 export type AutoEditJob =
   | { status: "processing" }
-  | { status: "done"; plan: AutoEditPlanSummary; segments: ProjectSegment[]; generatedClips: ProjectSfxClip[] }
+  | {
+      status: "done";
+      plan: AutoEditPlanSummary;
+      segments: ProjectSegment[];
+      generatedClips: ProjectSfxClip[];
+      /** Geminiの生の答え。手直しのときに画面から送り返してもらう。 */
+      rawPlan: RawAutoEditPlan;
+    }
   | { status: "error"; message: string };
 
 /**

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "@video/shared/schema";
 import type { ProjectSegment, ProjectSfxClip, VideoProject } from "@/lib/videoProject";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
+import type { RawAutoEditPlan } from "@/lib/gemini/autoEditTypes";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -28,12 +29,21 @@ export type AutoEditPlanSummary = {
   generatedImageCount: number;
 };
 
+export type AutoEditResult = {
+  status: "done";
+  plan: AutoEditPlanSummary;
+  segments: ProjectSegment[];
+  generatedClips: ProjectSfxClip[];
+  /** Geminiの生の答え。手直しのときに前回の案として送り返す。 */
+  rawPlan: RawAutoEditPlan;
+};
+
 export type AutoEditJobState =
   | { status: "idle" }
   /** usedStyleReferenceCount: サーバー上に見つかって手本にできた参考の数(渡した数より少なければ消えていた分がある)。 */
   /** usedMaterialImageCount: 同じく、サーバー上に見つかって使えた画像の数。 */
   | { status: "processing"; usedStyleReferenceCount: number | null; usedMaterialImageCount: number | null }
-  | { status: "done"; plan: AutoEditPlanSummary; segments: ProjectSegment[]; generatedClips: ProjectSfxClip[] }
+  | AutoEditResult
   | { status: "error"; message: string };
 
 export type AutoEditRequest = {
@@ -47,11 +57,17 @@ export type AutoEditRequest = {
   materialImages: { path: string; name: string }[];
   /** 使える画像が足りない所に、AIに画像を作らせてよいか。 */
   generateMissingImages: boolean;
+  /** AIへの要望(空ならなし)。 */
+  userRequest: string;
+  /** 手直し。前回の案と、直してほしいこと。 */
+  revision?: { previousPlan: RawAutoEditPlan; instruction: string };
 };
 
 /** 自動編集(Geminiに編集をすべて任せる)ジョブの開始+ポーリング。 */
 export const useAutoEditJob = () => {
   const [autoEditState, setAutoEditState] = useState<AutoEditJobState>({ status: "idle" });
+  /** 最後にできた案。手直しに失敗しても、前の案に戻って使えるように覚えておく。 */
+  const [lastResult, setLastResult] = useState<AutoEditResult | null>(null);
 
   const pollJob = (jobId: string) => {
     const timer = setInterval(async () => {
@@ -63,6 +79,7 @@ export const useAutoEditJob = () => {
         if (data.status === "done" || data.status === "error") {
           clearInterval(timer);
           setAutoEditState(data as AutoEditJobState);
+          if (data.status === "done") setLastResult(data as AutoEditResult);
         }
       } catch (error) {
         clearInterval(timer);
@@ -99,5 +116,5 @@ export const useAutoEditJob = () => {
     }
   };
 
-  return { autoEditState, handleStart };
+  return { autoEditState, lastResult, handleStart };
 };

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
-import { useAutoEditJob } from "../useAutoEditJob";
+import { useAutoEditJob, type AutoEditResult } from "../useAutoEditJob";
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
@@ -26,6 +26,9 @@ const EmptyState: React.FC = () => (
 const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
   ranges.reduce((sum, range) => sum + range.durationInSeconds, 0);
 
+/** 要望・手直しの指示の長さの上限。サーバー(api/auto-edit/route.ts)と合わせる。 */
+const MAX_USER_TEXT_LENGTH = 1000;
+
 const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "画像", "効果音", "冒頭の見出し", "締めの一言"];
 
 /**
@@ -39,7 +42,11 @@ export const AutoEditScreen: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const { autoEditState, handleStart } = useAutoEditJob();
+  const { autoEditState, lastResult, handleStart } = useAutoEditJob();
+  /** 「ここを直して」の指示。直し終わったら空に戻す。 */
+  const [revisionText, setRevisionText] = useState("");
+  /** 今動いているのが手直しか(処理中の表示を変える)。 */
+  const [isRevising, setIsRevising] = useState(false);
   /** 選んだテンプレート。nullならおまかせ。次に開いた時も同じ型を使えるようプロジェクトに保存する。 */
   const [templateId, setTemplateId] = useState<string | null>(null);
 
@@ -60,8 +67,9 @@ export const AutoEditScreen: React.FC = () => {
 
   const goToEditorWithoutChanges = () => router.push("/edit");
 
-  const handleRun = () => {
+  const handleRun = (revision?: { previousPlan: AutoEditResult["rawPlan"]; instruction: string }) => {
     if (!project) return;
+    setIsRevising(Boolean(revision));
     void handleStart({
       videoPath: project.videoPath,
       videoDurationInSeconds: project.videoDurationInSeconds,
@@ -70,12 +78,25 @@ export const AutoEditScreen: React.FC = () => {
       templateId,
       materialImages: project.materialImages ?? [],
       generateMissingImages: project.generateMissingImages ?? true,
+      userRequest: project.autoEditRequest ?? "",
+      revision,
     });
   };
 
+  // 手直しに失敗しても、前にできた案はそのまま使えるようにする。
+  const result: AutoEditResult | null =
+    autoEditState.status === "done" ? autoEditState : autoEditState.status === "error" ? lastResult : null;
+
+  const handleRevise = () => {
+    const instruction = revisionText.trim();
+    if (!result || !instruction) return;
+    handleRun({ previousPlan: result.rawPlan, instruction });
+    setRevisionText("");
+  };
+
   const applyPlan = () => {
-    if (!project || autoEditState.status !== "done") return;
-    const { plan, segments, generatedClips } = autoEditState;
+    if (!project || !result) return;
+    const { plan, segments, generatedClips } = result;
     saveProject({
       ...project,
       editTemplateId: templateId,
@@ -123,6 +144,12 @@ export const AutoEditScreen: React.FC = () => {
 
   const changeGenerateMissingImages = (generateMissingImages: boolean) => {
     const next = { ...project, generateMissingImages };
+    setProject(next);
+    saveProject(next);
+  };
+
+  const changeAutoEditRequest = (autoEditRequest: string) => {
+    const next = { ...project, autoEditRequest };
     setProject(next);
     saveProject(next);
   };
@@ -208,9 +235,31 @@ export const AutoEditScreen: React.FC = () => {
           disabled={isProcessing}
         />
 
+        <div className="panel flex flex-col gap-2 p-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="auto-edit-request" className="text-sm font-bold">
+              AIへの要望
+            </label>
+            <span className="badge-pill neutral">なくてもOK</span>
+          </div>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            こうしてほしい所があれば書いてください。手本より優先します。
+          </span>
+          <textarea
+            id="auto-edit-request"
+            value={project.autoEditRequest ?? ""}
+            onChange={(e) => changeAutoEditRequest(e.target.value)}
+            maxLength={MAX_USER_TEXT_LENGTH}
+            rows={3}
+            disabled={isProcessing}
+            placeholder={"例: 保証の話は日本の方に〇を付ける\n例: 強調の文字は黄色を多めに\n例: 最後に「保存してね」を出す"}
+            className="field-input w-full text-sm"
+          />
+        </div>
+
         {isProcessing ? (
           <div className="panel flex flex-col gap-1 p-4">
-            <span className="text-sm font-bold">AIが編集中…</span>
+            <span className="text-sm font-bold">{isRevising ? "AIが手直し中…" : "AIが編集中…"}</span>
             {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
               <span className="text-xs" style={{ color: "var(--muted)" }}>
                 {autoEditState.usedStyleReferenceCount === 0
@@ -236,41 +285,46 @@ export const AutoEditScreen: React.FC = () => {
           failed={autoEditState.status === "error"}
         />
 
-        {autoEditState.status === "error" ? <p className="badge-pill danger w-fit">{autoEditState.message}</p> : null}
+        {autoEditState.status === "error" ? (
+          <p className="badge-pill danger w-fit">
+            {autoEditState.message}
+            {result ? "(前の案はそのまま使えます)" : ""}
+          </p>
+        ) : null}
 
-        {autoEditState.status === "done" ? (
+        {result ? (
           <div className="panel flex flex-col gap-3 p-4">
-            <p className="text-sm">{autoEditState.plan.summary}</p>
-            {autoEditState.plan.referenceNotes ? (
+            <p className="text-sm">{result.plan.summary}</p>
+            {result.plan.referenceNotes ? (
               <p className="text-xs" style={{ color: "var(--muted)" }}>
-                参考から読み取った編集の感じ: {autoEditState.plan.referenceNotes}
+                参考から読み取った編集の感じ: {result.plan.referenceNotes}
               </p>
             ) : null}
             <ul className="flex flex-col gap-1 text-xs" style={{ color: "var(--muted)" }}>
               <li>
-                {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {autoEditState.segments.length}
-                クリップ・{totalSeconds(autoEditState.segments).toFixed(1)}秒
+                {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {result.segments.length}
+                クリップ・{totalSeconds(result.segments).toFixed(1)}秒
               </li>
-              {autoEditState.plan.hook ? <li>冒頭の見出し: {autoEditState.plan.hook.headline}</li> : null}
-              {autoEditState.plan.cta ? <li>締めの一言: {autoEditState.plan.cta.text}</li> : null}
-              {autoEditState.plan.globalOverlays.length > 0 ? (
-                <li>ずっと出す文字: {autoEditState.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
+              {result.plan.hook ? <li>冒頭の見出し: {result.plan.hook.headline}</li> : null}
+              {result.plan.cta ? <li>締めの一言: {result.plan.cta.text}</li> : null}
+              {result.plan.globalOverlays.length > 0 ? (
+                <li>ずっと出す文字: {result.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
               ) : null}
-              <li>寄り(ズーム): {autoEditState.segments.filter((s) => s.zoom).length}か所</li>
+              <li>寄り(ズーム): {result.segments.filter((s) => s.zoom).length}か所</li>
               <li>
-                強調テキスト: {autoEditState.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
+                強調テキスト: {result.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
               </li>
               <li>
                 画像:{" "}
-                {autoEditState.segments.reduce((sum, s) => sum + (s.images?.length ?? 0), 0) +
-                  autoEditState.plan.globalImages.length}
+                {result.segments.reduce((sum, s) => sum + (s.images?.length ?? 0), 0) +
+                  result.plan.globalImages.length}
                 か所
-                {autoEditState.plan.generatedImageCount > 0
-                  ? `(うちAIで作った画像${autoEditState.plan.generatedImageCount}種類)`
+                {result.plan.generatedImageCount > 0
+                  ? `(うちAIで作った画像${result.plan.generatedImageCount}種類)`
                   : ""}
               </li>
               <li>
-                効果音: {autoEditState.generatedClips.length}個
+                効果音: {result.generatedClips.length}個
               </li>
             </ul>
             <p className="text-xs" style={{ color: "var(--muted-2)" }}>
@@ -278,28 +332,60 @@ export const AutoEditScreen: React.FC = () => {
             </p>
           </div>
         ) : null}
+
+        {/* 手直し: 全部作り直すと良かった所まで変わるため、前の案を土台に言われた所だけ直させる */}
+        {result && !isProcessing ? (
+          <div className="panel flex flex-col gap-2 p-4">
+            <label htmlFor="auto-edit-revision" className="text-sm font-bold">
+              ここを直してほしい
+            </label>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              直してほしい所だけを書くと、今の案を土台にその所だけ直します(ほかの所は変えません)。作り直すより安く済みます。
+            </span>
+            <textarea
+              id="auto-edit-revision"
+              value={revisionText}
+              onChange={(e) => setRevisionText(e.target.value)}
+              maxLength={MAX_USER_TEXT_LENGTH}
+              rows={3}
+              placeholder={"例: 3位の画像を八重歯のイラストに替えて\n例: 20秒あたりの文字を小さく"}
+              className="field-input w-full text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleRevise}
+              disabled={!revisionText.trim()}
+              className="btn-outline flex w-fit items-center gap-1 px-4 py-2 text-sm font-bold"
+            >
+              <SparkleIcon size={16} />
+              この内容で直す
+            </button>
+          </div>
+        ) : null}
       </main>
 
       <div className="bottom-action-bar">
-        {autoEditState.status === "done" ? (
+        {result && !isProcessing ? (
           <>
             <button type="button" onClick={applyPlan} className="btn-primary">
               この案を使う
             </button>
-            <button type="button" onClick={handleRun} className="btn-outline">
+            <button type="button" onClick={() => handleRun()} className="btn-outline">
               別の案を作る
             </button>
           </>
         ) : (
           <button
             type="button"
-            onClick={handleRun}
+            onClick={() => handleRun()}
             disabled={isProcessing}
             className="btn-primary"
           >
             <SparkleIcon size={18} />
             {autoEditState.status === "processing"
-              ? "AIが編集中…"
+              ? isRevising
+                ? "AIが手直し中…"
+                : "AIが編集中…"
               : autoEditState.status === "error"
                 ? "もう一度自動編集する"
                 : "AIで自動編集する"}

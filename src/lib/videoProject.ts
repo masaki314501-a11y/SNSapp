@@ -132,6 +132,8 @@ export type VideoProject = {
   materialImages?: { path: string; name: string }[];
   /** 使える画像が足りない所に、自動編集でAIに画像を作らせるか(1枚数円〜十円かかる)。 */
   generateMissingImages?: boolean;
+  /** 自動編集でAIに伝える要望。やり直すたびに書き直さなくて済むよう保存しておく。 */
+  autoEditRequest?: string;
   /**
    * カット画面で残した範囲(再生順)。自動編集はこの中から切り出す。自動編集の後はsegmentsが
    * Geminiの切ったクリップに置き換わるため、やり直すたびに範囲が縮んでいかないよう別に持つ。
@@ -200,6 +202,7 @@ const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
   editTemplateId: raw.editTemplateId ?? null,
   materialImages: raw.materialImages ?? [],
   generateMissingImages: raw.generateMissingImages ?? true,
+  autoEditRequest: raw.autoEditRequest ?? "",
   cutKeepRanges: raw.cutKeepRanges ?? null,
   hook: raw.hook ?? null,
   cta: raw.cta ?? null,
