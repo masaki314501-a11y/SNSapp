@@ -20,7 +20,7 @@ describe("TEXT_STYLE_PRESETS", () => {
         preset.color,
         ...(preset.gradient?.stops.map(([color]) => color) ?? []),
         ...preset.strokes.map(([color]) => color),
-        preset.shadow?.color,
+        ...(preset.shadows?.map((shadow) => shadow.color) ?? []),
         ...(preset.backgrounds?.map((background) => background.color) ?? []),
       ].filter((color) => color !== undefined);
       for (const color of colors) expect(color).toMatch(HEX);

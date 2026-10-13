@@ -12,12 +12,12 @@ const rgba = (hex: string, alpha: number): string => {
 /**
  * 丸い縁取り。文字を少しずつずらした影を輪のように並べて作る。
  * -webkit-text-strokeは角が尖る(miter)うえ角の形を変えられず、太い縁取りで角がトゲのように飛び出したため。
- * 影は書き出し(@remotion/web-renderer)でもそのまま描ける。輪は外側・中ほどの2重にして、隙間が出ないようにする。
+ * 影は書き出し(@remotion/web-renderer)でもそのまま描ける。輪は3重にし、2.5pxおきに並べてふちがギザギザしないようにする。
  */
 const roundStrokeShadow = (color: string, widthPx: number): string => {
   const shadows: string[] = [];
-  for (const radius of [widthPx, widthPx * 0.5]) {
-    const count = Math.max(8, Math.ceil((2 * Math.PI * radius) / 4));
+  for (const radius of [widthPx, widthPx * 0.66, widthPx * 0.33]) {
+    const count = Math.max(8, Math.ceil((2 * Math.PI * radius) / 2.5));
     for (let i = 0; i < count; i++) {
       const angle = (2 * Math.PI * i) / count;
       shadows.push(`${(Math.cos(angle) * radius).toFixed(1)}px ${(Math.sin(angle) * radius).toFixed(1)}px 0 ${color}`);
@@ -34,7 +34,7 @@ type Props = {
 };
 
 /**
- * 文字のスタイル(textStylePresets.ts)で文字を描く。後ろから「背景の箱 → 太い縁取り → 細い縁取り → 文字」の順に重ねる。
+ * 文字のスタイル(textStylePresets.ts)で文字を描く。後ろから「背景の箱 → 影・光 → 太い縁取り → 細い縁取り → 文字」の順に重ねる。
  * 縁取りの層には同じ文字を置き、影でふち取る(層ごとに太さと色を変えて、何重もの縁取りにする)。
  */
 export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic }) => {
@@ -47,9 +47,6 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
     lineHeight: 1.2,
     whiteSpace: "nowrap",
   };
-  const shadow = preset.shadow
-    ? `drop-shadow(${(preset.shadow.dx * fontSizePx).toFixed(1)}px ${(preset.shadow.dy * fontSizePx).toFixed(1)}px ${(preset.shadow.blur * fontSizePx).toFixed(1)}px ${rgba(preset.shadow.color, preset.shadow.opacity)})`
-    : undefined;
   const strokes = [...preset.strokes].sort((a, b) => b[1] - a[1]);
   const text = lines.map((line, index) => (
     <span key={index} style={LINE_STYLE}>
@@ -58,7 +55,7 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
   ));
   const fill: React.CSSProperties = preset.gradient
     ? {
-        backgroundImage: `linear-gradient(${180 + preset.gradient.angleDeg}deg, ${preset.gradient.stops
+        backgroundImage: `linear-gradient(${90 + preset.gradient.angleDeg}deg, ${preset.gradient.stops
           .map(([color, position]) => `${color} ${(position * 100).toFixed(1)}%`)
           .join(", ")})`,
         WebkitBackgroundClip: "text",
@@ -67,9 +64,35 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
       }
     : { color: preset.color ?? "#FFFFFF" };
 
+  // 影・光は、一番外側の縁取り(+影の広がり)と同じ形をした層を、ずらしてぼかして後ろに置く。
+  // CSSのdrop-shadowを重ねると2つ目の影が1つ目の影にも付いてしまうので、影ごとに層を分ける。
+  const outerStrokeWidth = strokes.length > 0 ? strokes[0][1] : 0;
+  const shadowLayers = [...(preset.shadows ?? [])].reverse().map((shadow, index) => {
+    const spread = (outerStrokeWidth + shadow.size) * fontSizePx;
+    return (
+      <span
+        key={`shadow${index}`}
+        aria-hidden
+        style={{
+          ...textStyle,
+          position: "absolute",
+          inset: 0,
+          color: shadow.color,
+          textShadow: spread > 0 ? roundStrokeShadow(shadow.color, spread) : undefined,
+          opacity: shadow.opacity,
+          transform: `translate(${(shadow.dx * fontSizePx).toFixed(1)}px, ${(shadow.dy * fontSizePx).toFixed(1)}px)`,
+          // Premiereのぼかしの値をそのままCSSのblurに渡すとぼけすぎる(スクリーンショットと見比べて約8分の1が合った)。
+          filter: shadow.blur > 0 ? `blur(${((shadow.blur * fontSizePx) / 8).toFixed(1)}px)` : undefined,
+        }}
+      >
+        {text}
+      </span>
+    );
+  });
+
   return (
     <span lang="ja" style={{ position: "relative", display: "inline-block" }}>
-      {[...(preset.backgrounds ?? [])].reverse().map((background, index) => (
+      {(preset.backgrounds ?? []).map((background, index) => (
         <span
           key={`bg${index}`}
           style={{
@@ -80,11 +103,10 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
             bottom: -background.padY * fontSizePx,
             borderRadius: background.radius * fontSizePx,
             backgroundColor: rgba(background.color, background.opacity),
-            // 影は一番後ろの物にだけ付ける(箱がある時は箱ごと影を落とす)。
-            filter: index === 0 ? shadow : undefined,
           }}
         />
       ))}
+      {shadowLayers}
       {strokes.map(([color, width], index) => (
         <span
           key={`stroke${index}`}
@@ -95,23 +117,12 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
             inset: 0,
             color,
             textShadow: roundStrokeShadow(color, width * fontSizePx),
-            filter: index === 0 && !preset.backgrounds?.length ? shadow : undefined,
           }}
         >
           {text}
         </span>
       ))}
-      <span
-        style={{
-          ...textStyle,
-          position: "relative",
-          display: "block",
-          ...fill,
-          filter: strokes.length === 0 && !preset.backgrounds?.length ? shadow : undefined,
-        }}
-      >
-        {text}
-      </span>
+      <span style={{ ...textStyle, position: "relative", display: "block", ...fill }}>{text}</span>
     </span>
   );
 };

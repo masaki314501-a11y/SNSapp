@@ -6,8 +6,10 @@
 // 170種類を見比べて各数値の意味を割り出した(下のdecodeStyle)。主な対応:
 //   文字の設定 r.0.0[0].1: .1=文字の大きさ .2=文字色 .4=縁取りの色 .5=縁取りあり .6=縁取りの太さ
 //     .17=追加の縁取り[{.0色 .1あり .2太さ}] .20=グラデーションの種類 .21=グラデーション{.0角度 .1色の点[{.0色 .1位置}]}
-//   全体 r.0: .10=影の色 .11=影あり .12=濃さ(%) .13=角度 .14=距離 .15=大きさ .16=ぼかし
-//     .17=背景の色 .18=背景あり .19=濃さ .20=余白  .37=背景の箱[{.0色 .1あり .2濃さ .4横の余白 .5縦の余白 .6角の丸み}]
+//   全体 r.0: .10=影の色 .11=影あり .12=濃さ(%) .13=角度 .14=距離 .15=大きさ(広がり) .16=ぼかし
+//     .17=背景の色 .18=背景あり .19=濃さ .20=余白  .37=2つ目以降の影[{.0色 .1あり .2濃さ .3角度 .4距離 .5大きさ .6ぼかし}]
+//   縁取りの太さは輪郭をまたいで描く幅(外に見えるのは半分)。省いた値は初期値(影なら濃さ75%・角度135°・距離7・ぼかし40)。
+//   どれもPremiereの画面のスクリーンショットと見比べて確かめた。
 // 色は{.0赤 .1緑 .2青}で、省略された値は255(色ごと無ければ白)。
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -107,50 +109,50 @@ const decodeStyle = (base64, id) => {
   const stopCount = o[`${c}.21.1#len`];
   if (has(`${c}.20`) && stopCount) {
     preset.gradient = {
-      angleDeg: round(num(`${c}.21.0`) ?? 0),
+      // 角度の初期値は90(上→下)。0は左→右。
+      angleDeg: round(num(`${c}.21.0`) ?? 90),
       stops: Array.from({ length: stopCount }, (_, i) => [hex(`${c}.21.1[${i}].0`), round(num(`${c}.21.1[${i}].1`) ?? 0)]),
     };
   } else {
     preset.color = hex(`${c}.2`);
   }
 
+  // 縁取りの太さは輪郭の線をまたいで描く幅なので、文字の外に見えるのはその半分。
   preset.strokes = [];
-  if (has(`${c}.6`) && has(`${c}.5`)) preset.strokes.push([hex(`${c}.4`), round(num(`${c}.6`) * k)]);
+  if (has(`${c}.6`) && has(`${c}.5`)) preset.strokes.push([hex(`${c}.4`), round((num(`${c}.6`) * k) / 2)]);
   for (let i = 0; i < (o[`${c}.17#len`] ?? 0); i++) {
     const s = `${c}.17[${i}]`;
     const width = num(`${s}.2`) ?? 0;
-    if (has(`${s}.1`) && width > 0) preset.strokes.push([hex(`${s}.0`), round(width * k)]);
+    if (has(`${s}.1`) && width > 0) preset.strokes.push([hex(`${s}.0`), round((width * k) / 2)]);
   }
 
-  if (has("r.0.11")) {
-    const angle = (((num("r.0.13") ?? 135) % 360) * Math.PI) / 180;
-    const distance = num("r.0.14") ?? 0;
-    preset.shadow = {
-      color: hex("r.0.10"),
-      opacity: round((num("r.0.12") ?? 0) / 100),
+  // 影(光)。1つ目は全体の設定、2つ目以降は影の一覧(.37)。省いた値はPremiereの初期値
+  // (濃さ75%・角度135°・距離7・大きさ0・ぼかし40)。初期値と同じ値は書かれないため。
+  const shadowAt = (prefix, fields) => {
+    const angle = (((num(`${prefix}.${fields.angle}`) ?? 135) % 360) * Math.PI) / 180;
+    const distance = num(`${prefix}.${fields.distance}`) ?? 7;
+    return {
+      color: hex(`${prefix}.${fields.color}`),
+      opacity: round((num(`${prefix}.${fields.opacity}`) ?? 75) / 100),
       dx: round(Math.sin(angle) * distance * k),
       dy: round(-Math.cos(angle) * distance * k),
-      blur: round(((num("r.0.16") ?? 0) + (num("r.0.15") ?? 0)) * k / 2),
+      // 広がりも縁取りと同じく、輪郭をまたぐ幅として書かれている(外へ広がるのは半分)。
+      size: round(((num(`${prefix}.${fields.size}`) ?? 0) * k) / 2),
+      blur: round((num(`${prefix}.${fields.blur}`) ?? 40) * k),
     };
-  }
-
-  const backgrounds = [];
-  if (has("r.0.18")) {
-    const pad = round((num("r.0.20") ?? 0) * k);
-    backgrounds.push({ color: hex("r.0.17"), opacity: round((num("r.0.19") ?? 100) / 100), padX: pad, padY: pad, radius: 0 });
-  }
+  };
+  const shadows = [];
+  if (has("r.0.11")) shadows.push(shadowAt("r.0", { color: 10, opacity: 12, angle: 13, distance: 14, size: 15, blur: 16 }));
   for (let i = 0; i < (o["r.0.37#len"] ?? 0); i++) {
     const s = `r.0.37[${i}]`;
-    if (!has(`${s}.1`)) continue;
-    backgrounds.push({
-      color: hex(`${s}.0`),
-      opacity: round((num(`${s}.2`) ?? 100) / 100),
-      padX: round((num(`${s}.4`) ?? 0) * k),
-      padY: round((num(`${s}.5`) ?? 0) * k),
-      radius: round((num(`${s}.6`) ?? 0) * k),
-    });
+    if (has(`${s}.1`)) shadows.push(shadowAt(s, { color: 0, opacity: 2, angle: 3, distance: 4, size: 5, blur: 6 }));
   }
-  if (backgrounds.length) preset.backgrounds = backgrounds;
+  if (shadows.length) preset.shadows = shadows;
+
+  if (has("r.0.18")) {
+    const pad = round((num("r.0.20") ?? 0) * k);
+    preset.backgrounds = [{ color: hex("r.0.17"), opacity: round((num("r.0.19") ?? 100) / 100), padX: pad, padY: pad, radius: 0 }];
+  }
   return preset;
 };
 
@@ -207,13 +209,13 @@ export type TextStylePreset = {
   fontWeight: number;
   /** 単色の文字色。gradientがあればそちらを使う。 */
   color?: string;
-  /** 文字のグラデーション。angleDegは0で上→下、stopsは[色, 位置0〜1]。 */
+  /** 文字のグラデーション。angleDegはPremiereの角度(90で上→下、0で左→右)、stopsは[色, 位置0〜1]。 */
   gradient?: { angleDeg: number; stops: [string, number][] };
   /** 縁取り。[色, 文字の外側へ見える太さ]。太い物ほど後ろに描く。 */
   strokes: [string, number][];
-  /** 影・光。dx/dyはずれ、blurはぼかし。 */
-  shadow?: { color: string; opacity: number; dx: number; dy: number; blur: number };
-  /** 文字の後ろの箱(先頭が一番上)。padX/padYは文字の周りの余白、radiusは角の丸み。 */
+  /** 影・光(いくつも重ねられる。先頭が一番上)。dx/dyはずれ、sizeは文字の外への広がり、blurはぼかしの幅。 */
+  shadows?: { color: string; opacity: number; dx: number; dy: number; size: number; blur: number }[];
+  /** 文字の後ろの箱。padX/padYは文字の周りの余白、radiusは角の丸み。 */
   backgrounds?: { color: string; opacity: number; padX: number; padY: number; radius: number }[];
 };
 
