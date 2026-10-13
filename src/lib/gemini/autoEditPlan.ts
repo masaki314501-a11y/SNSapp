@@ -1,4 +1,4 @@
-import { GoogleGenAI, PartMediaResolutionLevel, Type, type Content, type Part } from "@google/genai";
+import { GoogleGenAI, PartMediaResolutionLevel, Type, type Content, type GenerateContentResponse, type Part } from "@google/genai";
 import { readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import path from "node:path";
@@ -1507,8 +1507,13 @@ const mergeFlickeringMarks = (shapes: ShapeOverlay[]): ShapeOverlay[] => {
   return [...shapes.filter((shape) => shape.kind !== "circle"), ...merged];
 };
 
-/** 一度に作る自動編集の案の数(1か2)。案の数だけ料金がかかる。 */
+/** 自動編集の案を最大いくつ作るか(1か2)。2なら、1案目が良くなかった時だけ2案目を作る。 */
 const AUTO_EDIT_CANDIDATES = Math.min(2, Math.max(1, Number(process.env.AUTO_EDIT_CANDIDATES) || 2));
+/**
+ * 1案目の手本との近さ(similarityToExamples)がこれ以上なら、2案目を作らずに使う。
+ * 以前は毎回2案を同時に作っていたが、7回中5回は1案目が満点(1.00)で、2案目の料金が無駄になっていた。
+ */
+const GOOD_ENOUGH_SIMILARITY = 0.95;
 
 /** Geminiに編集案を1つ作らせ、生のJSONのまま返す。混雑などの一時的な失敗は少し待ってやり直す。 */
 const requestRawPlan = async (
@@ -1521,12 +1526,23 @@ const requestRawPlan = async (
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
+      // 少しずつ受け取る形(stream)で頼む。まとめて受け取る形だと、Geminiが考え込んで5分以上何も返さない時に
+      // Node.jsの通信が「応答が来ない」として打ち切ってしまい(HeadersTimeoutError)、案が作れないことがあった。
       const response = await runWithGeminiRateLimit(() => {
-        const generatePromise = ai.models.generateContent({
-          model,
-          contents,
-          config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
-        });
+        const generatePromise = (async () => {
+          const stream = await ai.models.generateContentStream({
+            model,
+            contents,
+            config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
+          });
+          let text = "";
+          let last: GenerateContentResponse | undefined;
+          for await (const chunk of stream) {
+            text += chunk.text ?? "";
+            last = chunk;
+          }
+          return { text, usage: last?.usageMetadata, modelVersion: last?.modelVersion };
+        })();
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
         });
@@ -1534,7 +1550,7 @@ const requestRawPlan = async (
       }, lane);
 
       // 1回あたりの消費量をサーバーログで追えるようにしておく(残高切れの前に重さに気づけるように)。
-      const usage = response.usageMetadata;
+      const usage = response.usage;
       console.info(
         `[autoEditPlan] ${label} model=${response.modelVersion ?? model} 入力${usage?.promptTokenCount ?? "?"}トークン` +
           ` 出力${usage?.candidatesTokenCount ?? "?"}トークン 思考${usage?.thoughtsTokenCount ?? "?"}トークン`
@@ -1730,19 +1746,33 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
       parts: [...materialImageParts, { text: "【今回編集する本人の動画】" }, videoPart, { text: prompt }],
     });
 
-    // 同じ依頼でも、要素(枠の図形・最後まで残す画像など)を丸ごと出し忘れた手抜きの答えが混ざるため、
-    // 複数の案を同時に作り、編集例の書き起こしに一番近い案を選ぶ(料金は案の数だけかかる)。
-    const lanes: GeminiRateLimitLane[] = ["text", "text-parallel"].slice(0, AUTO_EDIT_CANDIDATES) as GeminiRateLimitLane[];
-    const results = await Promise.allSettled(
-      lanes.map((lane, index) => requestRawPlan(ai, model, contents, lane, `案${index + 1}`))
-    );
-    for (const [index, result] of results.entries()) {
-      if (result.status === "rejected") console.warn(`[autoEditPlan] 案${index + 1}の作成に失敗しました`, result.reason);
+    // 同じ依頼でも、要素(枠の図形・最後まで残す画像など)を丸ごと出し忘れた手抜きの答えが混ざる。
+    // まず1案作り、失敗したか編集例の書き起こしから遠い時だけ2案目を作って、近い方を選ぶ(料金は作った案の数だけかかる)。
+    // 2案目は同じ入力を送るので、Geminiの暗黙のキャッシュが効いて入力の料金も安くなる。
+    const breakdowns = examples.flatMap((example) => (example.breakdown ? [example.breakdown] : []));
+    const scored: { candidate: RawAutoEditPlan; score: number }[] = [];
+    let firstError: unknown;
+    for (let index = 0; index < AUTO_EDIT_CANDIDATES; index++) {
+      if (index > 0) {
+        const previous = scored[scored.length - 1];
+        // 手本が無いと近さを測れないので、1案目が作れていればそれを使う。
+        if (previous && (breakdowns.length === 0 || previous.score >= GOOD_ENOUGH_SIMILARITY)) break;
+        console.info(
+          `[autoEditPlan] ${previous ? `1案目の手本との近さが${previous.score.toFixed(2)}だった` : "1案目が作れなかった"}ため、2案目を作ります`
+        );
+      }
+      try {
+        const candidate = await requestRawPlan(ai, model, contents, "text", `案${index + 1}`);
+        scored.push({ candidate, score: similarityToExamples(candidate, breakdowns) });
+      } catch (error) {
+        console.warn(`[autoEditPlan] 案${index + 1}の作成に失敗しました`, error);
+        firstError ??= error;
+      }
     }
-    const candidates = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-    if (candidates.length === 0) {
-      throw toFriendlyGeminiError((results[0] as PromiseRejectedResult).reason);
+    if (scored.length === 0) {
+      throw toFriendlyGeminiError(firstError);
     }
+    const candidates = scored.map((entry) => entry.candidate);
     // 調整用: AUTO_EDIT_DEBUG_DIRを指定すると、Geminiの生の答えをそこへ保存する(丸め込みで何を捨てたかを確かめる時に使う)。
     if (process.env.AUTO_EDIT_DEBUG_DIR) {
       for (const [index, candidate] of candidates.entries()) {
@@ -1752,8 +1782,6 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
         ).catch(() => {});
       }
     }
-    const breakdowns = examples.flatMap((example) => (example.breakdown ? [example.breakdown] : []));
-    const scored = candidates.map((candidate) => ({ candidate, score: similarityToExamples(candidate, breakdowns) }));
     const best = scored.reduce((a, b) => (b.score > a.score ? b : a));
     console.info(
       `[autoEditPlan] ${candidates.length}案の手本との近さ: ${scored.map((s) => s.score.toFixed(2)).join(" / ")} → ${best.score.toFixed(2)}の案を使う`
