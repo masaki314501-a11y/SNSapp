@@ -47,6 +47,7 @@ export const ClipSequence: React.FC<Props> = ({
   zoom,
   overlays,
   images,
+  clipCaptionPosition,
   framing,
   layer,
 }) => {
@@ -73,7 +74,7 @@ export const ClipSequence: React.FC<Props> = ({
         animation={captionAnimation}
         captionStyle={captionStyle}
         fontFamily={captionFontFamily ?? fontFamily}
-        position={captionPosition}
+        position={clipCaptionPosition ?? captionPosition}
         fontSize={fontSize}
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}

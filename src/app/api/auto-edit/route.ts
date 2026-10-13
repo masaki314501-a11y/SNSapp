@@ -26,6 +26,10 @@ const DEFAULT_CAPTION_ANIMATION = CAPTION_ANIMATION_OPTIONS[0].value;
 
 /** 要望・手直しの指示の長さの上限。画面(AutoEditScreen.tsx)と合わせる。 */
 const MAX_USER_TEXT_LENGTH = 1000;
+/** タイトルの長さの上限。画面と合わせる。 */
+const MAX_TITLE_LENGTH = 40;
+/** 1回で新しく作ってよい画像の数の上限。autoEditPlan.tsのMAX_GENERATED_IMAGESと合わせる。 */
+const MAX_GENERATED_IMAGES = 8;
 
 const requestSchema = z.object({
   videoPath: z.string().regex(VIDEO_PATH_PATTERN),
@@ -40,6 +44,10 @@ const requestSchema = z.object({
     .max(MAX_MATERIAL_IMAGES)
     .default([]),
   generateMissingImages: z.boolean().default(false),
+  /** 新しく作ってよい画像の数(1枚約10円)。0なら貯めた画像だけを使う。古い画面からは届かないので、その時は今までと同じ上限。 */
+  maxGeneratedImages: z.number().int().min(0).max(MAX_GENERATED_IMAGES).default(MAX_GENERATED_IMAGES),
+  /** 左上に出すタイトル(空ならAIが決める)。 */
+  title: z.string().max(MAX_TITLE_LENGTH).default(""),
   /** AIへの要望(なくてもよい)。 */
   userRequest: z.string().max(MAX_USER_TEXT_LENGTH).default(""),
   /** 手直し。前回の案(Geminiの生の答え)と、直してほしいこと。 */
@@ -93,6 +101,8 @@ export async function POST(request: Request) {
         template,
         materialImages,
         generateMissingImages: parsed.data.generateMissingImages,
+        maxGeneratedImages: parsed.data.maxGeneratedImages,
+        title: parsed.data.title,
         userRequest: parsed.data.userRequest,
         revision: parsed.data.revision ?? undefined,
       });
@@ -113,14 +123,11 @@ export async function POST(request: Request) {
           durationInSeconds: clip.durationInSeconds,
           captionAnimation: clip.captionAnimation ?? DEFAULT_CAPTION_ANIMATION,
           volume: DEFAULT_CLIP_VOLUME,
-          emphasisWords: clip.emphasisWords,
-          emphasisColor: clip.emphasisColor,
-          captionAccentColor: clip.captionAccentColor,
-          captionFontFamily: clip.captionFontFamily,
-          captionGlowColor: clip.captionGlowColor,
           zoom: clip.zoom,
           overlays: clip.overlays,
           images: clip.images,
+          faceBox: clip.faceBox,
+          clipCaptionPosition: clip.clipCaptionPosition,
         });
 
         for (const sfx of clip.sfx) {
@@ -152,6 +159,7 @@ export async function POST(request: Request) {
           globalShapes: plan.globalShapes,
           framing: plan.framing,
           generatedImageCount: plan.generatedImageCount,
+          imageSources: plan.imageSources,
         },
         rawPlan: plan.rawPlan,
         segments,

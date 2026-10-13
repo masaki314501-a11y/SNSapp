@@ -117,6 +117,19 @@ const rawClipSchema = z.object({
   images: z.array(rawImageSchema).nullable().optional(),
   /** そのクリップで出す図形(〇印など)。出し続ける長さはクリップより長くてよく、全体の図形へサーバー側で移す。 */
   shapes: z.array(rawShapeSchema).nullable().optional(),
+  /**
+   * 話している人の顔の位置(元の動画の画面に対する割合)。文字・画像を顔に重ねない配置に使う。
+   * 顔を別に調べる(顔検出)と料金・サーバーの重さが増えるので、動画を見ているついでに書かせる。
+   */
+  face: z
+    .object({
+      xPercent: z.number(),
+      yPercent: z.number(),
+      widthPercent: z.number(),
+      heightPercent: z.number(),
+    })
+    .nullable()
+    .optional(),
   sfx: z
     .array(
       z.object({
@@ -158,6 +171,8 @@ export const rawAutoEditPlanSchema = z.object({
     .optional(),
   /** 動画全体に重ねる図形(ランキングの空の枠など)。 */
   globalShapes: z.array(rawShapeSchema).nullable().optional(),
+  /** 左上に最初から最後まで出すタイトル。位置・見た目はサーバー側の決まった形で置く(autoEditPlan.ts)。 */
+  title: z.string().nullable().optional(),
   /** 動画全体に重ね続ける文字(参考投稿の上部タイトル等)。 */
   globalOverlays: z.array(rawOverlaySchema).nullable().optional(),
   /** 話している言葉を字幕(テロップ)として出すか。参考・編集例が字幕を出していればtrue。 */
@@ -189,7 +204,6 @@ const overlayItemSchema = {
     backgroundColor: nullableString,
     rotationDeg: nullableNumber,
     animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
-    fontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES, nullable: true },
     glowColor: nullableString,
     italic: { type: Type.BOOLEAN, nullable: true },
     strokeWidthPx: nullableNumber,
@@ -278,6 +292,7 @@ export const autoEditResponseSchema = {
       required: ["scale"],
     },
     globalShapes: { type: Type.ARRAY, nullable: true, items: shapeItemSchema },
+    title: nullableString,
     globalOverlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
     showCaptions: { type: Type.BOOLEAN, nullable: true },
     generatedImageStyle: { type: Type.STRING, format: "enum", enum: ["illustration", "photo"], nullable: true },
@@ -290,11 +305,17 @@ export const autoEditResponseSchema = {
           sourceEndSeconds: { type: Type.NUMBER },
           speech: nullableString,
           captionAnimation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
-          emphasisWords: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-          emphasisColor: nullableString,
-          captionAccentColor: nullableString,
-          captionFontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES, nullable: true },
-          captionGlowColor: nullableString,
+          face: {
+            type: Type.OBJECT,
+            nullable: true,
+            properties: {
+              xPercent: { type: Type.NUMBER },
+              yPercent: { type: Type.NUMBER },
+              widthPercent: { type: Type.NUMBER },
+              heightPercent: { type: Type.NUMBER },
+            },
+            required: ["xPercent", "yPercent", "widthPercent", "heightPercent"],
+          },
           zoom: {
             type: Type.OBJECT,
             nullable: true,
@@ -323,18 +344,16 @@ export const autoEditResponseSchema = {
           },
           narration: nullableString,
         },
-        // Geminiは書いた順に考えるので、クリップの中もプロンプトの手順(①カット・物→②テロップ→
-        // ③強調→④寄り→仕上げ)の順に出力させる。指定しないとアルファベット順になってしまう。
+        // Geminiは書いた順に考えるので、クリップの中もプロンプトの手順(①カット・物→②テロップ・顔の位置→
+        // ④寄り→仕上げ)の順に出力させる。指定しないとアルファベット順になってしまう。
+        // テロップの強調語・クリップごとの書体や色は、AIに決めさせず本人が選ぶので書かせない
+        // (受け取る側のzodには、前の答え・編集例の書き起こしを読めるよう残してある)。
         propertyOrdering: [
           "sourceStartSeconds",
           "sourceEndSeconds",
           "speech",
+          "face",
           "captionAnimation",
-          "emphasisWords",
-          "emphasisColor",
-          "captionAccentColor",
-          "captionFontFamily",
-          "captionGlowColor",
           "overlays",
           "images",
           "shapes",
@@ -351,6 +370,7 @@ export const autoEditResponseSchema = {
     "referenceNotes",
     "framing",
     "globalShapes",
+    "title",
     "globalOverlays",
     "theme",
     "showCaptions",

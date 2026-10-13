@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
 import { estimateOverlayBox } from "@video/shared/textWrap";
-import { fillMissingRankImages, finalizeAutoEditPlan, similarityToExamples, verifyComparisonMarks } from "./autoEditPlan";
+import { faceOnScreen, fillMissingRankImages, finalizeAutoEditPlan, similarityToExamples, verifyComparisonMarks } from "./autoEditPlan";
 import type { RawAutoEditPlan } from "./autoEditTypes";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
 
@@ -441,5 +441,124 @@ describe("長い文の置き場所", () => {
     );
     const placed = estimateOverlayBox(plan.clips[0].overlays![0]);
     expect(placed.left).toBeGreaterThan(37);
+  });
+});
+
+describe("左上のタイトル", () => {
+  it("本人が決めたタイトルを左上に最初から出し、AIが同じ文言で置いた上部の文字は外す", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 2 }], {
+        title: "AIのタイトル",
+        globalOverlays: [
+          { text: "矯正した方がいい", startOffsetSeconds: 0, xPercent: 50, yPercent: 10 },
+          { text: "歯並びTOP5", startOffsetSeconds: 0, xPercent: 50, yPercent: 16 },
+          { text: "1位", startOffsetSeconds: 0, xPercent: 15, yPercent: 40 },
+        ],
+      }),
+      { ...input, title: "矯正した方がいい歯並びTOP5" }
+    );
+    const [title, ...rest] = plan.globalOverlays;
+    expect(title.text.replace(/\n/g, "")).toBe("矯正した方がいい歯並びTOP5");
+    expect(title.startOffsetSeconds).toBe(0);
+    expect(title.durationInSeconds).toBeUndefined();
+    const box = estimateOverlayBox(title);
+    expect(box.left).toBeGreaterThanOrEqual(3);
+    expect(box.left).toBeLessThan(6);
+    expect(box.top).toBeLessThan(8);
+    expect(rest.map((overlay) => overlay.text)).toEqual(["1位"]);
+  });
+
+  it("本人が決めていなければ、AIが決めた文言で置く", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 2 }], { title: "AIのタイトル" }),
+      input
+    );
+    expect(plan.globalOverlays[0].text).toBe("AIのタイトル");
+  });
+});
+
+describe("顔を避ける", () => {
+  const face = { xPercent: 50, yPercent: 40, widthPercent: 30, heightPercent: 16 };
+
+  it("強調テキスト・画像を顔に重ならない所へ動かす", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([
+        {
+          sourceStartSeconds: 0,
+          sourceEndSeconds: 2,
+          face,
+          overlays: [{ text: "実は3倍!", xPercent: 50, yPercent: 40, fontSizePx: 90 }],
+          images: [{ imageNumber: 1, description: "八重歯", xPercent: 50, yPercent: 42, widthPercent: 40 }],
+        },
+      ]),
+      input
+    );
+    const faceBox = { left: 30.5, right: 69.5, top: 29.6, bottom: 50.4 };
+    const overlay = estimateOverlayBox(plan.clips[0].overlays![0]);
+    const intersects = (box: { left: number; right: number; top: number; bottom: number }) =>
+      box.left < faceBox.right && faceBox.left < box.right && box.top < faceBox.bottom && faceBox.top < box.bottom;
+    expect(intersects(overlay)).toBe(false);
+    const image = plan.clips[0].images![0];
+    const imageHeight = (image.widthPercent * 0.75 * 1080) / 1920;
+    expect(
+      intersects({
+        left: image.xPercent - image.widthPercent / 2,
+        right: image.xPercent + image.widthPercent / 2,
+        top: image.yPercent - imageHeight / 2,
+        bottom: image.yPercent + imageHeight / 2,
+      })
+    ).toBe(false);
+    expect(plan.clips[0].faceBox).toEqual(face);
+  });
+
+  it("下のテロップが顔に重なるクリップだけ、テロップの位置を変える", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          { sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "こんにちは", face: { xPercent: 50, yPercent: 85, widthPercent: 30, heightPercent: 16 } },
+          { sourceStartSeconds: 2, sourceEndSeconds: 4, speech: "こんにちは", face },
+        ],
+        { theme: { captionPosition: "bottom" } }
+      ),
+      input
+    );
+    expect(plan.clips[0].clipCaptionPosition).toBe("top");
+    expect(plan.clips[1].clipCaptionPosition).toBeUndefined();
+  });
+
+  it("寄ったクリップでは、寄った後の顔の位置で確かめる", () => {
+    const box = faceOnScreen(face, null, { scale: 1.3, style: "punch", focusXPercent: 50, focusYPercent: 20 });
+    // 中心(縦20%)から離れる方向へ1.3倍に広がる
+    expect(box.top).toBeCloseTo(20 + (40 - 8 * 1.3 - 20) * 1.3, 5);
+  });
+});
+
+describe("新しく作る画像の上限", () => {
+  it("作れなかった枠の画像は、項目名の文字で枠を埋める", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          {
+            sourceStartSeconds: 0,
+            sourceEndSeconds: 2,
+            images: [{ imageNumber: null, name: "八重歯", description: "八重歯のイラスト", durationInSeconds: 2 }],
+          },
+          {
+            sourceStartSeconds: 2,
+            sourceEndSeconds: 4,
+            images: [{ imageNumber: null, name: "八重歯", description: "八重歯のイラスト", keepUntilEnd: true, slotRank: 1 }],
+          },
+        ],
+        {
+          globalShapes: [{ xPercent: 25, yPercent: 40, widthPercent: 40, heightPercent: 10, borderColor: "#000000" }],
+          globalOverlays: [{ text: "1位", xPercent: 10, yPercent: 40 }],
+        }
+      ),
+      input
+    );
+    expect(plan.globalImages).toEqual([]);
+    const name = plan.globalOverlays.find((overlay) => overlay.text === "八重歯");
+    expect(name).toMatchObject({ startOffsetSeconds: 2, xPercent: 25 });
+    expect(plan.imageSources).toEqual({ material: 0, library: 0, generated: 0 });
   });
 });

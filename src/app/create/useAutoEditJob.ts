@@ -27,6 +27,8 @@ export type AutoEditPlanSummary = {
   framing: VideoProject["framing"];
   /** AIが作って使った画像の枚数(種類)。 */
   generatedImageCount: number;
+  /** 使った画像の出どころ(本人の画像・貯めた画像・新しく作った画像)。古いサーバーからの答えには無い。 */
+  imageSources?: { material: number; library: number; generated: number };
 };
 
 export type AutoEditResult = {
@@ -55,8 +57,12 @@ export type AutoEditRequest = {
   templateId: string | null;
   /** 自動編集で使ってよい画像。 */
   materialImages: { path: string; name: string }[];
-  /** 使える画像が足りない所に、AIに画像を作らせてよいか。 */
+  /** 使える画像が足りない所に、AIが作った画像を出してよいか。 */
   generateMissingImages: boolean;
+  /** 新しく作ってよい画像の数。 */
+  maxGeneratedImages: number;
+  /** 左上のタイトル(空ならAIが決める)。 */
+  title: string;
   /** AIへの要望(空ならなし)。 */
   userRequest: string;
   /** 手直し。前回の案と、直してほしいこと。 */

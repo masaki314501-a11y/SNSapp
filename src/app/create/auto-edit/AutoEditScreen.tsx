@@ -7,7 +7,7 @@ import { useAutoEditJob, type AutoEditResult } from "../useAutoEditJob";
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
-import { MaterialImagesPanel, type MaterialImage } from "./MaterialImagesPanel";
+import { DEFAULT_MAX_GENERATED_IMAGES, MaterialImagesPanel, type MaterialImage } from "./MaterialImagesPanel";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -28,8 +28,10 @@ const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
 
 /** 要望・手直しの指示の長さの上限。サーバー(api/auto-edit/route.ts)と合わせる。 */
 const MAX_USER_TEXT_LENGTH = 1000;
+/** タイトルの長さの上限。サーバーと合わせる。 */
+const MAX_TITLE_LENGTH = 40;
 
-const AI_DECIDES = ["切り方", "寄り(ズーム)", "強調テキスト", "画像", "効果音", "冒頭の見出し", "締めの一言"];
+const AI_DECIDES = ["切り方", "左上のタイトル", "寄り(ズーム)", "強調テキスト", "画像", "効果音", "冒頭の見出し", "締めの一言"];
 
 /**
  * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
@@ -78,6 +80,8 @@ export const AutoEditScreen: React.FC = () => {
       templateId,
       materialImages: project.materialImages ?? [],
       generateMissingImages: project.generateMissingImages ?? true,
+      maxGeneratedImages: project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES,
+      title: project.autoEditTitle ?? "",
       userRequest: project.autoEditRequest ?? "",
       revision,
     });
@@ -142,8 +146,14 @@ export const AutoEditScreen: React.FC = () => {
     saveProject(next);
   };
 
-  const changeGenerateMissingImages = (generateMissingImages: boolean) => {
-    const next = { ...project, generateMissingImages };
+  const changeGenerate = (generateMissingImages: boolean, maxGeneratedImages: number) => {
+    const next = { ...project, generateMissingImages, maxGeneratedImages };
+    setProject(next);
+    saveProject(next);
+  };
+
+  const changeTitle = (autoEditTitle: string) => {
+    const next = { ...project, autoEditTitle };
     setProject(next);
     saveProject(next);
   };
@@ -169,7 +179,7 @@ export const AutoEditScreen: React.FC = () => {
             ))}
           </div>
           <span className="text-xs" style={{ color: "var(--muted)" }}>
-            数分かかることがあります。字幕は次の編集画面で付けるか決められます。
+            数分かかることがあります。字幕は次の編集画面で付けるか決められます。字幕の中の強調(色・書体)は、AIでは付けず、編集画面で自分で選べます。
           </span>
         </div>
 
@@ -231,9 +241,32 @@ export const AutoEditScreen: React.FC = () => {
           images={project.materialImages ?? []}
           onChange={changeMaterialImages}
           generateMissing={project.generateMissingImages ?? true}
-          onChangeGenerateMissing={changeGenerateMissingImages}
+          maxGenerated={project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES}
+          onChangeGenerate={changeGenerate}
           disabled={isProcessing}
         />
+
+        <div className="panel flex flex-col gap-2 p-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="auto-edit-title" className="text-sm font-bold">
+              左上のタイトル
+            </label>
+            <span className="badge-pill neutral">空ならAIが決めます</span>
+          </div>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            動画の最初から最後まで、画面の左上に出します。あとから編集画面でも直せます。
+          </span>
+          <input
+            id="auto-edit-title"
+            type="text"
+            value={project.autoEditTitle ?? ""}
+            onChange={(e) => changeTitle(e.target.value)}
+            maxLength={MAX_TITLE_LENGTH}
+            disabled={isProcessing}
+            placeholder="例: 矯正した方がいい歯並びTOP5"
+            className="field-input w-full text-sm"
+          />
+        </div>
 
         <div className="panel flex flex-col gap-2 p-4">
           <div className="flex items-center gap-2">
@@ -319,9 +352,11 @@ export const AutoEditScreen: React.FC = () => {
                 {result.segments.reduce((sum, s) => sum + (s.images?.length ?? 0), 0) +
                   result.plan.globalImages.length}
                 か所
-                {result.plan.generatedImageCount > 0
-                  ? `(うちAIで作った画像${result.plan.generatedImageCount}種類)`
-                  : ""}
+                {result.plan.imageSources
+                  ? `(あなたの画像${result.plan.imageSources.material}種類・貯めた画像${result.plan.imageSources.library}種類・新しく作った画像${result.plan.imageSources.generated}種類)`
+                  : result.plan.generatedImageCount > 0
+                    ? `(うちAIで作った画像${result.plan.generatedImageCount}種類)`
+                    : ""}
               </li>
               <li>
                 効果音: {result.generatedClips.length}個

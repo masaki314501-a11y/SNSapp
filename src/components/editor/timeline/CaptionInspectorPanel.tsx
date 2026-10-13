@@ -4,7 +4,9 @@ import type { ProjectSegment } from "@/lib/videoProject";
 import { WaitTime } from "@/components/WaitTime";
 import {
   CAPTION_ANIMATION_OPTIONS,
+  CAPTION_POSITION_OPTIONS,
   type CaptionAnimation,
+  type CaptionPosition,
 } from "@video/shared/schema";
 import { CaptionIcon, EditIcon, HighlightIcon, MicIcon, PaletteIcon, SparkleIcon, TrashIcon } from "@/components/icons";
 import { SettingsSection } from "../SettingsSection";
@@ -20,7 +22,10 @@ type Props = {
     patch: Partial<Pick<ProjectSegment, "caption" | "captionAnimation">>
   ) => void;
   /** 字幕の中で強調する単語と、その色(旧・演出タブの「字幕の強調」)。 */
-  onUpdateEmphasis: (key: string, patch: Partial<Pick<ProjectSegment, "emphasisWords" | "emphasisColor">>) => void;
+  onUpdateEmphasis: (
+    key: string,
+    patch: Partial<Pick<ProjectSegment, "emphasisWords" | "emphasisColor" | "clipCaptionPosition">>
+  ) => void;
   onApplyAnimationToAll: (animation: CaptionAnimation) => void;
   onOpenBulkEdit: () => void;
   canOpenBulkEdit: boolean;
@@ -141,6 +146,27 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
             ) : (
               noSelectionNote
             ))}
+          {/* 自動編集は、全体の位置だと顔に重なるクリップだけテロップの位置を変えている。ここで戻せる */}
+          {!multiSelectedNote && target ? (
+            <label className="editor-field">
+              <span>このクリップのテロップの位置</span>
+              <select
+                value={target.clipCaptionPosition ?? ""}
+                onChange={(e) =>
+                  onUpdateEmphasis(target.key, {
+                    clipCaptionPosition: (e.target.value || undefined) as CaptionPosition | undefined,
+                  })
+                }
+              >
+                <option value="">全体の設定と同じ</option>
+                {CAPTION_POSITION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </SettingsSection>
 
         {/* 強調する単語(クリップごと)と、全クリップ共通の見た目を1つの欄にまとめる */}

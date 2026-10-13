@@ -192,6 +192,8 @@ export const textOverlaySchema = z.object({
   glowColor: zColor().optional(),
   /** 斜体にする(タイトルの小見出し等)。 */
   italic: z.boolean().optional(),
+  /** 複数行の時の行のそろえ方。省略時は中央。左上のタイトルは左にそろえる。 */
+  textAlign: z.enum(["left", "center"]).optional(),
   /** 見える縁取りの太さ(横1080pxの画面でのpx)。省略時は文字の大きさの約8%。 */
   strokeWidthPx: z.number().min(1).max(40).optional(),
   /**
@@ -241,6 +243,12 @@ export const imageOverlaySchema = z.object({
   rotationDeg: z.number().min(-45).max(45).default(0),
   cornerRadiusPx: z.number().min(0).max(200).default(0),
   animation: captionAnimationSchema,
+  /**
+   * 高さも決めた時(heightPercent)の収め方。contain=絵の全体が見えるよう枠の中に収める(省略時)、
+   * cover=枠いっぱいに広げてはみ出た所を切る。以前は常にcoverで、横長の画像を横長の枠に入れると上下が切れ、
+   * 絵の半分しか見えないことがあった。
+   */
+  fit: z.enum(["contain", "cover"]).optional(),
 });
 
 export type ImageOverlay = z.infer<typeof imageOverlaySchema>;
@@ -280,6 +288,19 @@ export const videoFramingSchema = z.object({
 });
 
 export type VideoFraming = z.infer<typeof videoFramingSchema>;
+
+/**
+ * 映像の中の顔の位置(元の動画の画面に対する割合。寄り・画角を付ける前)。xPercent/yPercentは顔の中心。
+ * 自動編集(Gemini)が動画を見て書き、文字・画像を顔に重ねない配置や、顔を中心にした寄りに使う。
+ */
+export const faceBoxSchema = z.object({
+  xPercent: z.number().min(0).max(100),
+  yPercent: z.number().min(0).max(100),
+  widthPercent: z.number().min(1).max(100),
+  heightPercent: z.number().min(1).max(100),
+});
+
+export type FaceBox = z.infer<typeof faceBoxSchema>;
 
 /**
  * 動画/画像+テロップで構成されるカットの共通フィールド。
@@ -323,6 +344,10 @@ export const mediaItemBaseSchema = z.object({
   zoom: clipZoomSchema.optional(),
   overlays: z.array(textOverlaySchema).max(20).optional(),
   images: z.array(imageOverlaySchema).max(20).optional(),
+  /** このクリップの顔の位置。自動編集が書く。 */
+  faceBox: faceBoxSchema.optional(),
+  /** このクリップだけテロップの位置を変える(全体の位置だと顔に重なる時など)。省略時は全体の位置。 */
+  clipCaptionPosition: captionPositionSchema.removeDefault().optional(),
 });
 
 export const sfxClipSchema = z.object({

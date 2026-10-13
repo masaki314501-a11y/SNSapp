@@ -38,14 +38,28 @@ const OverlayImage: React.FC<{ image: ImageOverlay }> = ({ image }) => {
         transform: `translate(-50%, -50%) rotate(${image.rotationDeg}deg)`,
       }}
     >
-      <div style={{ transform, opacity, filter, clipPath, height: image.heightPercent !== undefined ? "100%" : undefined }}>
+      <div
+        style={{
+          transform,
+          opacity,
+          filter,
+          clipPath,
+          ...(image.heightPercent !== undefined
+            ? { height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }
+            : {}),
+        }}
+      >
         <Img
           src={resolveClipSrc(image.src)}
           style={
-            image.heightPercent !== undefined
-              ? // 高さも決まっている時(ランキングの枠など)は、枠いっぱいに切り抜いて収める
-                { width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: image.cornerRadiusPx }
-              : { width: "100%", height: "auto", display: "block", borderRadius: image.cornerRadiusPx }
+            image.heightPercent === undefined
+              ? { width: "100%", height: "auto", display: "block", borderRadius: image.cornerRadiusPx }
+              : image.fit === "cover"
+                ? { width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: image.cornerRadiusPx }
+                : // 高さも決まっている時(ランキングの枠など)は、絵の全体が見えるよう枠の中に収める。
+                  // 枠いっぱいに切り抜くと、横長の画像を横長の枠に入れた時に上下が切れ、絵の半分しか見えなかった。
+                  // 角の丸みが見えている絵に付くよう、画像の要素そのものを絵の大きさにする。
+                  { maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", display: "block", borderRadius: image.cornerRadiusPx }
           }
         />
       </div>

@@ -7,7 +7,9 @@ import {
   CAPTION_FONT_FAMILY_OPTIONS,
   CAPTION_POSITION_OPTIONS,
   CAPTION_STYLE_OPTIONS,
+  CAPTION_FONT_SIZE_SCALE,
   clipZoomSchema,
+  faceBoxSchema,
   imageOverlaySchema,
   shapeOverlaySchema,
   textOverlaySchema,
@@ -18,6 +20,7 @@ import {
   type CaptionPosition,
   type CaptionStyle,
   type ClipZoom,
+  type FaceBox,
   type ImageOverlay,
   type ShapeOverlay,
   type TextOverlay,
@@ -25,7 +28,7 @@ import {
 } from "@video/shared/schema";
 import { MAX_CLIPS } from "@video/templates/standard/schema";
 import { VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
-import { breakIntoLines, estimateOverlayBox, type BoxPercent } from "@video/shared/textWrap";
+import { breakIntoLines, estimateOverlayBox, estimateTextWidthPx, type BoxPercent } from "@video/shared/textWrap";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { runWithGeminiRateLimit, type GeminiRateLimitLane } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
@@ -91,8 +94,15 @@ export type AutoEditPlanInput = {
   template: EditTemplate | null;
   /** 本人が渡した「使える画像」(症例写真・商品写真など)。番号(1始まり)で指定させて動画に重ねる。 */
   materialImages: ResolvedMaterialImage[];
-  /** 使える画像が足りない所に、AIに画像を作らせてよいか(generateImage.ts)。 */
+  /** 使える画像が足りない所に、AIが作った画像(画像の棚・新しく作る画像)を出してよいか(generateImage.ts)。 */
   generateMissingImages: boolean;
+  /**
+   * 1回の自動編集で新しく作ってよい画像の数(0〜MAX_GENERATED_IMAGES)。1枚約10円かかるため、本人が上限を決める。
+   * 0なら棚に貯めた画像だけを使う。上限を超えた分は画像を出さない(ランキングの枠は項目名の文字で埋める)。
+   */
+  maxGeneratedImages: number;
+  /** 本人が決めた、左上に出すタイトル。空ならAIが動画の内容から決める。 */
+  title?: string;
   /** 本人がAIへの要望として書いた文(「保証は日本の方に〇」等)。手本より優先する。 */
   userRequest?: string;
   /**
@@ -116,6 +126,10 @@ export type AutoEditClipPlan = {
   zoom?: ClipZoom;
   overlays?: TextOverlay[];
   images?: ImageOverlay[];
+  /** 顔の位置(元の動画の画面に対する割合)。 */
+  faceBox?: FaceBox;
+  /** テロップを全体の位置に出すと顔に重なる時の、このクリップだけの位置。 */
+  clipCaptionPosition?: CaptionPosition;
   sfx: { presetId: string; offsetSeconds: number }[];
 };
 
@@ -143,6 +157,8 @@ export type AutoEditPlan = {
   showCaptions: boolean;
   /** AIが作って動画に使った画像の枚数(種類)。 */
   generatedImageCount: number;
+  /** 動画に使った画像(種類)の出どころ。本人の画像・画像の棚(無料)・新しく作った画像(1枚約10円)。 */
+  imageSources: { material: number; library: number; generated: number };
   clips: AutoEditClipPlan[];
   /** 丸め込む前のGeminiの答え。手直し(revision)のときに前回の案として渡し直す。 */
   rawPlan: RawAutoEditPlan;
@@ -205,7 +221,8 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
    AIに画像を作らせてよい。imageNumberをnullにし、descriptionに描いてほしい内容を具体的に書き(何を・どの向きから・
    どこが特徴か。文字は入れない前提で。「バニーティース」のような比喩の名前はそのまま書かず、「上の前歯2本が
    ほかの歯より大きく長い口元」のように見た目で書く)、nameにその画像の短い名前を付ける。同じ画像を2回出す(大きく出す→枠に入れる)
-   ときは、nameとdescriptionを同じにする。作れるのは最大${MAX_GENERATED_IMAGES}種類(name単位)まで。
+   ときは、nameとdescriptionを同じにする。前に作った画像を貯めてあり、同じ物の画像はそれを使う(無料)。
+   新しく作れるのは${input.maxGeneratedImages}種類までで、1枚ごとに料金がかかるので、画像があると本当に伝わりやすくなる場面に絞る。
    画像を作るなら、generatedImageStyleで画風を選ぶ: 医療・歯科・美容・健康・薬・体の話はillustration(図解風イラスト)必須。
    作った画像を本物の症例写真のように見せると誤解を招くため。それ以外(料理・商品・場所など)はphoto(写真風)でもよい。
    画像を作らないならgeneratedImageStyleはnull。`
@@ -231,6 +248,11 @@ ${userRequest}
 
 `
     : "";
+
+  const userTitle = input.title?.trim();
+  const titleInstruction = userTitle
+    ? `本人がタイトルを「${userTitle}」と決めているので、titleにはそのまま書く(言い換えない)。`
+    : "この動画が何の話かが一目でわかる短い言葉(全角16文字以内。2行にするなら意味の切れ目に「\\n」を1つ)を、本人の話から作る。参考スクショにタイトルがあっても文言は真似しない。";
 
   const templateSection = input.template
     ? `
@@ -287,9 +309,11 @@ ${keepRangesList}
    - 1クリップはおおむね1〜4秒(話のひと区切り)。長く話し続ける所も区切ってテンポを出す
    - 範囲の順番は入れ替えてよい(冒頭に一番強い一言を持ってくる等)。ただし同じ区間を二度使わない
    - クリップ数は最大${MAX_CLIPS}個
-3. globalOverlays: 1で読み取った「ずっと画面に置いてある物」のうち、この動画にも必要な物を、同じ位置(左上なら左上)・
-   同じ見た目で再現する(4の「最後まで残す物」と合わせて最大${MAX_GLOBAL_OVERLAYS}個)。参考スクショの上部に動画のテーマを表す
-   タイトルが常に出ているなら、文言は真似せず、この動画の内容に合わせたタイトルを作る。何の動画か映像だけで十分わかるなら無くてよい。1行ごとに別要素にして色を変えてもよい。画像は4-2の「使える画像」だけ置ける。
+3. title: 画面の左上に最初から最後まで出すタイトル。${titleInstruction}
+   位置・大きさ・見た目はサーバー側で決まった形にするので、文言だけ書く。
+3-2. globalOverlays: 1で読み取った「ずっと画面に置いてある物」のうち、この動画にも必要な物を、同じ位置(左上なら左上)・
+   同じ見た目で再現する(4の「最後まで残す物」と合わせて最大${MAX_GLOBAL_OVERLAYS}個)。ただし動画のテーマを表すタイトルは
+   3のtitleに書いたので、globalOverlaysには入れない。画像は4-2の「使える画像」だけ置ける。
    それ以外のアイコンや図は、近い意味の短い文字で置き換える。項目はoverlaysと同じ(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで表示)。
    ランキングの「1位」〜の文字は、1-3の枠の中(左下など参考と同じ所)に置く。
 4. overlays(物): 参考スクショで一時的に出ている物(矢印・ラベル・アイコン等)は、本人の動画にも同じ役割の場面がある
@@ -308,9 +332,9 @@ ${keepRangesList}
    keepUntilEnd=trueの物で埋め、発表のたびに埋めていく(使える画像があれば4-2のとおり画像で、無ければ枠の中か
    すぐ横に項目名の文字で)。埋める物には必ずslotRank(何位の枠か)を書く。空の枠を出したまま埋めないのは不可。
    文言・位置(xPercent/yPercent、文字の中心)・大きさ(fontSizePx、20〜220)・色・縁取り色・帯の色・傾き(rotationDeg)・
-   出すタイミング(クリップ先頭からの秒)はすべて自由。参考の見た目を細かく再現するため、文字ごとに書体(fontFamily、
-   候補は手順②と同じ。省略するとテロップと同じ)・光(glowColor、文字の周りのにじみ)・斜体(italic)・
-   縁取りの見える太さ(strokeWidthPx、横1080pxの画面でのpx。省略すると文字の大きさの約8%)も指定できる。
+   出すタイミング(クリップ先頭からの秒)はすべて自由。参考の見た目を細かく再現するため、文字ごとに光(glowColor、
+   文字の周りのにじみ)・斜体(italic)・縁取りの見える太さ(strokeWidthPx、横1080pxの画面でのpx。省略すると文字の大きさの約8%)も指定できる。
+   書体は動画全体でそろえる(文字ごとに変えない)。
    animationは候補から選ぶ:
 ${captionAnimationHints}
 ${imageSection}
@@ -320,6 +344,10 @@ ${imageSection}
    字幕を出さず、要点をまとめた強調テキストだけを出しているならfalse。
 5. speech: そのクリップで本人が話している言葉をそのまま書き起こす(テロップになる)。字幕として読みやすい長さ
    (1〜2行、全角25文字くらいまで)に収まるよう、長く話す所はクリップを分ける。
+   字幕を2行にする時は、speechの中の意味の切れ目に「\\n」を1つだけ入れてよい(例:「日本の方が\\n通いやすい」)。
+5-2. face: そのクリップで話している人の顔の位置。添付した本人の動画の画面(寄りを付ける前)に対する割合で、
+   xPercent/yPercentは顔の中心、widthPercent/heightPercentは顔(髪・あごを含む)の幅・高さ。顔が映っていなければnull。
+   文字・画像を顔に重ねないよう、サーバー側でこの位置を避けて配置し直すので、正確に書く。
 6. theme: テロップの見た目。全体の差し色(primaryColor、#RRGGBB)・フォント・テロップの位置・背景の付き方。参考スクショに合わせる。
    手順①で置いた物と重ならない位置を選ぶ。
    fontFamily候補:
@@ -330,19 +358,12 @@ ${captionStyleHints}
    captionFontSize(字幕の大きさ): small / medium / large / xlarge。字幕を画面中央に大きく出す参考ならlarge〜xlarge。
 7. captionAnimation: テロップの出現演出(候補は4と同じ)。
 
-### 手順③ テロップの強調
-8. emphasisWords / emphasisColor: テロップの中で色を変えて大きく見せる単語と、その色(#RRGGBB)。
-   話の要になる数字・結論・キーワードがあるクリップだけ。1クリップ1〜2語まで、無ければ付けない。
-   emphasisWordsはspeechの中に実際に出てくる語にすること。
-8-2. captionAccentColor / captionFontFamily / captionGlowColor: 参考が、場面の気持ちに合わせて特定の字幕だけ見た目を変えているなら、
-   そのクリップだけ変える。縁取りの色(強い結論は赤など)・書体(しみじみ語る所や本音は明朝など)・光(強い一言はオレンジ、
-   前向きな話は緑など)。参考で場面ごとに字幕の見た目が変わっているなら、本人の動画でも同じ気持ちの場面で同じように変える。
-   全体と同じならnull。
-   字幕を2行にする時は、speechの中の意味の切れ目に「\n」を1つだけ入れてよい(例:「日本の方が\n通いやすい」)。
+### 手順③ 強調テキスト
+テロップの中の強調(色を変える語・書体・光)は、本人が後で選ぶので付けない。テロップの書体・色は動画全体で1つにそろえる。
 9. overlays(強調): テロップとは別に画面へ出す強調テキスト(「実は3倍!」「ここ重要」「え?」など)。テロップだけでは
    伝わり切らない数字・結論・ツッコミ・問いかけがある所にだけ、手順①の物に足す。同じ時間に出すのは1〜2個まで。
    項目は4と同じ。参考スクショに似た見た目にし、顔や手順①の物・テロップを隠さない位置に置く。
-   参考が場面の気持ち(驚き・かわいい・深刻など)に合わせて文字の色・縁取り・光・書体を変えているなら、同じように変える。
+   参考が場面の気持ち(驚き・かわいい・深刻など)に合わせて文字の色・縁取り・光を変えているなら、同じように変える。
 
 ### 手順④ カメラアングル(違和感が出ないことを最優先。迷ったら寄らない)
 10. zoom: 手順①〜③で決めた山場(強調した数字・結論・オチ)だけで画面を寄せる。見ている人が「カメラが動いた」と
@@ -372,16 +393,17 @@ ${sfxPresetHints}
 15. summary: どこを切ってどこをフックにし、どこで山を作ったかを日本語1〜2文で書く。
 
 ## 画面の配置(重なると読めなくなるので必ず守る)
-- globalOverlays(ずっと出すタイトル): 画面上部(yPercentが8〜25あたり)
+- title: 画面の左上にずっと出る(サーバー側で置く)
+- globalOverlays(ずっと出す物): titleと重ならない所
 - hook: 冒頭3秒だけ画面中央に大きく出る
 - テロップ: themeのcaptionPositionの位置(top=上部 / middle=中央 / bottom=下部)
 - cta: 最後の5秒、画面下から2割あたりに出る
-- overlays: 上の要素と同じ時間に同じ場所へ置かない。顔も隠さない
+- overlays・images: 上の要素と同じ時間に同じ場所へ置かない。5-2で書いた顔も隠さない
 - overlaysはテロップ(speech)と同じ文言をそのまま繰り返さず、短い見出し・ツッコミ・数字にする
 
 ## 文字の改行(変な所で改行されると読みにくいので必ず守る)
 - speechには改行を入れない(画面の幅に合わせて自動で折り返す)
-- overlays・globalOverlays・hook・ctaは、なるべく1行(全角10文字以内)に収まる短い言葉にする
+- title・overlays・globalOverlays・hook・ctaは、なるべく1行(全角10文字以内)に収まる短い言葉にする
 - 2行にする時だけ「\\n」で改行し、改行は必ず意味の切れ目(文節・助詞の後)に入れる。
   単語の途中・数字と単位の間(「3/倍」)・1〜2文字だけの行は作らない
   (良い例:「知らないと\\n損する話」 悪い例:「知らないと損す\\nる話」「最\\n強」)
@@ -535,18 +557,23 @@ const generatedImageKey = (raw: RawAutoEditImage): string => raw.name?.trim() ||
 const findMaterialImage = (raw: RawAutoEditImage, materialImages: ResolvedMaterialImage[]) =>
   raw.imageNumber != null ? materialImages[raw.imageNumber - 1] : undefined;
 
+/** AIが作った画像の出どころ。棚(前に作った画像)は無料、新しく作った画像は1枚約10円。 */
+type GeneratedImageSource = { path: string; source: "library" | "generated" };
+
 /**
- * 使える画像に無い画像(imageNumberがnull)をAIに作らせ、目印→画像のパスを返す。1枚失敗しても他は続け、
- * 作れなかった画像はその場所に出さない(自動編集全体は止めない)。
+ * 使える画像に無い画像(imageNumberがnull)を、画像の棚から探し、無い分だけAIに作らせる。目印→画像のパスを返す。
+ * 新しく作るのは本人が決めた上限(maxGeneratedImages)まで。1枚失敗しても他は続け、作れなかった画像はその場所に出さない
+ * (自動編集全体は止めない)。完成動画に入らないクリップ(使う範囲の外など)の画像は作らない。
  */
 const generateMissingImages = async (
   plan: { clips: RawAutoEditClip[]; generatedImageStyle?: GeneratedImageStyle | null },
-  materialImages: ResolvedMaterialImage[]
-): Promise<Map<string, string>> => {
+  input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "maxGeneratedImages">
+): Promise<Map<string, GeneratedImageSource>> => {
   const requests = new Map<string, { name: string; description: string }>();
-  for (const clip of plan.clips) {
+  const usedClips = plan.clips.filter((clip) => fitClipToKeepRanges(clip, input.keepRanges)).slice(0, MAX_CLIPS);
+  for (const clip of usedClips) {
     for (const image of clip.images ?? []) {
-      if (findMaterialImage(image, materialImages)) continue;
+      if (findMaterialImage(image, input.materialImages)) continue;
       // 枠に入れる画像は、その前に大きく出していた画像を使い回す(finalizeAutoEditPlan)ので、別には作らない。
       if (isSlotImage(image)) continue;
       const key = generatedImageKey(image);
@@ -558,7 +585,7 @@ const generateMissingImages = async (
   if (requests.size === 0) return new Map();
   // 画風の指定が無ければ、誤解を招きにくいイラストにする。
   const style = plan.generatedImageStyle ?? "illustration";
-  const paths = new Map<string, string>();
+  const sources = new Map<string, GeneratedImageSource>();
 
   // まず画像の棚から探す(同じ物の画像が前に作ってあれば、作らずに使う)。画風が違う画像は混ぜない。
   const entries = [...requests.entries()];
@@ -566,29 +593,39 @@ const generateMissingImages = async (
   const exact = new Map(library.map((image) => [image.description.trim(), image]));
   const unmatched = entries.filter(([key, request]) => {
     const image = exact.get(request.description.trim());
-    if (image) paths.set(key, libraryImageSrc(image));
+    if (image) sources.set(key, { path: libraryImageSrc(image), source: "library" });
     return !image;
   });
+  const usedPaths = new Set([...sources.values()].map((entry) => entry.path));
   const matches = await matchLibraryImages(
     unmatched.map(([, request]) => request),
-    library.filter((image) => ![...paths.values()].includes(libraryImageSrc(image)))
+    library.filter((image) => !usedPaths.has(libraryImageSrc(image)))
   );
-  for (const [index, image] of matches) paths.set(unmatched[index][0], libraryImageSrc(image));
+  for (const [index, image] of matches) sources.set(unmatched[index][0], { path: libraryImageSrc(image), source: "library" });
 
-  // 棚に無い分だけ作る(作った画像は棚に足される)。
+  // 棚に無い分だけ、上限まで作る(作った画像は棚に足される)。話に出てくる順に作る。
+  const limit = clamp(Math.floor(input.maxGeneratedImages), 0, MAX_GENERATED_IMAGES);
   let generated = 0;
+  let skipped = 0;
   for (const [key, request] of entries) {
-    if (paths.has(key) || generated >= MAX_GENERATED_IMAGES) continue;
+    if (sources.has(key)) continue;
+    if (generated >= limit) {
+      skipped++;
+      continue;
+    }
     try {
       const result = await getOrGenerateImage(request.description, style, request.name);
       if (!result.cached) generated++;
-      paths.set(key, result.path);
+      sources.set(key, { path: result.path, source: result.cached ? "library" : "generated" });
     } catch (error) {
       console.warn(`[autoEditPlan] 画像「${key}」を作れなかったため、その画像は出しません`, error);
     }
   }
-  console.info(`[autoEditPlan] 画像${requests.size}種類のうち、${requests.size - generated}種類は棚の画像を使い、${generated}種類を作りました`);
-  return paths;
+  console.info(
+    `[autoEditPlan] 画像${requests.size}種類: 棚から${requests.size - generated - skipped}種類・新しく作った${generated}種類` +
+      (skipped > 0 ? `・上限(${limit}枚)を超えて出さない${skipped}種類` : "")
+  );
+  return sources;
 };
 
 /** AIが作った画像を使った動画に添える注意書き。作った画像を本物の写真と誤解させないため。 */
@@ -731,6 +768,92 @@ const normalizeZoom = (clip: RawAutoEditClip): ClipZoom | undefined => {
     focusYPercent: clamp(clip.zoom.focusYPercent ?? 40, 0, 100),
   });
   return parsed.success ? parsed.data : undefined;
+};
+
+/** Geminiが書いた顔の位置を丸め込む。小さすぎる・読めない物は無かったことにする。 */
+const normalizeFace = (raw: RawAutoEditClip["face"]): FaceBox | undefined => {
+  if (!raw) return undefined;
+  const parsed = faceBoxSchema.safeParse({
+    xPercent: clamp(raw.xPercent, 0, 100),
+    yPercent: clamp(raw.yPercent, 0, 100),
+    widthPercent: clamp(raw.widthPercent, 1, 100),
+    heightPercent: clamp(raw.heightPercent, 1, 100),
+  });
+  return parsed.success && parsed.data.widthPercent >= 3 && parsed.data.heightPercent >= 2 ? parsed.data : undefined;
+};
+
+/** 顔の位置の見積もりの誤差を見込んで、顔の範囲を上下左右に広げる割合。 */
+const FACE_MARGIN_RATIO = 0.15;
+
+/**
+ * 顔が完成動画の画面のどこに映るか(%)。映像には画角(framing)と寄り(zoom)が付くので、その分だけ動かす
+ * (描画側のMediaBackground.tsxと同じ計算。中心の点は動かず、ほかは中心から離れる方向へ広がる)。
+ * ゆっくり寄る(slow)クリップは、寄る前と寄った後の両方を含む範囲にする。
+ */
+export const faceOnScreen = (face: FaceBox, framing: VideoFraming | null, zoom: ClipZoom | undefined): BoxPercent => {
+  const halfWidth = (face.widthPercent / 2) * (1 + FACE_MARGIN_RATIO * 2);
+  const halfHeight = (face.heightPercent / 2) * (1 + FACE_MARGIN_RATIO * 2);
+  const scaleAround = (value: number, focus: number, scale: number) => focus + (value - focus) * scale;
+  const project = (zoomScale: number): BoxPercent => {
+    const toScreen = (x: number, y: number) => {
+      let px = zoom ? scaleAround(x, zoom.focusXPercent, zoomScale) : x;
+      let py = zoom ? scaleAround(y, zoom.focusYPercent, zoomScale) : y;
+      if (framing) {
+        px = scaleAround(px, framing.focusXPercent, framing.scale);
+        py = scaleAround(py, framing.focusYPercent, framing.scale);
+      }
+      return { x: px, y: py };
+    };
+    const topLeft = toScreen(face.xPercent - halfWidth, face.yPercent - halfHeight);
+    const bottomRight = toScreen(face.xPercent + halfWidth, face.yPercent + halfHeight);
+    return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
+  };
+  const end = project(zoom?.scale ?? 1);
+  const box = zoom?.style === "slow" ? unionBox(project(1), end) : end;
+  return {
+    left: clamp(box.left, 0, 100),
+    top: clamp(box.top, 0, 100),
+    right: clamp(box.right, 0, 100),
+    bottom: clamp(box.bottom, 0, 100),
+  };
+};
+
+const unionBox = (a: BoxPercent, b: BoxPercent): BoxPercent => ({
+  left: Math.min(a.left, b.left),
+  top: Math.min(a.top, b.top),
+  right: Math.max(a.right, b.right),
+  bottom: Math.max(a.bottom, b.bottom),
+});
+
+/** 左上のタイトルの決まった形。白い文字に黒い縁取りで、どんな映像の上でも読めるようにする。 */
+const TITLE_FONT_SIZE_PX = 64;
+/** タイトルの1行の最大幅(px)。左上に収め、画面の右半分(顔のある所)まで伸ばさない。 */
+const TITLE_MAX_WIDTH_PX = 620;
+/** タイトルの左端・上端の位置(%)。 */
+const TITLE_LEFT_PERCENT = 4;
+const TITLE_TOP_PERCENT = 5;
+
+/** 左上のタイトルを作る。位置は文字の中心で持つので、文字の大きさの見積もりから左上が決まった所に来るよう中心を決める。 */
+const buildTitleOverlay = (text: string): TextOverlay => {
+  const lines = breakIntoLines(text, TITLE_FONT_SIZE_PX, TITLE_MAX_WIDTH_PX).slice(0, 3);
+  const base: TextOverlay = {
+    text: lines.join("\n"),
+    startOffsetSeconds: 0,
+    xPercent: 50,
+    yPercent: 50,
+    fontSizePx: TITLE_FONT_SIZE_PX,
+    color: "#FFFFFF",
+    strokeColor: "#000000",
+    rotationDeg: 0,
+    animation: "fade",
+    textAlign: "left",
+  };
+  const box = estimateOverlayBox(base);
+  return {
+    ...base,
+    xPercent: TITLE_LEFT_PERCENT + (box.right - box.left) / 2,
+    yPercent: TITLE_TOP_PERCENT + (box.bottom - box.top) / 2,
+  };
 };
 
 /**
@@ -1026,6 +1149,105 @@ const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, o
   return best.overlay;
 };
 
+/** テロップの文字の大きさ・余白・画面の端からの距離。描画側(AnimatedCaption.tsx)と同じ値。 */
+const CAPTION_BASE_FONT_PX: Record<CaptionStyle, number> = { outline: 48, pill: 44 };
+const CAPTION_OFFSET_FROM_EDGE_PX = 160;
+const CAPTION_MAX_WIDTH_PX = VIDEO_WIDTH - 48 * 2;
+
+/** テロップがその位置で画面のどこを占めるかの見積もり(%)。 */
+const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle, fontSize: CaptionFontSize): BoxPercent => {
+  const fontPx = CAPTION_BASE_FONT_PX[style] * CAPTION_FONT_SIZE_SCALE[fontSize];
+  const padding = style === "pill" ? 32 : 0;
+  const lines = breakIntoLines(text || "あ", fontPx, CAPTION_MAX_WIDTH_PX - padding * 2);
+  const widthPx = Math.min(CAPTION_MAX_WIDTH_PX, estimateTextWidthPx(lines.join("\n"), fontPx) + padding * 2);
+  const heightPercent = ((lines.length * fontPx * 1.35 + padding) / VIDEO_HEIGHT) * 100;
+  const edgePercent = (CAPTION_OFFSET_FROM_EDGE_PX / VIDEO_HEIGHT) * 100;
+  const top = position === "top" ? edgePercent : position === "middle" ? 50 - heightPercent / 2 : 100 - edgePercent - heightPercent;
+  const halfWidth = (widthPx / VIDEO_WIDTH) * 50;
+  return { left: 50 - halfWidth, right: 50 + halfWidth, top, bottom: top + heightPercent };
+};
+
+/**
+ * テロップが顔に重なるクリップだけ、テロップの位置を変える。顔に重ならない位置のうち、ずっと出ている物
+ * (タイトル・ランキングの枠など)と重なる面積が一番小さい所(同じなら下→上→中央の順)。
+ * テロップの位置は全体で1つだが、寄ったクリップや顔が下の方に映るクリップでは、決まった位置だと顔を隠していた。
+ */
+const chooseCaptionPositions = (
+  clips: AutoEditClipPlan[],
+  framing: VideoFraming | null,
+  theme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize },
+  shownItems: (TimedBox & { weight: number })[]
+): AutoEditClipPlan[] => {
+  let clipStart = 0;
+  return clips.map((clip) => {
+    const start = clipStart;
+    clipStart += clip.durationInSeconds;
+    if (!clip.faceBox) return clip;
+    const timed = (box: BoxPercent): TimedBox => ({ ...box, start, end: start + clip.durationInSeconds });
+    const face = timed(faceOnScreen(clip.faceBox, framing, clip.zoom));
+    const boxAt = (position: CaptionPosition) => timed(captionBox(clip.speechText, position, theme.style, theme.fontSize));
+    if (!boxesOverlap(boxAt(theme.position), face)) return clip;
+    const alternatives = (["bottom", "top", "middle"] as const).filter((position) => position !== theme.position);
+    const awayFromFace = alternatives.filter((position) => !boxesOverlap(boxAt(position), face));
+    // ほかの物と重なる面積が一番小さい位置(どれとも重ならない位置があればそこ)。文字どうしが重なると両方読めなくなるので、
+    // 文字との重なりは画像・枠との重なりより重く数える。
+    const overlapArea = (position: CaptionPosition) => {
+      const box = boxAt(position);
+      return shownItems
+        .filter((item) => item.start < box.end && box.start < item.end)
+        .reduce(
+          (sum, item) =>
+            sum +
+            item.weight *
+              Math.max(0, Math.min(box.right, item.right) - Math.max(box.left, item.left)) *
+              Math.max(0, Math.min(box.bottom, item.bottom) - Math.max(box.top, item.top)),
+          0
+        );
+    };
+    const chosen = awayFromFace.reduce<CaptionPosition | undefined>(
+      (best, position) => (best === undefined || overlapArea(position) < overlapArea(best) ? position : best),
+      undefined
+    );
+    return chosen ? { ...clip, clipCaptionPosition: chosen } : clip;
+  });
+};
+
+/**
+ * 画像を、顔に重ならない一番近い位置・大きさへ動かす。元の位置で重ならなければそのまま。
+ * 切り抜きはせず、少し小さくする・上下左右にずらす、の組み合わせから元の見た目から一番変わらない物を選ぶ。
+ */
+const placeImageAwayFromFaces = (image: ImageOverlay, start: number, end: number, faces: TimedBox[]): ImageOverlay => {
+  const overlapsFace = (candidate: ImageOverlay) =>
+    faces.some((face) => boxesOverlap(imageBox(candidate, start, end), face, PLACEMENT_GAP_PERCENT));
+  if (!faces.some((face) => boxesOverlap(imageBox(image, start, end), face))) return image;
+  let best: { image: ImageOverlay; cost: number } | null = null;
+  for (const scale of [1, 0.85, 0.7, 0.55]) {
+    for (let dy = 0; dy <= 50; dy += 2) {
+      for (const signY of dy === 0 ? [1] : [1, -1]) {
+        for (const dx of [0, 10, -10, 20, -20, 30, -30]) {
+          const cost = dy + Math.abs(dx) * 1.2 + (1 - scale) * 60;
+          if (best && cost >= best.cost) continue;
+          const candidate: ImageOverlay = {
+            ...image,
+            xPercent: image.xPercent + dx,
+            yPercent: image.yPercent + signY * dy,
+            widthPercent: Math.max(5, image.widthPercent * scale),
+            ...(image.heightPercent !== undefined ? { heightPercent: Math.max(2, image.heightPercent * scale) } : {}),
+          };
+          const box = imageBox(candidate, start, end);
+          const inside = box.left >= 0 && box.right <= 100 && box.top >= SCREEN_MARGIN_PERCENT && box.bottom <= 100 - SCREEN_MARGIN_PERCENT;
+          if (inside && !overlapsFace(candidate)) best = { image: candidate, cost };
+        }
+      }
+    }
+  }
+  if (!best) {
+    console.info(`[autoEditPlan] 画像の、顔に重ならない置き場所が見つからなかったため、そのままにします`);
+    return image;
+  }
+  return best.image;
+};
+
 /**
  * ずっと出る文字(タイトル・順位の文字など)に、ほかの文字が重ならないようにする(ルール)。
  * 1. ずっと出る文字どうし: 先に置いた方を優先し、後の方をずらす
@@ -1038,7 +1260,8 @@ export const avoidTextOverlaps = (
   clips: AutoEditClipPlan[],
   globalShapes: ShapeOverlay[],
   globalImages: ImageOverlay[],
-  totalSeconds: number
+  totalSeconds: number,
+  framing: VideoFraming | null = null
 ): { globalOverlays: TextOverlay[]; clips: AutoEditClipPlan[]; globalImages: ImageOverlay[] } => {
   const endOf = (item: { startOffsetSeconds: number; durationInSeconds?: number }, fallbackEnd: number) =>
     item.durationInSeconds !== undefined ? item.startOffsetSeconds + item.durationInSeconds : fallbackEnd;
@@ -1046,37 +1269,60 @@ export const avoidTextOverlaps = (
   const isPersistent = (item: { startOffsetSeconds: number; durationInSeconds?: number }) =>
     item.durationInSeconds === undefined || item.durationInSeconds >= totalSeconds / 2;
 
-  const placedPersistent: TimedBox[] = [];
-  const resultGlobal: TextOverlay[] = globalOverlays.map((overlay) => overlay);
-  for (const [index, overlay] of globalOverlays.entries()) {
-    if (!isPersistent(overlay)) continue;
-    const end = endOf(overlay, totalSeconds);
-    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, placedPersistent);
-    resultGlobal[index] = placed;
-    placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
-  }
-
-  // ずっと出す画像(ランキングの枠に入れた写真など)は、ずっと出る文字を隠さないよう切り詰める
-  const arrangedImages = globalImages.map((image) =>
-    isPersistent(image)
-      ? trimImageAwayFromText(image, { start: image.startOffsetSeconds, end: endOf(image, totalSeconds) }, placedPersistent)
-      : image
-  );
-
-  const obstacles: TimedBox[] = [
-    ...placedPersistent,
-    ...globalShapes
-      .filter((shape) => shape.kind !== "circle")
-      .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
-    ...arrangedImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
-  ];
   let clipStart = 0;
   const clipTimes = clips.map((clip) => {
     const start = clipStart;
     clipStart += clip.durationInSeconds;
     return start;
   });
-  clips.forEach((clip, clipIndex) => {
+  // 顔の範囲(クリップごと)。文字・画像はこれを避ける(Geminiに「顔を隠さないで」と頼むだけでは顔に重なることがあった)。
+  const faces: TimedBox[] = clips.flatMap((clip, clipIndex) =>
+    clip.faceBox
+      ? [{ ...faceOnScreen(clip.faceBox, framing, clip.zoom), start: clipTimes[clipIndex], end: clipTimes[clipIndex] + clip.durationInSeconds }]
+      : []
+  );
+
+  const placedPersistent: TimedBox[] = [];
+  const resultGlobal: TextOverlay[] = globalOverlays.map((overlay) => overlay);
+  for (const [index, overlay] of globalOverlays.entries()) {
+    if (!isPersistent(overlay)) continue;
+    const end = endOf(overlay, totalSeconds);
+    // 「1位」などの順位の文字は枠と組なので、顔を理由には動かさない(枠ごと人物を避けて置いてある)
+    const obstacles = rankOfLabel(overlay.text) === null ? [...placedPersistent, ...faces] : placedPersistent;
+    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles);
+    resultGlobal[index] = placed;
+    placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
+  }
+
+  // ずっと出す画像(ランキングの枠に入れた写真など)は、ずっと出る文字を隠さないよう切り詰める。
+  // 話の間だけ出す画像は、顔に重なるなら顔の無い所へずらす。
+  const arrangedImages = globalImages.map((image) => {
+    const end = endOf(image, totalSeconds);
+    return isPersistent(image)
+      ? trimImageAwayFromText(image, { start: image.startOffsetSeconds, end }, placedPersistent)
+      : placeImageAwayFromFaces(image, image.startOffsetSeconds, end, faces);
+  });
+  const clipsWithImagesPlaced = clips.map((clip, clipIndex) =>
+    clip.images
+      ? {
+          ...clip,
+          images: clip.images.map((image) => {
+            const start = clipTimes[clipIndex] + image.startOffsetSeconds;
+            return placeImageAwayFromFaces(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds), faces);
+          }),
+        }
+      : clip
+  );
+
+  const obstacles: TimedBox[] = [
+    ...placedPersistent,
+    ...faces,
+    ...globalShapes
+      .filter((shape) => shape.kind !== "circle")
+      .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
+    ...arrangedImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
+  ];
+  clipsWithImagesPlaced.forEach((clip, clipIndex) => {
     for (const image of clip.images ?? []) {
       const start = clipTimes[clipIndex] + image.startOffsetSeconds;
       obstacles.push(imageBox(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds)));
@@ -1090,7 +1336,7 @@ export const avoidTextOverlaps = (
     resultGlobal[index] = placed;
     obstacles.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
-  const resultClips = clips.map((clip, clipIndex) => {
+  const resultClips = clipsWithImagesPlaced.map((clip, clipIndex) => {
     if (!clip.overlays) return clip;
     const overlays = clip.overlays.map((overlay) => {
       const start = clipTimes[clipIndex] + overlay.startOffsetSeconds;
@@ -1110,12 +1356,13 @@ export const avoidTextOverlaps = (
  */
 export const finalizeAutoEditPlan = async (
   data: RawAutoEditPlan,
-  input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages">,
+  input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages"> &
+    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title">>,
   options: { resolveImage?: ImageSourceResolver } = {}
 ): Promise<AutoEditPlan> => {
-  const generatedImagePaths = input.generateMissingImages
-    ? await generateMissingImages(data, input.materialImages)
-    : new Map<string, string>();
+  const generatedImageSources = input.generateMissingImages
+    ? await generateMissingImages(data, { ...input, maxGeneratedImages: input.maxGeneratedImages ?? MAX_GENERATED_IMAGES })
+    : new Map<string, GeneratedImageSource>();
   // 枠に入れる画像のうち、番号も作った画像も結び付かない物は、直前に大きく出していた画像を使う。
   // 枠用の画像を、大きく出した画像と違う説明・名前で書いてくることがあり、以前はそのまま別の画像として作ろうとして
   // (作る数の上限で)作られず、枠が空のままになっていた。
@@ -1123,7 +1370,7 @@ export const finalizeAutoEditPlan = async (
   const resolveImageSrc: ImageSourceResolver = (raw) =>
     options.resolveImage?.(raw) ??
     findMaterialImage(raw, input.materialImages)?.path ??
-    (raw.imageNumber == null ? generatedImagePaths.get(generatedImageKey(raw)) : undefined) ??
+    (raw.imageNumber == null ? generatedImageSources.get(generatedImageKey(raw))?.path : undefined) ??
     slotFallbackSrc.get(raw);
   let lastShownImageSrc: string | undefined;
 
@@ -1148,7 +1395,8 @@ export const finalizeAutoEditPlan = async (
       if (isSlotImage(image)) {
         if (lastShownImageSrc) slotFallbackSrc.set(image, lastShownImageSrc);
       } else {
-        lastShownImageSrc = resolveImageSrc(image) ?? lastShownImageSrc;
+        // 出せなかった画像(作る上限を超えた等)の後の枠に、その前の話題の画像が入らないよう、出せない時は空にする。
+        lastShownImageSrc = resolveImageSrc(image);
       }
     }
     for (const overlay of overlays) {
@@ -1161,6 +1409,28 @@ export const finalizeAutoEditPlan = async (
       const fallback = slotFallbackSrc.get(image);
       if (fallback) slotFallbackSrc.set(lifted, fallback);
       liftedImages.push(lifted);
+      // 枠に入れる画像が出せない(作る上限を超えた等)なら、代わりに項目名の文字で枠を埋める(空の枠を残さない)。
+      const name = image.name?.trim();
+      if (isSlotImage(image) && !resolveImageSrc(lifted) && name && !overlays.some((overlay) => overlay.slotRank === image.slotRank)) {
+        liftedOverlays.push(
+          snapToRankSlots(
+            {
+              text: name,
+              slotRank: image.slotRank,
+              keepUntilEnd: true,
+              startOffsetSeconds: lifted.startOffsetSeconds,
+              fontSizePx: 56,
+              color: "#FFFFFF",
+              strokeColor: "#000000",
+              animation: "pop",
+              xPercent: lifted.xPercent,
+              yPercent: lifted.yPercent,
+            },
+            rankSlots,
+            "text"
+          )
+        );
+      }
     }
     for (const shape of raw.shapes ?? []) {
       const lifted = toWholeVideoTiming(shape, outputStartSeconds, clipDuration);
@@ -1172,19 +1442,15 @@ export const finalizeAutoEditPlan = async (
       );
     }
     outputStartSeconds += clipDuration;
-    const emphasisWords = (raw.emphasisWords ?? []).map((w) => w.trim()).filter((w) => w.length > 0);
     clips.push({
       ...fitted,
       // テロップは描画側で文節の切れ目で折り返すが、参考に合わせて意味の切れ目で2行にしたい時のために、
       // Geminiが入れた改行は最初の1つだけ残す(変な所の改行・短すぎる行はtidyLineBreaksで直す)。
       speechText: keepFirstLineBreak(tidyLineBreaks(raw.speech ?? "")),
       captionAnimation: (raw.captionAnimation ?? undefined) as CaptionAnimation | undefined,
-      emphasisWords: emphasisWords.length > 0 ? emphasisWords : undefined,
-      emphasisColor: hexOrUndefined(raw.emphasisColor),
-      captionAccentColor: hexOrUndefined(raw.captionAccentColor),
-      captionFontFamily: (raw.captionFontFamily ?? undefined) as CaptionFontFamily | undefined,
-      captionGlowColor: hexOrUndefined(raw.captionGlowColor),
+      // テロップの強調語・クリップごとの書体や色は付けない(本人が後で選ぶ。途中でテロップの書体が変わらないように)。
       zoom: normalizeZoom(raw),
+      faceBox: normalizeFace(raw.face),
       overlays: normalizeOverlays(
         overlays.filter((overlay) => !outlivesClip(overlay, clipDuration)),
         clipDuration,
@@ -1210,19 +1476,44 @@ export const finalizeAutoEditPlan = async (
     normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, resolveImageSrc) ?? [],
     clips
   );
-  const generatedPaths = new Set(generatedImagePaths.values());
-  const usedGeneratedPaths = new Set(
-    [...globalImages, ...clips.flatMap((clip) => clip.images ?? [])]
-      .map((image) => image.src)
-      .filter((src) => generatedPaths.has(src))
-  );
+  const sourceByPath = new Map([...generatedImageSources.values()].map((entry) => [entry.path, entry.source]));
+  const materialPaths = new Set(input.materialImages.map((image) => image.path));
+  const usedSrcs = new Set([...globalImages, ...clips.flatMap((clip) => clip.images ?? [])].map((image) => image.src));
+  const usedGeneratedPaths = new Set([...usedSrcs].filter((src) => sourceByPath.has(src)));
+  const imageSources = {
+    material: [...usedSrcs].filter((src) => materialPaths.has(src)).length,
+    library: [...usedGeneratedPaths].filter((src) => sourceByPath.get(src) === "library").length,
+    generated: [...usedGeneratedPaths].filter((src) => sourceByPath.get(src) === "generated").length,
+  };
+
+  // 左上のタイトル。本人が決めた文言があればそれを、無ければAIが決めた文言を、決まった形で置く。
+  // AIがタイトルと同じ文言をglobalOverlaysにも書いてきたら(編集例の書き起こしを真似た等)、二重に出ないよう外す。
+  const titleText = tidyLineBreaks(input.title?.trim() || data.title?.trim() || "");
+  const titleComparable = comparableText(titleText);
+  const isTitleCopy = (overlay: NonNullable<RawAutoEditPlan["globalOverlays"]>[number]) => {
+    const text = comparableText(overlay.text.replace(/\\n/g, ""));
+    return (
+      titleComparable.length > 0 &&
+      text.length >= 2 &&
+      rankOfLabel(overlay.text) === null &&
+      (overlay.startOffsetSeconds ?? 0) < 1 &&
+      titleComparable.includes(text)
+    );
+  };
   const globalOverlays = linkTextMoves(
-    normalizeOverlays([...(data.globalOverlays ?? []), ...liftedOverlays], outputStartSeconds, MAX_GLOBAL_OVERLAYS) ?? []);
+    normalizeOverlays(
+      [...(data.globalOverlays ?? []).filter((overlay) => !isTitleCopy(overlay)), ...liftedOverlays],
+      outputStartSeconds,
+      MAX_GLOBAL_OVERLAYS
+    ) ?? []
+  );
   if (usedGeneratedPaths.size > 0) {
     // 注意書きは上限で切られないよう先頭に入れる。
     globalOverlays.unshift(GENERATED_IMAGE_NOTICE);
-    globalOverlays.splice(MAX_GLOBAL_OVERLAYS);
   }
+  // タイトルは一番先に置く(重なりを避ける時に、ほかの文字の方をずらす)。
+  if (titleText) globalOverlays.unshift(buildTitleOverlay(titleText));
+  globalOverlays.splice(MAX_GLOBAL_OVERLAYS);
 
   // 冒頭の見出し・締めの一言が、すでに画面に出している文字(タイトル・最後のクリップの文字)と同じ内容なら出さない。
   // 同じ言葉が2か所に出ると読みにくいうえ、締めの一言は画面下の決まった位置に出るので、左に並べた枠などとも重なる。
@@ -1251,9 +1542,35 @@ export const finalizeAutoEditPlan = async (
     ...normalizeShapes(data.globalShapes, outputStartSeconds),
     ...normalizeShapes(liftedShapes, outputStartSeconds),
   ]).slice(0, MAX_GLOBAL_SHAPES);
-  const arranged = avoidTextOverlaps(globalOverlays, clips, globalShapes, globalImages, outputStartSeconds);
+  const framing = normalizeFraming(data.framing);
+  const arranged = avoidTextOverlaps(globalOverlays, clips, globalShapes, globalImages, outputStartSeconds, framing);
 
   const theme = data.theme ?? {};
+  const arrangedClips = chooseCaptionPositions(
+    arranged.clips,
+    framing,
+    {
+      position: (theme.captionPosition ?? "bottom") as CaptionPosition,
+      style: (theme.captionStyle ?? "pill") as CaptionStyle,
+      fontSize: (theme.captionFontSize ?? "medium") as CaptionFontSize,
+    },
+    [
+      ...arranged.globalOverlays.map((overlay) => ({
+        ...textBox(overlay, overlay.startOffsetSeconds, overlay.startOffsetSeconds + (overlay.durationInSeconds ?? outputStartSeconds)),
+        weight: 3,
+      })),
+      ...arranged.globalImages.map((image) => ({
+        ...imageBox(image, image.startOffsetSeconds, image.startOffsetSeconds + (image.durationInSeconds ?? outputStartSeconds)),
+        weight: 1,
+      })),
+      ...globalShapes
+        .filter((shape) => shape.kind !== "circle")
+        .map((shape) => ({
+          ...shapeBox(shape, shape.startOffsetSeconds, shape.startOffsetSeconds + (shape.durationInSeconds ?? outputStartSeconds)),
+          weight: 1,
+        })),
+    ]
+  );
   return {
     summary: data.summary,
     referenceNotes: data.referenceNotes?.trim() || null,
@@ -1270,9 +1587,10 @@ export const finalizeAutoEditPlan = async (
     globalImages: arranged.globalImages,
     globalShapes,
     showCaptions: Boolean(data.showCaptions),
-    framing: normalizeFraming(data.framing),
+    framing,
     generatedImageCount: usedGeneratedPaths.size,
-    clips: arranged.clips,
+    imageSources,
+    clips: arrangedClips,
     rawPlan: data,
   };
 };

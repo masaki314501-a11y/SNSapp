@@ -45,6 +45,8 @@ const buildPrompt = (example: EditExample): string =>
   どこまでを使っているかを、素材(1本目)上の秒数でsourceStartSeconds/sourceEndSecondsに書く。
   素材の間・言い淀みが切られている所は、その分だけクリップを分ける。
 - speech: そのクリップで話している言葉。改行は入れない。
+- face: そのクリップで話している人の顔の位置(素材の画面に対する割合)。xPercent/yPercentは顔の中心、
+  widthPercent/heightPercentは顔(髪・あごを含む)の幅・高さ。顔が映っていなければnull。
 - テロップ(話している言葉を出す字幕)について:
   - theme.captionPosition: テロップの位置(top=上部 / middle=中央 / bottom=下部)
   - theme.captionStyle: テロップの背景の付き方。候補:
@@ -54,15 +56,13 @@ ${hints(CAPTION_FONT_FAMILY_OPTIONS)}
   - theme.primaryColor: テロップの差し色(#RRGGBB)
   - captionAnimation: テロップの出方。候補:
 ${hints(CAPTION_ANIMATION_OPTIONS)}
-  - emphasisWords / emphasisColor: テロップの中で色や大きさを変えている語と、その色(#RRGGBB)。
-  - captionAccentColor / captionFontFamily / captionGlowColor: そのクリップだけテロップの縁取りの色・書体・光が違うなら、それ。同じならnull。
   - speechを2行で出しているなら、画面と同じ所に「\n」を入れる。
   使われていない場合(テロップが無い等)の候補も、正解動画に一番近いものを選ぶ。
 - overlays: テロップとは別に、そのクリップの間だけ画面に出ている文字(強調・ツッコミ・見出し・数字・ラベル)。
   文言は画面の通りに書き、改行も画面の通り「\\n」で書く。xPercent/yPercentは文字の中心の位置(0〜100)、
   fontSizePxは横1080pxの画面での文字の高さ、color/strokeColor(縁取り)/backgroundColor(帯)は#RRGGBB、
   rotationDegは傾き、startOffsetSeconds/durationInSecondsはクリップ先頭からの表示タイミング。animationは候補から選ぶ。
-  文字の周りが光っている(にじんでいる)ならglowColor、斜体ならitalic、縁取りの見える太さはstrokeWidthPx(px)、テロップと書体が違うならfontFamily(候補はtheme.fontFamilyと同じ)。
+  文字の周りが光っている(にじんでいる)ならglowColor、斜体ならitalic、縁取りの見える太さはstrokeWidthPx(px)。
   色・縁取り・光は文字ごとに違うことが多いので、1つずつ画面の通りに書く。
   途中で出てから動画の最後まで残り続ける文字(ランキングの空枠に、発表のたびに入っていく項目名など)は、
   出始めたクリップのoverlaysに書いてkeepUntilEnd=trueにする(それ以外はnull)。最後まで残る物を書き漏らさないこと。
@@ -80,6 +80,7 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
 - shapes(クリップ): 途中で出る図形(結論の所で重ねる〇印など)は、出始めたクリップに書く。kindは丸ならcircle(widthPercentが直径)。
 - globalShapes: ずっと出ている図形(ランキングの空の枠・箱・帯など)。位置は中心、widthPercent/heightPercentは画面に対する幅・高さ、
   borderColor/borderWidthPx(横1080pxの画面での線の太さ)/fillColor/fillOpacity/cornerRadiusPxを測って書く。
+- title: 動画の最初からずっと出ている、動画のテーマを表すタイトル(上部のタイトル帯など)の文言。無ければnull。
 - globalOverlays: 動画の最初からずっと出ている文字(上部のタイトル帯、ランキングの空枠の「1位」〜など)。秒数は動画の先頭から、最後まで出ているならdurationInSecondsはnull。
 - zoom: 素材より画面が寄っているクリップだけ。scaleは素材に対する倍率、punch=切り替わった瞬間から寄っている /
   slow=クリップの中でゆっくり寄っていく、focusXPercent/focusYPercentは寄っている中心。寄っていなければnull。

@@ -12,7 +12,7 @@ import { ImageOverlayFields, createDefaultImageOverlay } from "./ImageOverlayFie
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 export type SegmentEffectsPatch = Partial<
-  Pick<ProjectSegment, "zoom" | "overlays" | "images" | "emphasisWords" | "emphasisColor">
+  Pick<ProjectSegment, "zoom" | "overlays" | "images" | "emphasisWords" | "emphasisColor" | "clipCaptionPosition">
 >;
 export type ProjectEffectsPatch = Partial<Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages">>;
 export type EffectsScope = "clip" | "global";

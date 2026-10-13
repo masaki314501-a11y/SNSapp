@@ -8,6 +8,7 @@ import {
   type CaptionPosition,
   type CaptionStyle,
   type ClipZoom,
+  type FaceBox,
   type ImageOverlay,
   type ShapeOverlay,
   type TextOverlay,
@@ -57,6 +58,10 @@ export type ProjectSegment = {
   overlays?: TextOverlay[];
   /** 利用者が差し込んだ画像(ロゴ・商品写真等)。 */
   images?: ImageOverlay[];
+  /** このクリップの顔の位置(自動編集が書く)。 */
+  faceBox?: FaceBox;
+  /** このクリップだけテロップの位置を変える(顔に重なるのを避ける等)。 */
+  clipCaptionPosition?: CaptionPosition;
 };
 
 /** 自動編集が手本にする参考画像/動画。スタイル抽出画面でアップロードしたものを残しておく。 */
@@ -132,6 +137,10 @@ export type VideoProject = {
   materialImages?: { path: string; name: string }[];
   /** 使える画像が足りない所に、自動編集でAIに画像を作らせるか(1枚数円〜十円かかる)。 */
   generateMissingImages?: boolean;
+  /** 自動編集で新しく作ってよい画像の数(1枚約10円)。0なら貯めた画像だけを使う。 */
+  maxGeneratedImages?: number;
+  /** 自動編集で左上に出すタイトル。空ならAIが決める。 */
+  autoEditTitle?: string;
   /** 自動編集でAIに伝える要望。やり直すたびに書き直さなくて済むよう保存しておく。 */
   autoEditRequest?: string;
   /**
@@ -312,6 +321,8 @@ export const buildStandardVideoProps = (params: {
       zoom: segment.zoom,
       overlays: segment.overlays,
       images: segment.images,
+      faceBox: segment.faceBox,
+      clipCaptionPosition: segment.clipCaptionPosition,
     })),
     theme: {
       primaryColor: params.primaryColor,

@@ -70,7 +70,7 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
         // 途中で折り返されていた。文字の長さぶんの幅を取り、画面の9割を超える時だけ折り返す。
         width: "max-content",
         maxWidth: "90%",
-        textAlign: "center",
+        textAlign: overlay.textAlign ?? "center",
       }}
     >
       <div style={{ transform, opacity, filter }}>
