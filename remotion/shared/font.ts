@@ -32,7 +32,7 @@ const FONT_DEFINITIONS: Record<CaptionFontFamily, FontDefinition> = {
   "Reggae One": { slug: "reggae-one", weights: ["400"] },
   "RocknRoll One": { slug: "rocknroll-one", weights: ["400"] },
   "Mochiy Pop One": { slug: "mochiy-pop-one", weights: ["400"] },
-  "Noto Serif JP": { slug: "noto-serif-jp", weights: ["700"] },
+  "Noto Serif JP": { slug: "noto-serif-jp", weights: ["700", "900"] },
   "Shippori Mincho": { slug: "shippori-mincho", weights: ["700"] },
   Yomogi: { slug: "yomogi", weights: ["400"] },
   "Kaisei Decol": { slug: "kaisei-decol", weights: ["700"] },

@@ -5,6 +5,8 @@ import type { TextOverlay } from "./schema";
 import { LINE_STYLE, resolveOverlayLayout } from "./textWrap";
 import { resolveFontFamilyStack } from "./schema";
 import { ensureCaptionFontLoaded } from "./font";
+import { StyledText } from "./StyledText";
+import { findTextStylePreset } from "./textStylePresets";
 
 /** 明るい色か(白・黄色など)。縁取りも帯も無い明るい文字は、明るい背景や画像の上で読めなくなる。 */
 const isLightColor = (hex: string): boolean => {
@@ -43,6 +45,7 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
   const fontSizePx = moveFrom ? lerp(resolveOverlayLayout({ ...overlay, ...moveFrom }).fontSizePx, layout.fontSizePx) : layout.fontSizePx;
   const xPercent = moveFrom ? lerp(moveFrom.xPercent, layout.xPercent) : layout.xPercent;
   const yPercent = moveFrom ? lerp(moveFrom.yPercent, overlay.yPercent) : overlay.yPercent;
+  const preset = findTextStylePreset(overlay.textStyleId);
   // この文字だけ書体を変える時は、その書体も読み込む(テロップの書体はテロップ側で読み込まれる)。
   if (overlay.fontFamily) void ensureCaptionFontLoaded(overlay.fontFamily);
   const textShadow = overlay.glowColor
@@ -71,37 +74,43 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
       }}
     >
       <div style={{ transform, opacity, filter }}>
-        <span
-          lang="ja"
-          style={{
-            display: "inline-block",
-            clipPath,
-            color: overlay.color,
-            backgroundColor: overlay.backgroundColor,
-            padding: overlay.backgroundColor ? "0.12em 0.4em" : undefined,
-            borderRadius: overlay.backgroundColor ? "0.2em" : undefined,
-            // 縁取りは文字の内側半分が文字に隠れる(paintOrder: stroke fill)ので、見える太さはこの半分。
-            // ショート動画でよく見る「太い縁取り」に合わせ、見える太さが文字の大きさの約8%になるようにする
-            // (以前の文字の約3%では細く、完成動画の手本と比べて縁取りがほとんど見えなかった)。
-            WebkitTextStroke: strokeColor
-              ? `${overlay.strokeWidthPx !== undefined ? overlay.strokeWidthPx * 2 : Math.max(3, Math.round(fontSizePx * 0.16))}px ${strokeColor}`
-              : undefined,
-            paintOrder: "stroke fill",
-            fontFamily: overlay.fontFamily ? resolveFontFamilyStack(overlay.fontFamily) : fontFamilyStack,
-            fontStyle: overlay.italic ? "italic" : undefined,
-            fontSize: fontSizePx,
-            fontWeight: 900,
-            lineHeight: 1.2,
-            textShadow,
-          }}
-        >
-          {/* 改行位置はresolveOverlayLayoutで決めた物を使い、1行ずつ描く(重なりの見積もりとも一致させる) */}
-          {lines.map((line, index) => (
-            <span key={index} style={LINE_STYLE}>
-              {line}
-            </span>
-          ))}
-        </span>
+        {preset ? (
+          <span style={{ display: "inline-block", clipPath }}>
+            <StyledText preset={preset} fontSizePx={fontSizePx} lines={lines} italic={overlay.italic} />
+          </span>
+        ) : (
+          <span
+            lang="ja"
+            style={{
+              display: "inline-block",
+              clipPath,
+              color: overlay.color,
+              backgroundColor: overlay.backgroundColor,
+              padding: overlay.backgroundColor ? "0.12em 0.4em" : undefined,
+              borderRadius: overlay.backgroundColor ? "0.2em" : undefined,
+              // 縁取りは文字の内側半分が文字に隠れる(paintOrder: stroke fill)ので、見える太さはこの半分。
+              // ショート動画でよく見る「太い縁取り」に合わせ、見える太さが文字の大きさの約8%になるようにする
+              // (以前の文字の約3%では細く、完成動画の手本と比べて縁取りがほとんど見えなかった)。
+              WebkitTextStroke: strokeColor
+                ? `${overlay.strokeWidthPx !== undefined ? overlay.strokeWidthPx * 2 : Math.max(3, Math.round(fontSizePx * 0.16))}px ${strokeColor}`
+                : undefined,
+              paintOrder: "stroke fill",
+              fontFamily: overlay.fontFamily ? resolveFontFamilyStack(overlay.fontFamily) : fontFamilyStack,
+              fontStyle: overlay.italic ? "italic" : undefined,
+              fontSize: fontSizePx,
+              fontWeight: 900,
+              lineHeight: 1.2,
+              textShadow,
+            }}
+          >
+            {/* 改行位置はresolveOverlayLayoutで決めた物を使い、1行ずつ描く(重なりの見積もりとも一致させる) */}
+            {lines.map((line, index) => (
+              <span key={index} style={LINE_STYLE}>
+                {line}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
     </div>
   );

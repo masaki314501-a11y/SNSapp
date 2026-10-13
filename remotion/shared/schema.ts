@@ -195,6 +195,10 @@ export const textOverlaySchema = z.object({
   /** 見える縁取りの太さ(横1080pxの画面でのpx)。省略時は文字の大きさの約8%。 */
   strokeWidthPx: z.number().min(1).max(40).optional(),
   /**
+   * 文字のスタイル(textStylePresets.tsのid)。指定した時は、色・縁取り・光・帯・書体の代わりにスタイルの見た目で描く。
+   */
+  textStyleId: z.string().optional(),
+  /**
    * 出る時に、この位置・大きさから今の位置・大きさへ動いてくる(冒頭に中央へ大きく出したタイトルが、縮みながら上へ移る等)。
    * 指定した時は出現アニメーション(animation)の代わりにこの動きを使う。
    */

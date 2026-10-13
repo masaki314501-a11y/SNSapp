@@ -4,6 +4,7 @@ import { CAPTION_ANIMATION_OPTIONS, type CaptionAnimation, type TextOverlay } fr
 import { TextIcon, TrashIcon } from "@/components/icons";
 import { Collapsible } from "../SettingsSection";
 import { TimeRangeField } from "./TimeRangeField";
+import { TextStylePicker } from "./TextStylePicker";
 
 type Props = {
   overlay: TextOverlay;
@@ -19,7 +20,7 @@ type Props = {
 };
 
 /**
- * 自動編集(Gemini)が決めた強調テキスト1個ぶんの編集欄。文言・位置・大きさ・色・縁取り・帯・傾き・
+ * 自動編集(Gemini)が決めた強調テキスト1個ぶんの編集欄。文言・位置・大きさ・スタイル・色・縁取り・帯・傾き・
  * 表示タイミング・出現演出まで、自動編集が決めた項目はすべてここで直せるようにする。
  * クリップ内の強調テキストと、動画全体に出し続ける文字(globalOverlays)の両方で使う。
  * 並ぶと長くなるため、普段は文言だけ見える形に畳んでおき、押すと開く。
@@ -82,47 +83,51 @@ export const TextOverlayFields: React.FC<Props> = ({
         />
       </label>
     </div>
+    <TextStylePicker value={overlay.textStyleId} onChange={(textStyleId) => onChange({ textStyleId })} />
+    {/* スタイルを選んでいる間は、色・縁取り・帯はスタイルが決めるので出さない */}
     {/* 縁取り・帯は、チェックした時だけ色を選べる(チェックボックスは文言のすぐ横) */}
-    <div className="color-options">
-      <label className="color-option">
-        <span>文字色</span>
-        <input type="color" value={overlay.color} onChange={(e) => onChange({ color: e.target.value })} />
-      </label>
-      <div className="color-option">
-        <label className="color-option-toggle">
-          <input
-            type="checkbox"
-            checked={overlay.strokeColor !== undefined}
-            onChange={(e) => onChange({ strokeColor: e.target.checked ? "#000000" : undefined })}
-          />
-          縁取り
+    {overlay.textStyleId ? null : (
+      <div className="color-options">
+        <label className="color-option">
+          <span>文字色</span>
+          <input type="color" value={overlay.color} onChange={(e) => onChange({ color: e.target.value })} />
         </label>
-        <input
-          type="color"
-          aria-label="縁取りの色"
-          value={overlay.strokeColor ?? "#000000"}
-          disabled={overlay.strokeColor === undefined}
-          onChange={(e) => onChange({ strokeColor: e.target.value })}
-        />
-      </div>
-      <div className="color-option">
-        <label className="color-option-toggle">
+        <div className="color-option">
+          <label className="color-option-toggle">
+            <input
+              type="checkbox"
+              checked={overlay.strokeColor !== undefined}
+              onChange={(e) => onChange({ strokeColor: e.target.checked ? "#000000" : undefined })}
+            />
+            縁取り
+          </label>
           <input
-            type="checkbox"
-            checked={overlay.backgroundColor !== undefined}
-            onChange={(e) => onChange({ backgroundColor: e.target.checked ? "#000000" : undefined })}
+            type="color"
+            aria-label="縁取りの色"
+            value={overlay.strokeColor ?? "#000000"}
+            disabled={overlay.strokeColor === undefined}
+            onChange={(e) => onChange({ strokeColor: e.target.value })}
           />
-          帯
-        </label>
-        <input
-          type="color"
-          aria-label="帯の色"
-          value={overlay.backgroundColor ?? "#000000"}
-          disabled={overlay.backgroundColor === undefined}
-          onChange={(e) => onChange({ backgroundColor: e.target.value })}
-        />
+        </div>
+        <div className="color-option">
+          <label className="color-option-toggle">
+            <input
+              type="checkbox"
+              checked={overlay.backgroundColor !== undefined}
+              onChange={(e) => onChange({ backgroundColor: e.target.checked ? "#000000" : undefined })}
+            />
+            帯
+          </label>
+          <input
+            type="color"
+            aria-label="帯の色"
+            value={overlay.backgroundColor ?? "#000000"}
+            disabled={overlay.backgroundColor === undefined}
+            onChange={(e) => onChange({ backgroundColor: e.target.value })}
+          />
+        </div>
       </div>
-    </div>
+    )}
     <TimeRangeField
       startOffsetSeconds={overlay.startOffsetSeconds}
       durationInSeconds={overlay.durationInSeconds}
