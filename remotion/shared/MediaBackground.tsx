@@ -8,6 +8,8 @@ import { resolveClipSrc } from "./resolveSrc";
 import type { ClipZoom, VideoFraming } from "./schema";
 
 const PLACEHOLDER_COLORS = ["#1F2937", "#312E81", "#7C2D12", "#134E4A"];
+/** pan(横に流す)で寄る中心を動かす幅(中心から左右に、画面幅の%)。大きいと酔うので控えめにする。 */
+const PAN_RANGE_PERCENT = 15;
 
 type Props = {
   src?: string;
@@ -52,7 +54,18 @@ export const MediaBackground: React.FC<Props> = ({
           easing: Easing.inOut(Easing.quad),
         })
       : zoom.scale;
-  const transformOrigin = zoom ? `${zoom.focusXPercent}% ${zoom.focusYPercent}%` : "50% 50%";
+  // panは寄った倍率のまま、寄る中心を左右に少しずつ動かして、カメラが横へ流れるように見せる。
+  const panOffset =
+    zoom?.style === "pan"
+      ? interpolate(frame, [0, Math.max(1, durationInFrames - 1)], [-PAN_RANGE_PERCENT, PAN_RANGE_PERCENT], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+          easing: Easing.inOut(Easing.quad),
+        })
+      : 0;
+  const transformOrigin = zoom
+    ? `${Math.min(100, Math.max(0, zoom.focusXPercent + panOffset))}% ${zoom.focusYPercent}%`
+    : "50% 50%";
 
   const framingStyle: React.CSSProperties | undefined =
     framing && framing.scale > 1.001

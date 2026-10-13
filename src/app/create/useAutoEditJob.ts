@@ -63,6 +63,8 @@ export type AutoEditRequest = {
   maxGeneratedImages: number;
   /** 左上のタイトル(空ならAIが決める)。 */
   title: string;
+  /** 完成動画の長さの目安(秒)。nullならAIにまかせる。 */
+  targetDurationSeconds: number | null;
   /** AIへの要望(空ならなし)。 */
   userRequest: string;
   /** 手直し。前回の案と、直してほしいこと。 */

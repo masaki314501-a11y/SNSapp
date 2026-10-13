@@ -19,6 +19,7 @@ import {
   type CaptionPosition,
   type CaptionStyle,
 } from "@video/shared/schema";
+import { applyCameraRule, type CameraRuleId } from "@/lib/cameraRules";
 import {
   DEFAULT_CAPTION_ANIMATION,
   DEFAULT_CLIP_VOLUME,
@@ -332,6 +333,8 @@ export const ClipEditor: React.FC = () => {
         globalShapes: project?.globalShapes,
         framing: project?.framing,
         muteOriginalUnderNarration,
+        captionTextStyleId: project?.captionTextStyleId,
+        keywordHighlights: project?.keywordHighlights,
       }),
     [
       muteOriginalUnderNarration,
@@ -343,6 +346,8 @@ export const ClipEditor: React.FC = () => {
       project?.globalImages,
       project?.globalShapes,
       project?.framing,
+      project?.captionTextStyleId,
+      project?.keywordHighlights,
       primaryColor,
       captionStyle,
       fontFamily,
@@ -486,6 +491,16 @@ export const ClipEditor: React.FC = () => {
       ...prev,
       segments: prev.segments.map((segment) => (segment.key === key ? { ...segment, ...patch } : segment)),
     }));
+  };
+
+  /** 全クリップの寄りを、カメラワークのルールで付け直す(顔の位置・山場の印は自動編集が書いた物を使う)。 */
+  const applyCameraRuleToAll = (ruleId: CameraRuleId) => {
+    pushHistory();
+    setForm((prev) => {
+      const zooms = applyCameraRule(ruleId, prev.segments);
+      return { ...prev, segments: prev.segments.map((segment, index) => ({ ...segment, zoom: zooms[index] })) };
+    });
+    setProject((prev) => (prev ? { ...prev, cameraRuleId: ruleId } : prev));
   };
 
   /** 動画全体の演出(冒頭の見出し・締めの一言・ずっと出す文字)を直す。projectの変更は自動保存に乗る。 */
@@ -1566,6 +1581,9 @@ export const ClipEditor: React.FC = () => {
           selectedCount={selectedKeys.size}
           onUpdateSegment={updateSegment}
           onUpdateEmphasis={updateSegmentEffects}
+          captionTextStyleId={project?.captionTextStyleId}
+          keywordHighlights={project?.keywordHighlights ?? []}
+          onUpdateCaptionLook={updateProjectEffects}
           onApplyAnimationToAll={applyAnimationToAll}
           onOpenBulkEdit={openBulkEdit}
           canOpenBulkEdit={form.segments.length > 0}
@@ -1597,6 +1615,8 @@ export const ClipEditor: React.FC = () => {
         onUpdateProjectEffects={updateProjectEffects}
         onPreviewInClip={previewInClip}
         onPreviewInProgram={previewAtSeconds}
+        cameraRuleId={project?.cameraRuleId}
+        onApplyCameraRule={applyCameraRuleToAll}
       />
     ) : activeTab === "se" ? (
       <SfxInspectorPanel

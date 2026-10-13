@@ -17,6 +17,9 @@ type Props = ClipProps & {
   fontSize: CaptionFontSize;
   /** 動画全体の画角(全クリップ共通)。 */
   framing?: VideoFraming;
+  /** 字幕の文字スタイルと重大ワード(全クリップ共通)。 */
+  captionTextStyleId?: string;
+  keywordHighlights?: { word: string; color: string }[];
   /**
    * 描く層。base=映像・テロップ・画像、text=強調テキストだけ。強調テキストを動画全体の画像・図形
    * (ランキングの枠など)より上に重ねるため、StandardVideoで層を分けて2回描く。
@@ -48,6 +51,9 @@ export const ClipSequence: React.FC<Props> = ({
   overlays,
   images,
   clipCaptionPosition,
+  captionEmphasis,
+  captionTextStyleId,
+  keywordHighlights,
   framing,
   layer,
 }) => {
@@ -78,6 +84,9 @@ export const ClipSequence: React.FC<Props> = ({
         fontSize={fontSize}
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}
+        textStyleId={captionTextStyleId}
+        keywordHighlights={keywordHighlights}
+        emphasis={captionEmphasis}
       />
       {/* 強調テキストはlayer="text"で、動画全体の画像・図形より上に別に描く。 */}
       {images && images.length > 0 ? <ImageOverlays images={images} /> : null}

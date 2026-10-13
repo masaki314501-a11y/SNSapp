@@ -48,6 +48,8 @@ const requestSchema = z.object({
   maxGeneratedImages: z.number().int().min(0).max(MAX_GENERATED_IMAGES).default(MAX_GENERATED_IMAGES),
   /** 左上に出すタイトル(空ならAIが決める)。 */
   title: z.string().max(MAX_TITLE_LENGTH).default(""),
+  /** 完成動画の長さの目安(秒)。nullなら長さはAIにまかせる。 */
+  targetDurationSeconds: z.number().min(5).max(600).nullable().default(null),
   /** AIへの要望(なくてもよい)。 */
   userRequest: z.string().max(MAX_USER_TEXT_LENGTH).default(""),
   /** 手直し。前回の案(Geminiの生の答え)と、直してほしいこと。 */
@@ -103,6 +105,7 @@ export async function POST(request: Request) {
         generateMissingImages: parsed.data.generateMissingImages,
         maxGeneratedImages: parsed.data.maxGeneratedImages,
         title: parsed.data.title,
+        targetDurationSeconds: parsed.data.targetDurationSeconds,
         userRequest: parsed.data.userRequest,
         revision: parsed.data.revision ?? undefined,
       });
@@ -115,9 +118,8 @@ export async function POST(request: Request) {
         const key = randomUUID();
         segments.push({
           key,
-          // 参考・編集例が話している言葉を字幕で出しているなら、書き起こしをそのまま字幕にする。
-          // そうでなければ、字幕を付けるかどうかは編集画面で決める(「字幕を一括生成」でspeechTextを流し込む)。
-          caption: plan.showCaptions ? clip.speechText : "",
+          // 話している言葉は、基本の字幕として必ず出す(強調は付けず、書体は全体で1つ)。強調は編集画面で本人が選ぶ。
+          caption: clip.speechText,
           speechText: clip.speechText,
           startFromSeconds: clip.startFromSeconds,
           durationInSeconds: clip.durationInSeconds,
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
           images: clip.images,
           faceBox: clip.faceBox,
           clipCaptionPosition: clip.clipCaptionPosition,
+          cameraHighlight: clip.cameraHighlight,
         });
 
         for (const sfx of clip.sfx) {

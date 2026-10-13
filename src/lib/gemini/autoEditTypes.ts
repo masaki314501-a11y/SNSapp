@@ -267,7 +267,6 @@ export const autoEditResponseSchema = {
       nullable: true,
       properties: {
         primaryColor: { type: Type.STRING, description: "#RRGGBB形式" },
-        fontFamily: { type: Type.STRING, format: "enum", enum: FONT_FAMILY_VALUES },
         captionPosition: { type: Type.STRING, format: "enum", enum: CAPTION_POSITION_VALUES },
         captionStyle: { type: Type.STRING, format: "enum", enum: CAPTION_STYLE_VALUES },
         captionFontSize: { type: Type.STRING, format: "enum", enum: CAPTION_FONT_SIZE_VALUES },

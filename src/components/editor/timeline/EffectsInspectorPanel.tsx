@@ -10,11 +10,24 @@ import { SettingsSection } from "../SettingsSection";
 import { TextOverlayFields, createDefaultTextOverlay } from "./TextOverlayFields";
 import { ImageOverlayFields, createDefaultImageOverlay } from "./ImageOverlayFields";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
+import { CAMERA_RULES, findCameraRule, type CameraRuleId } from "@/lib/cameraRules";
 
 export type SegmentEffectsPatch = Partial<
-  Pick<ProjectSegment, "zoom" | "overlays" | "images" | "emphasisWords" | "emphasisColor" | "clipCaptionPosition">
+  Pick<
+    ProjectSegment,
+    | "zoom"
+    | "overlays"
+    | "images"
+    | "emphasisWords"
+    | "emphasisColor"
+    | "clipCaptionPosition"
+    | "captionEmphasis"
+    | "emphasisSfxPresetId"
+  >
 >;
-export type ProjectEffectsPatch = Partial<Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages">>;
+export type ProjectEffectsPatch = Partial<
+  Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages" | "captionTextStyleId" | "keywordHighlights" | "cameraRuleId">
+>;
 export type EffectsScope = "clip" | "global";
 
 type Props = {
@@ -37,6 +50,10 @@ type Props = {
   /** 表示時間を動かした時に、その時刻を動画で見せる(クリップ内の秒数 / 動画全体の秒数)。 */
   onPreviewInClip: (segmentKey: string, offsetSeconds: number) => void;
   onPreviewInProgram: (seconds: number) => void;
+  /** 今のカメラワークのルール(cameraRules.tsのid)。 */
+  cameraRuleId: string | undefined;
+  /** 全クリップの寄りを、ルールで付け直す。 */
+  onApplyCameraRule: (ruleId: CameraRuleId) => void;
 };
 
 /**
@@ -63,8 +80,11 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
   onUpdateProjectEffects,
   onPreviewInClip,
   onPreviewInProgram,
+  cameraRuleId: savedCameraRuleId,
+  onApplyCameraRule,
 }) => {
   const [uploading, setUploading] = useState(false);
+  const [cameraRuleId, setCameraRuleId] = useState<CameraRuleId>(findCameraRule(savedCameraRuleId) ?? "two-choice");
   // 追加した直後の1件だけは開いた状態で見せる(他は畳んでおく)。
   const [justAdded, setJustAdded] = useState<{ list: string; index: number } | null>(null);
   const selectedIndex = selectedSegmentKey ? segments.findIndex((s) => s.key === selectedSegmentKey) : -1;
@@ -169,12 +189,13 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                           value={selected.zoom.style}
                           onChange={(e) =>
                             onUpdateSegmentEffects(selected.key, {
-                              zoom: { ...selected.zoom!, style: e.target.value as "punch" | "slow" },
+                              zoom: { ...selected.zoom!, style: e.target.value as "punch" | "slow" | "pan" },
                             })
                           }
                         >
                           <option value="punch">一気に寄る</option>
                           <option value="slow">じわじわ寄る</option>
+                          <option value="pan">寄って横に流す</option>
                         </select>
                       </label>
                     </div>
@@ -390,6 +411,31 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                 />
               </label>
               <WaitTime task="file-upload" units={1} active={uploading} />
+            </SettingsSection>
+
+            <SettingsSection title="カメラワーク(寄り)">
+              <label className="editor-field">
+                <span>動画の形式に合わせたルール</span>
+                <select value={cameraRuleId} onChange={(e) => setCameraRuleId(e.target.value as CameraRuleId)}>
+                  {CAMERA_RULES.map((rule) => (
+                    <option key={rule.id} value={rule.id}>
+                      {rule.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+                {CAMERA_RULES.find((rule) => rule.id === cameraRuleId)?.description}
+                。全クリップの寄りを、このルールで付け直します(手で直した寄りも置き換わります)。
+              </span>
+              <button
+                type="button"
+                className="editor-toolbar-btn self-start"
+                disabled={cameraRuleId === "ai"}
+                onClick={() => onApplyCameraRule(cameraRuleId)}
+              >
+                このルールで寄りを付け直す
+              </button>
             </SettingsSection>
 
             <SettingsSection title="全体のフェード">

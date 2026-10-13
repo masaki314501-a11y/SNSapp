@@ -2,9 +2,18 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { getCaptionAnimationStyle } from "./captionAnimations";
 import { ensureCaptionFontLoaded } from "./font";
-import type { CaptionAnimation, CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "./schema";
+import type {
+  CaptionAnimation,
+  CaptionEmphasis,
+  CaptionFontFamily,
+  CaptionFontSize,
+  CaptionPosition,
+  CaptionStyle,
+} from "./schema";
 import { CAPTION_FONT_SIZE_SCALE, resolveFontFamilyStack } from "./schema";
 import { LINE_STYLE, breakIntoLines } from "./textWrap";
+import { StyledText } from "./StyledText";
+import { findTextStylePreset } from "./textStylePresets";
 
 type Props = {
   text: string;
@@ -20,6 +29,12 @@ type Props = {
   emphasisColor?: string;
   /** 文字の周りの光(にじみ)の色。省略時は黒い影。 */
   glowColor?: string;
+  /** 動画全体の字幕の文字スタイル(textStylePresets.tsのid)。指定時はcaptionStyle・配色の代わりにこれで描く。 */
+  textStyleId?: string;
+  /** 重大ワード(全クリップ共通)。言葉ごとに色を決めて、大きく見せる。 */
+  keywordHighlights?: { word: string; color: string }[];
+  /** このクリップの字幕の強調(帯・書体・色。本人が選ぶ)。 */
+  emphasis?: CaptionEmphasis;
 };
 
 /**
@@ -38,6 +53,12 @@ const splitByEmphasis = (text: string, words: string[]): { text: string; emphasi
     .filter((part) => part.length > 0)
     .map((part) => ({ text: part, emphasized: targets.includes(part) }));
 };
+
+/** 強調した字幕の文字の大きさ(倍)。 */
+const EMPHASIZED_CAPTION_SCALE = 1.15;
+/** シェイプテロップ(帯)の既定の色。白い帯に黒い文字。 */
+const DEFAULT_BAND_COLOR = "#FFFFFF";
+const DEFAULT_BAND_TEXT_COLOR = "#111111";
 
 const OFFSET_FROM_EDGE = 160;
 /** テロップの左右の余白(px)と、1行の最大幅。 */
@@ -61,16 +82,22 @@ export const AnimatedCaption: React.FC<Props> = ({
   accentColor,
   animation,
   captionStyle = "pill",
-  fontFamily = "Noto Sans JP",
+  fontFamily: baseFontFamily = "Noto Sans JP",
   position = "bottom",
   fontSize = "medium",
   emphasisWords,
   emphasisColor = "#FFE600",
   glowColor,
+  textStyleId,
+  keywordHighlights,
+  emphasis,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(animation, frame, fps);
+  // 強調で文字スタイルを選んだ時はそれを、無ければ全体の字幕の文字スタイルを使う。帯を敷く時は帯の見た目が優先。
+  const preset = emphasis?.band ? undefined : findTextStylePreset(emphasis?.textStyleId ?? textStyleId);
+  const fontFamily = emphasis?.fontFamily ?? preset?.fontFamily ?? baseFontFamily;
   // 選択されているフォントだけを遅延読み込みする(全書体を毎回読み込むのは無駄が大きいため)。
   void ensureCaptionFontLoaded(fontFamily);
 
@@ -81,13 +108,31 @@ export const AnimatedCaption: React.FC<Props> = ({
   }
 
   const fontFamilyStack = resolveFontFamilyStack(fontFamily);
-  const sizeScale = CAPTION_FONT_SIZE_SCALE[fontSize];
+  const sizeScale = CAPTION_FONT_SIZE_SCALE[fontSize] * (emphasis ? EMPHASIZED_CAPTION_SCALE : 1);
+  // 色を変える語: このクリップで選んだ強調する語と、全体の重大ワード(言葉ごとの色)。
+  const wordColors = new Map<string, string>();
+  for (const word of emphasisWords ?? []) if (word.trim()) wordColors.set(word.trim(), emphasisColor);
+  for (const highlight of keywordHighlights ?? []) if (highlight.word.trim()) wordColors.set(highlight.word.trim(), highlight.color);
+  const highlightWords = [...wordColors.keys()];
 
-  const textStyle: React.CSSProperties =
-    captionStyle === "outline"
+  const textStyle: React.CSSProperties = emphasis?.band
+    ? {
+        // シェイプテロップ: 字幕の後ろに帯を敷き、帯の上に縁取りなしの文字を置く
+        display: "inline-block",
+        backgroundColor: emphasis.bandColor ?? DEFAULT_BAND_COLOR,
+        color: emphasis.textColor ?? DEFAULT_BAND_TEXT_COLOR,
+        fontFamily: fontFamilyStack,
+        fontSize: 46 * sizeScale,
+        fontWeight: 900,
+        padding: "14px 30px",
+        borderRadius: 10,
+        lineHeight: 1.35,
+        boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
+      }
+    : captionStyle === "outline"
       ? {
           display: "inline-block",
-          color: "white",
+          color: emphasis?.textColor ?? "white",
           // 縁取りの内側半分は文字に隠れるので、見える太さはこの半分(文字の約9%)。以前の2.5px固定では
           // 細すぎて、ショート動画でよく見る太い縁取りの字幕にならなかった。
           WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18)}px ${accentColor}`,
@@ -103,7 +148,7 @@ export const AnimatedCaption: React.FC<Props> = ({
       : {
           display: "inline-block",
           backgroundColor: accentColor,
-          color: "white",
+          color: emphasis?.textColor ?? "white",
           fontFamily: fontFamilyStack,
           fontSize: 44 * sizeScale,
           fontWeight: 800,
@@ -112,6 +157,14 @@ export const AnimatedCaption: React.FC<Props> = ({
           lineHeight: 1.35,
           boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         };
+  const fontSizePx = preset ? 48 * sizeScale : Number(textStyle.fontSize);
+  const hasBox = !preset && (emphasis?.band || captionStyle === "pill");
+  const lines = breakIntoLines(text, fontSizePx, CAPTION_MAX_WIDTH_PX - (hasBox ? 64 : 0), highlightWords, EMPHASIS_SCALE);
+  const lineParts = lines.map((line) =>
+    splitByEmphasis(line, highlightWords).map((part) =>
+      part.emphasized ? { text: part.text, color: wordColors.get(part.text), scale: EMPHASIS_SCALE } : { text: part.text }
+    )
+  );
 
   return (
     <AbsoluteFill
@@ -123,28 +176,28 @@ export const AnimatedCaption: React.FC<Props> = ({
       }}
     >
       <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
-        {/* 改行位置はbreakIntoLinesで決め、1行ずつ描く(自動編集が意味の切れ目に入れた改行も守る) */}
-        <span lang="ja" style={{ ...textStyle, clipPath }}>
-          {breakIntoLines(
-            text,
-            Number(textStyle.fontSize),
-            CAPTION_MAX_WIDTH_PX - (captionStyle === "outline" ? 0 : 64),
-            emphasisWords ?? [],
-            EMPHASIS_SCALE
-          ).map((line, lineIndex) => (
-            <span key={lineIndex} style={LINE_STYLE}>
-              {splitByEmphasis(line, emphasisWords ?? []).map((part, i) =>
-                part.emphasized ? (
-                  <span key={i} style={{ color: emphasisColor, fontSize: `${EMPHASIS_SCALE}em` }}>
-                    {part.text}
-                  </span>
-                ) : (
-                  <React.Fragment key={i}>{part.text}</React.Fragment>
-                )
-              )}
-            </span>
-          ))}
-        </span>
+        {preset ? (
+          <span style={{ display: "inline-block", clipPath }}>
+            <StyledText preset={preset} fontSizePx={fontSizePx} lines={lineParts} fontFamily={fontFamily} />
+          </span>
+        ) : (
+          // 改行位置はbreakIntoLinesで決め、1行ずつ描く(自動編集が意味の切れ目に入れた改行も守る)
+          <span lang="ja" style={{ ...textStyle, clipPath }}>
+            {lineParts.map((parts, lineIndex) => (
+              <span key={lineIndex} style={LINE_STYLE}>
+                {parts.map((part, i) =>
+                  part.color ? (
+                    <span key={i} style={{ color: part.color, fontSize: `${EMPHASIS_SCALE}em` }}>
+                      {part.text}
+                    </span>
+                  ) : (
+                    <React.Fragment key={i}>{part.text}</React.Fragment>
+                  )
+                )}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
     </AbsoluteFill>
   );

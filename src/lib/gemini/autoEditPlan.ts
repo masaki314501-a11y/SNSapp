@@ -4,7 +4,6 @@ import { z } from "zod";
 import path from "node:path";
 import {
   CAPTION_ANIMATION_OPTIONS,
-  CAPTION_FONT_FAMILY_OPTIONS,
   CAPTION_POSITION_OPTIONS,
   CAPTION_STYLE_OPTIONS,
   CAPTION_FONT_SIZE_SCALE,
@@ -49,6 +48,7 @@ import type { ResolvedMaterialImage } from "@/lib/materialImage";
 import { getOrGenerateImage, type GeneratedImageStyle } from "./generateImage";
 import { matchLibraryImages } from "./imageLibraryMatch";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
+import { applyCameraRule, cameraRuleForTemplate } from "@/lib/cameraRules";
 
 /**
  * 自動編集は「どこを切り、どこで寄り、何を画面に出すか」という演出判断そのものなので、
@@ -103,6 +103,8 @@ export type AutoEditPlanInput = {
   maxGeneratedImages: number;
   /** 本人が決めた、左上に出すタイトル。空ならAIが動画の内容から決める。 */
   title?: string;
+  /** 完成動画をこの秒数くらいに収める。nullなら長さはAIにまかせる。 */
+  targetDurationSeconds?: number | null;
   /** 本人がAIへの要望として書いた文(「保証は日本の方に〇」等)。手本より優先する。 */
   userRequest?: string;
   /**
@@ -130,6 +132,8 @@ export type AutoEditClipPlan = {
   faceBox?: FaceBox;
   /** テロップを全体の位置に出すと顔に重なる時の、このクリップだけの位置。 */
   clipCaptionPosition?: CaptionPosition;
+  /** 話の山場(順位の発表・結論など)。カメラワークのルールで寄る所。 */
+  cameraHighlight?: boolean;
   sfx: { presetId: string; offsetSeconds: number }[];
 };
 
@@ -167,7 +171,6 @@ export type AutoEditPlan = {
 const CAPTION_POSITION_VALUES = CAPTION_POSITION_OPTIONS.map((option) => option.value);
 
 const captionAnimationHints = CAPTION_ANIMATION_OPTIONS.map((o) => `- ${o.value}: ${o.label}`).join("\n");
-const fontFamilyHints = CAPTION_FONT_FAMILY_OPTIONS.map((o) => `- ${o.value}: ${o.label}`).join("\n");
 const captionStyleHints = CAPTION_STYLE_OPTIONS.map((o) => `- ${o.value}: ${o.label}`).join("\n");
 const sfxPresetHints = SFX_PRESETS.map((p) => `- ${p.id}: ${p.label}`).join("\n");
 
@@ -249,6 +252,13 @@ ${userRequest}
 `
     : "";
 
+  const keepTotal = input.keepRanges.reduce((sum, range) => sum + range.durationInSeconds, 0);
+  const target = input.targetDurationSeconds;
+  const lengthLine =
+    target && target < keepTotal - 1
+      ? `\n- **完成動画の長さは${formatSeconds(target)}秒前後(長くても${formatSeconds(target * 1.1)}秒まで)にする**。使う範囲は合計${formatSeconds(keepTotal)}秒あるので、
+  話の要点(フック・順位や結論・オチ)を残し、前置き・繰り返し・脇道の話からクリップごと削って収める。話の途中で切れて意味が通らなくならないようにする。`
+      : "";
   const userTitle = input.title?.trim();
   const titleInstruction = userTitle
     ? `本人がタイトルを「${userTitle}」と決めているので、titleにはそのまま書く(言い換えない)。`
@@ -284,7 +294,7 @@ ${templateSection}
 ## 本人の動画について
 - 動画全体の長さ: ${formatSeconds(input.video.durationInSeconds)}秒
 - 本人がカット画面で「使う」と決めた範囲(再生順)。**クリップはこの範囲の中からだけ切り出すこと**:
-${keepRangesList}
+${keepRangesList}${lengthLine}
 
 ## 編集の手順(必ずこの順に、前の手順の結果を土台にして進める)
 値はすべて自由。候補が書いてあるものだけは候補から選ぶ。
@@ -348,10 +358,8 @@ ${imageSection}
 5-2. face: そのクリップで話している人の顔の位置。添付した本人の動画の画面(寄りを付ける前)に対する割合で、
    xPercent/yPercentは顔の中心、widthPercent/heightPercentは顔(髪・あごを含む)の幅・高さ。顔が映っていなければnull。
    文字・画像を顔に重ねないよう、サーバー側でこの位置を避けて配置し直すので、正確に書く。
-6. theme: テロップの見た目。全体の差し色(primaryColor、#RRGGBB)・フォント・テロップの位置・背景の付き方。参考スクショに合わせる。
-   手順①で置いた物と重ならない位置を選ぶ。
-   fontFamily候補:
-${fontFamilyHints}
+6. theme: テロップの見た目。全体の差し色(primaryColor、#RRGGBB)・テロップの位置・背景の付き方。参考スクショに合わせる。
+   手順①で置いた物と重ならない位置を選ぶ。フォントは本人が決めた物を動画全体で使うので選ばない。
    captionPosition候補: ${CAPTION_POSITION_VALUES.join(" / ")}
    captionStyle候補:
 ${captionStyleHints}
@@ -366,7 +374,8 @@ ${captionStyleHints}
    参考が場面の気持ち(驚き・かわいい・深刻など)に合わせて文字の色・縁取り・光を変えているなら、同じように変える。
 
 ### 手順④ カメラアングル(違和感が出ないことを最優先。迷ったら寄らない)
-10. zoom: 手順①〜③で決めた山場(強調した数字・結論・オチ)だけで画面を寄せる。見ている人が「カメラが動いた」と
+10. zoom: 手順①〜③で決めた山場(順位の発表・数字・結論・オチ)だけで画面を寄せる。テンプレートによっては、寄り方(倍率・寄り方)は
+    サーバー側のカメラワークのルールで決め直し、あなたが寄せたクリップは「山場」の印として使う。山場の判断を正確にする。見ている人が「カメラが動いた」と
     意識しないくらいが正解で、寄りすぎ・寄り過多は素人っぽく見えて離脱の原因になる。
     - scaleは1.1〜1.3。1.35を超えない(画質が荒れて顔が切れる)
     - styleはpunch(切り替わった瞬間に寄った絵になる)かslow(クリップ全体でゆっくり寄る)。話の区切り目・
@@ -794,9 +803,9 @@ export const faceOnScreen = (face: FaceBox, framing: VideoFraming | null, zoom: 
   const halfWidth = (face.widthPercent / 2) * (1 + FACE_MARGIN_RATIO * 2);
   const halfHeight = (face.heightPercent / 2) * (1 + FACE_MARGIN_RATIO * 2);
   const scaleAround = (value: number, focus: number, scale: number) => focus + (value - focus) * scale;
-  const project = (zoomScale: number): BoxPercent => {
+  const project = (zoomScale: number, panOffset = 0): BoxPercent => {
     const toScreen = (x: number, y: number) => {
-      let px = zoom ? scaleAround(x, zoom.focusXPercent, zoomScale) : x;
+      let px = zoom ? scaleAround(x, clamp(zoom.focusXPercent + panOffset, 0, 100), zoomScale) : x;
       let py = zoom ? scaleAround(y, zoom.focusYPercent, zoomScale) : y;
       if (framing) {
         px = scaleAround(px, framing.focusXPercent, framing.scale);
@@ -809,7 +818,13 @@ export const faceOnScreen = (face: FaceBox, framing: VideoFraming | null, zoom: 
     return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
   };
   const end = project(zoom?.scale ?? 1);
-  const box = zoom?.style === "slow" ? unionBox(project(1), end) : end;
+  // ゆっくり寄るなら寄る前から後まで、横に流すなら流す範囲の両端を含める(描画側のPAN_RANGE_PERCENTと同じ幅)
+  const box =
+    zoom?.style === "slow"
+      ? unionBox(project(1), end)
+      : zoom?.style === "pan"
+        ? unionBox(project(zoom.scale, -15), project(zoom.scale, 15))
+        : end;
   return {
     left: clamp(box.left, 0, 100),
     top: clamp(box.top, 0, 100),
@@ -1357,7 +1372,7 @@ export const avoidTextOverlaps = (
 export const finalizeAutoEditPlan = async (
   data: RawAutoEditPlan,
   input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages"> &
-    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title">>,
+    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title" | "template">>,
   options: { resolveImage?: ImageSourceResolver } = {}
 ): Promise<AutoEditPlan> => {
   const generatedImageSources = input.generateMissingImages
@@ -1451,6 +1466,12 @@ export const finalizeAutoEditPlan = async (
       // テロップの強調語・クリップごとの書体や色は付けない(本人が後で選ぶ。途中でテロップの書体が変わらないように)。
       zoom: normalizeZoom(raw),
       faceBox: normalizeFace(raw.face),
+      // 山場: AIが寄せたクリップ(AIが山場と判断した所)と、順位を発表したクリップ(枠を埋める物・順位の文字がある)
+      cameraHighlight:
+        Boolean(raw.zoom && raw.zoom.scale > 1.001) ||
+        images.some(isSlotImage) ||
+        overlays.some((overlay) => overlay.slotRank != null || rankOfLabel(overlay.text) !== null) ||
+        undefined,
       overlays: normalizeOverlays(
         overlays.filter((overlay) => !outlivesClip(overlay, clipDuration)),
         clipDuration,
@@ -1471,6 +1492,12 @@ export const finalizeAutoEditPlan = async (
   if (clips.length === 0) {
     throw new Error("Geminiの編集案に使えるクリップがありませんでした。もう一度お試しください");
   }
+  // カメラワークは、動画の形式ごとのルールで決め直す(AIの寄りは山場の印として使う)。顔を避ける配置より先に決める
+  // (寄ると顔の映る位置が変わるため)。
+  const cameraRule = cameraRuleForTemplate(input.template?.id);
+  applyCameraRule(cameraRule, clips).forEach((zoom, index) => {
+    clips[index] = { ...clips[index], zoom };
+  });
 
   const globalImages = linkImageMoves(
     normalizeImages(liftedImages, outputStartSeconds, MAX_GLOBAL_IMAGES, resolveImageSrc) ?? [],
@@ -1576,7 +1603,8 @@ export const finalizeAutoEditPlan = async (
     referenceNotes: data.referenceNotes?.trim() || null,
     theme: {
       primaryColor: hexOrUndefined(theme.primaryColor),
-      fontFamily: (theme.fontFamily ?? undefined) as CaptionFontFamily | undefined,
+      // 字幕の書体は本人が決めた物を動画全体で使う(AIには選ばせない)
+      fontFamily: undefined,
       captionPosition: (theme.captionPosition ?? undefined) as CaptionPosition | undefined,
       captionStyle: (theme.captionStyle ?? undefined) as CaptionStyle | undefined,
       captionFontSize: (theme.captionFontSize ?? undefined) as CaptionFontSize | undefined,

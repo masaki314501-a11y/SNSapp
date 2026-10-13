@@ -26,21 +26,27 @@ const roundStrokeShadow = (color: string, widthPx: number): string => {
   return shadows.join(",");
 };
 
+/** 1行の中の、色や大きさを変える一部分(字幕の重大ワード・強調する語)。 */
+export type StyledTextPart = { text: string; color?: string; scale?: number };
+
 type Props = {
   preset: TextStylePreset;
   fontSizePx: number;
-  lines: string[];
+  /** 行ごとの文字。色や大きさを変える所がある行は、部分の並びで渡す。 */
+  lines: (string | StyledTextPart[])[];
   italic?: boolean;
+  /** 書体だけ変える(字幕の強調で本人が書体を選んだ時)。省略時はスタイルの書体。 */
+  fontFamily?: TextStylePreset["fontFamily"];
 };
 
 /**
  * 文字のスタイル(textStylePresets.ts)で文字を描く。後ろから「背景の箱 → 影・光 → 太い縁取り → 細い縁取り → 文字」の順に重ねる。
  * 縁取りの層には同じ文字を置き、影でふち取る(層ごとに太さと色を変えて、何重もの縁取りにする)。
  */
-export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic }) => {
-  void ensureCaptionFontLoaded(preset.fontFamily);
+export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic, fontFamily = preset.fontFamily }) => {
+  void ensureCaptionFontLoaded(fontFamily);
   const textStyle: React.CSSProperties = {
-    fontFamily: resolveFontFamilyStack(preset.fontFamily),
+    fontFamily: resolveFontFamilyStack(fontFamily),
     fontWeight: preset.fontWeight,
     fontStyle: italic ? "italic" : undefined,
     fontSize: fontSizePx,
@@ -48,11 +54,31 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
     whiteSpace: "nowrap",
   };
   const strokes = [...preset.strokes].sort((a, b) => b[1] - a[1]);
-  const text = lines.map((line, index) => (
-    <span key={index} style={LINE_STYLE}>
-      {line}
-    </span>
-  ));
+  // 縁取り・影の層では色を付けず(層の色で塗る)、大きさだけ変える。文字の層でだけ部分の色を付ける。
+  const renderLines = (withColor: boolean) =>
+    lines.map((line, index) => (
+      <span key={index} style={LINE_STYLE}>
+        {typeof line === "string"
+          ? line
+          : line.map((part, partIndex) =>
+              part.color || part.scale ? (
+                <span
+                  key={partIndex}
+                  style={{
+                    fontSize: part.scale ? `${part.scale}em` : undefined,
+                    // グラデーションの文字(背景を文字の形に切り抜く)の中でも色が出るよう、色は文字の色で塗る
+                    ...(withColor && part.color ? { color: part.color, WebkitTextFillColor: part.color } : {}),
+                  }}
+                >
+                  {part.text}
+                </span>
+              ) : (
+                <React.Fragment key={partIndex}>{part.text}</React.Fragment>
+              )
+            )}
+      </span>
+    ));
+  const text = renderLines(false);
   const fill: React.CSSProperties = preset.gradient
     ? {
         backgroundImage: `linear-gradient(${90 + preset.gradient.angleDeg}deg, ${preset.gradient.stops
@@ -122,7 +148,7 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic 
           {text}
         </span>
       ))}
-      <span style={{ ...textStyle, position: "relative", display: "block", ...fill }}>{text}</span>
+      <span style={{ ...textStyle, position: "relative", display: "block", ...fill }}>{renderLines(true)}</span>
     </span>
   );
 };

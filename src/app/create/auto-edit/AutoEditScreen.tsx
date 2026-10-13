@@ -7,6 +7,7 @@ import { useAutoEditJob, type AutoEditResult } from "../useAutoEditJob";
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
+import { cameraRuleForTemplate } from "@/lib/cameraRules";
 import { DEFAULT_MAX_GENERATED_IMAGES, MaterialImagesPanel, type MaterialImage } from "./MaterialImagesPanel";
 
 const EmptyState: React.FC = () => (
@@ -30,6 +31,9 @@ const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
 const MAX_USER_TEXT_LENGTH = 1000;
 /** タイトルの長さの上限。サーバーと合わせる。 */
 const MAX_TITLE_LENGTH = 40;
+
+/** 完成動画の長さの選択肢(秒)。nullはAIにまかせる。 */
+const TARGET_DURATION_OPTIONS: (number | null)[] = [null, 15, 30, 45, 60, 90];
 
 const AI_DECIDES = ["切り方", "左上のタイトル", "寄り(ズーム)", "強調テキスト", "画像", "効果音", "冒頭の見出し", "締めの一言"];
 
@@ -82,6 +86,7 @@ export const AutoEditScreen: React.FC = () => {
       generateMissingImages: project.generateMissingImages ?? true,
       maxGeneratedImages: project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES,
       title: project.autoEditTitle ?? "",
+      targetDurationSeconds: project.targetDurationSeconds ?? null,
       userRequest: project.autoEditRequest ?? "",
       revision,
     });
@@ -118,6 +123,8 @@ export const AutoEditScreen: React.FC = () => {
       globalImages: plan.globalImages,
       globalShapes: plan.globalShapes,
       framing: plan.framing,
+      // 寄りは選んだテンプレートのカメラワークのルールで付けてある。編集画面で付け直す時も同じルールを選んでおく
+      cameraRuleId: cameraRuleForTemplate(templateId),
       // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });
@@ -152,6 +159,12 @@ export const AutoEditScreen: React.FC = () => {
     saveProject(next);
   };
 
+  const changeTargetDuration = (targetDurationSeconds: number | null) => {
+    const next = { ...project, targetDurationSeconds };
+    setProject(next);
+    saveProject(next);
+  };
+
   const changeTitle = (autoEditTitle: string) => {
     const next = { ...project, autoEditTitle };
     setProject(next);
@@ -179,7 +192,7 @@ export const AutoEditScreen: React.FC = () => {
             ))}
           </div>
           <span className="text-xs" style={{ color: "var(--muted)" }}>
-            数分かかることがあります。字幕は次の編集画面で付けるか決められます。字幕の中の強調(色・書体)は、AIでは付けず、編集画面で自分で選べます。
+            数分かかることがあります。話している言葉は、書体をそろえた基本の字幕として付けます。字幕の強調(帯・書体・色・効果音)と重大ワードは、AIでは付けず、次の編集画面で自分で選べます。
           </span>
         </div>
 
@@ -245,6 +258,28 @@ export const AutoEditScreen: React.FC = () => {
           onChangeGenerate={changeGenerate}
           disabled={isProcessing}
         />
+
+        <div className="panel flex flex-col gap-2 p-4">
+          <label htmlFor="auto-edit-length" className="text-sm font-bold">
+            完成動画の長さ
+          </label>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            使う範囲は合計{totalSeconds(keepRanges).toFixed(0)}秒です。短くしたい時は、要点を残して前置きや繰り返しから削ります。
+          </span>
+          <select
+            id="auto-edit-length"
+            value={project.targetDurationSeconds ?? ""}
+            disabled={isProcessing}
+            onChange={(e) => changeTargetDuration(e.target.value ? Number(e.target.value) : null)}
+            className="field-input w-full text-sm"
+          >
+            {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
+              <option key={seconds ?? "auto"} value={seconds ?? ""}>
+                {seconds === null ? "AIにまかせる(使う範囲から間を詰めるだけ)" : `${seconds}秒くらい`}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="panel flex flex-col gap-2 p-4">
           <div className="flex items-center gap-2">

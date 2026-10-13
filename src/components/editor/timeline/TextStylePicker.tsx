@@ -5,6 +5,8 @@ import { StyledText } from "@video/shared/StyledText";
 import { TEXT_STYLE_PRESETS, findTextStylePreset } from "@video/shared/textStylePresets";
 
 type Props = {
+  /** 欄の名前。 */
+  label?: string;
   value: string | undefined;
   onChange: (textStyleId: string | undefined) => void;
 };
@@ -18,13 +20,13 @@ const SAMPLE_BACKGROUND = "#8a9aa8";
  * 文字のスタイル(Premiereのテキストスタイルから作った170種類)を、見本を見ながら選ぶ欄。
  * 一覧は開いた時だけ描く(170個の見本を常に描くと編集画面が重くなるため)。
  */
-export const TextStylePicker: React.FC<Props> = ({ value, onChange }) => {
+export const TextStylePicker: React.FC<Props> = ({ label = "スタイル", value, onChange }) => {
   const [open, setOpen] = useState(false);
   const current = findTextStylePreset(value);
 
   return (
     <div className="editor-field">
-      <span>スタイル</span>
+      <span>{label}</span>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button
           type="button"

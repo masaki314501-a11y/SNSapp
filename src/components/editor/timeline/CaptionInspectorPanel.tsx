@@ -10,6 +10,8 @@ import {
 } from "@video/shared/schema";
 import { CaptionIcon, EditIcon, HighlightIcon, MicIcon, PaletteIcon, SparkleIcon, TrashIcon } from "@/components/icons";
 import { SettingsSection } from "../SettingsSection";
+import { CaptionEmphasisFields, KeywordHighlightFields } from "./CaptionEmphasisFields";
+import { TextStylePicker } from "./TextStylePicker";
 
 const DEFAULT_EMPHASIS_COLOR = "#FFE600";
 
@@ -24,8 +26,20 @@ type Props = {
   /** 字幕の中で強調する単語と、その色(旧・演出タブの「字幕の強調」)。 */
   onUpdateEmphasis: (
     key: string,
-    patch: Partial<Pick<ProjectSegment, "emphasisWords" | "emphasisColor" | "clipCaptionPosition">>
+    patch: Partial<
+      Pick<
+        ProjectSegment,
+        "emphasisWords" | "emphasisColor" | "clipCaptionPosition" | "captionEmphasis" | "emphasisSfxPresetId"
+      >
+    >
   ) => void;
+  /** 全クリップ共通の字幕の文字スタイルと重大ワード。 */
+  captionTextStyleId: string | undefined;
+  keywordHighlights: { word: string; color: string }[];
+  onUpdateCaptionLook: (patch: {
+    captionTextStyleId?: string | undefined;
+    keywordHighlights?: { word: string; color: string }[];
+  }) => void;
   onApplyAnimationToAll: (animation: CaptionAnimation) => void;
   onOpenBulkEdit: () => void;
   canOpenBulkEdit: boolean;
@@ -55,6 +69,9 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   selectedCount,
   onUpdateSegment,
   onUpdateEmphasis,
+  captionTextStyleId,
+  keywordHighlights,
+  onUpdateCaptionLook,
   onApplyAnimationToAll,
   onOpenBulkEdit,
   canOpenBulkEdit,
@@ -169,6 +186,26 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           ) : null}
         </SettingsSection>
 
+        {/* 字幕の強調はAIに任せず、ここで本人が選ぶ(帯・書体・色・効果音) */}
+        <SettingsSection title="このクリップの字幕の強調" icon={<SparkleIcon size={16} />}>
+          {multiSelectedNote ??
+            (target ? (
+              <CaptionEmphasisFields segment={target} onChange={(patch) => onUpdateEmphasis(target.key, patch)} />
+            ) : (
+              noSelectionNote
+            ))}
+        </SettingsSection>
+
+        <SettingsSection title="重大ワード(全クリップ)" icon={<HighlightIcon size={16} />}>
+          <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+            ここに入れた言葉は、すべての字幕で選んだ色・少し大きい文字になります
+          </span>
+          <KeywordHighlightFields
+            keywords={keywordHighlights}
+            onChange={(next) => onUpdateCaptionLook({ keywordHighlights: next })}
+          />
+        </SettingsSection>
+
         {/* 強調する単語(クリップごと)と、全クリップ共通の見た目を1つの欄にまとめる */}
         <SettingsSection title="字幕の見た目" icon={<PaletteIcon size={16} />}>
           {target ? (
@@ -198,6 +235,11 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
               </label>
             </div>
           ) : null}
+          <TextStylePicker
+            label="字幕の文字スタイル(全クリップ共通)"
+            value={captionTextStyleId}
+            onChange={(id) => onUpdateCaptionLook({ captionTextStyleId: id })}
+          />
           {lookSettings}
         </SettingsSection>
 

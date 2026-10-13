@@ -562,3 +562,21 @@ describe("新しく作る画像の上限", () => {
     expect(plan.imageSources).toEqual({ material: 0, library: 0, generated: 0 });
   });
 });
+
+describe("カメラワークのルール", () => {
+  it("ランキングでは、順位を発表したクリップだけ顔を中心に寄る(AIが寄せた所は山場の印にする)", async () => {
+    const face = { xPercent: 40, yPercent: 30, widthPercent: 30, heightPercent: 16 };
+    const plan = await finalizeAutoEditPlan(
+      basePlan([
+        { sourceStartSeconds: 0, sourceEndSeconds: 2, face, zoom: { scale: 1.3, style: "slow" } },
+        { sourceStartSeconds: 2, sourceEndSeconds: 4, face },
+        { sourceStartSeconds: 4, sourceEndSeconds: 6, face, overlays: [{ text: "第3位" }] },
+      ]),
+      { ...input, template: { id: "ranking", label: "ランキング", description: "", instructions: "" } }
+    );
+    expect(plan.clips.map((clip) => clip.cameraHighlight)).toEqual([true, undefined, true]);
+    expect(plan.clips[0].zoom).toEqual({ scale: 1.15, style: "punch", focusXPercent: 40, focusYPercent: 30 });
+    expect(plan.clips[1].zoom).toBeUndefined();
+    expect(plan.clips[2].zoom?.scale).toBe(1.15);
+  });
+});

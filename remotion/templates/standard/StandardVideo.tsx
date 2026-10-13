@@ -92,6 +92,8 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
               captionPosition={theme.captionPosition}
               fontSize={theme.fontSize}
               framing={framing}
+              captionTextStyleId={theme.captionTextStyleId}
+              keywordHighlights={theme.keywordHighlights}
               layer="base"
             />
           </Series.Sequence>

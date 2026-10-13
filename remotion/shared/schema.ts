@@ -121,6 +121,16 @@ export const themeSchema = z.object({
   captionPosition: captionPositionSchema,
   fontSize: captionFontSizeSchema,
   fadeInOut: z.boolean().default(false).describe("動画の先頭・末尾をフェードイン/アウトさせる"),
+  /**
+   * 字幕(基本テロップ)の文字スタイル(textStylePresets.tsのid)。動画全体で1つ。指定した時は、見た目(captionStyle)・
+   * 配色の代わりにこのスタイルで字幕を描く(書体もスタイルの書体)。
+   */
+  captionTextStyleId: z.string().optional(),
+  /** 重大ワード。全クリップの字幕で、この言葉を指定の色で大きく見せる。 */
+  keywordHighlights: z
+    .array(z.object({ word: z.string().min(1), color: zColor() }))
+    .max(30)
+    .optional(),
 });
 
 export const captionAnimationSchema = z
@@ -158,11 +168,12 @@ export const CAPTION_ANIMATION_OPTIONS: {
 /**
  * カット中の「寄り」。自動編集(Gemini)が強調したい瞬間に使う。候補から選ばせるのではなく
  * 倍率・寄る位置を数値で自由に決めさせ、描画側はその値をそのまま使う。
- * punch=カット頭で一気に寄る(バズ動画定番のジャンプズーム)、slow=カットの間じわじわ寄る。
+ * punch=カット頭で一気に寄る(バズ動画定番のジャンプズーム)、slow=カットの間じわじわ寄る、
+ * pan=寄った倍率のまま、カットの間に横へゆっくり動く(2択の動画などで、単調にならない程度の動きを付ける)。
  */
 export const clipZoomSchema = z.object({
   scale: z.number().min(1).max(2).describe("最終的な拡大率(1=等倍)"),
-  style: z.enum(["punch", "slow"]).default("punch"),
+  style: z.enum(["punch", "slow", "pan"]).default("punch"),
   focusXPercent: z.number().min(0).max(100).default(50).describe("寄る中心の横位置(左端0〜右端100)"),
   focusYPercent: z.number().min(0).max(100).default(40).describe("寄る中心の縦位置(上端0〜下端100)"),
 });
@@ -289,6 +300,17 @@ export const videoFramingSchema = z.object({
 
 export type VideoFraming = z.infer<typeof videoFramingSchema>;
 
+/** 字幕の強調(シェイプテロップ・書体・色)。 */
+export const captionEmphasisSchema = z.object({
+  band: z.boolean().default(false),
+  bandColor: zColor().optional(),
+  textColor: zColor().optional(),
+  fontFamily: captionFontFamilySchema.removeDefault().optional(),
+  textStyleId: z.string().optional(),
+});
+
+export type CaptionEmphasis = z.infer<typeof captionEmphasisSchema>;
+
 /**
  * 映像の中の顔の位置(元の動画の画面に対する割合。寄り・画角を付ける前)。xPercent/yPercentは顔の中心。
  * 自動編集(Gemini)が動画を見て書き、文字・画像を顔に重ねない配置や、顔を中心にした寄りに使う。
@@ -344,6 +366,11 @@ export const mediaItemBaseSchema = z.object({
   zoom: clipZoomSchema.optional(),
   overlays: z.array(textOverlaySchema).max(20).optional(),
   images: z.array(imageOverlaySchema).max(20).optional(),
+  /**
+   * このクリップの字幕を強調する(本人が選ぶ)。band=字幕の後ろに帯を敷くシェイプテロップ。
+   * 書体・文字色・文字スタイルは、指定した時だけ全体の設定から変える。
+   */
+  captionEmphasis: captionEmphasisSchema.optional(),
   /** このクリップの顔の位置。自動編集が書く。 */
   faceBox: faceBoxSchema.optional(),
   /** このクリップだけテロップの位置を変える(全体の位置だと顔に重なる時など)。省略時は全体の位置。 */

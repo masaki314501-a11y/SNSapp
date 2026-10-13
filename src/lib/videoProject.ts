@@ -6,6 +6,7 @@ import {
   type CaptionFontFamily,
   type CaptionFontSize,
   type CaptionPosition,
+  type CaptionEmphasis,
   type CaptionStyle,
   type ClipZoom,
   type FaceBox,
@@ -14,7 +15,8 @@ import {
   type TextOverlay,
   type VideoFraming,
 } from "@video/shared/schema";
-import type { StandardVideoProps } from "@video/templates/standard/schema";
+import { MAX_SFX_CLIPS, type StandardVideoProps } from "@video/templates/standard/schema";
+import { SFX_PRESETS } from "@/components/editor/audioPresets";
 
 /**
  * 「動画をアップロード・字幕生成する画面(/create)」と
@@ -62,6 +64,12 @@ export type ProjectSegment = {
   faceBox?: FaceBox;
   /** このクリップだけテロップの位置を変える(顔に重なるのを避ける等)。 */
   clipCaptionPosition?: CaptionPosition;
+  /** このクリップの字幕の強調(帯・書体・色。本人が選ぶ)。 */
+  captionEmphasis?: CaptionEmphasis;
+  /** 字幕を強調した時に、クリップの頭で鳴らす効果音(audioPresets.tsのid)。 */
+  emphasisSfxPresetId?: string;
+  /** 話の山場(順位の発表・結論など)。カメラワークのルール(cameraRules.ts)で寄る所を決めるのに使う。 */
+  cameraHighlight?: boolean;
 };
 
 /** 自動編集が手本にする参考画像/動画。スタイル抽出画面でアップロードしたものを残しておく。 */
@@ -141,6 +149,14 @@ export type VideoProject = {
   maxGeneratedImages?: number;
   /** 自動編集で左上に出すタイトル。空ならAIが決める。 */
   autoEditTitle?: string;
+  /** 自動編集で、完成動画をこの秒数くらいに収める。未指定なら長さはAIにまかせる。 */
+  targetDurationSeconds?: number | null;
+  /** 字幕の文字スタイル(全クリップ共通。textStylePresets.tsのid)。 */
+  captionTextStyleId?: string;
+  /** 重大ワード(全クリップの字幕で色を変える言葉と、その色)。 */
+  keywordHighlights?: { word: string; color: string }[];
+  /** カメラワークのルール(cameraRules.tsのid)。 */
+  cameraRuleId?: string;
   /** 自動編集でAIに伝える要望。やり直すたびに書き直さなくて済むよう保存しておく。 */
   autoEditRequest?: string;
   /**
@@ -265,6 +281,17 @@ export const clearProject = (): void => {
 /** アップロード済み動画をブラウザで直接再生するためのURL(public/配下の静的パス)。 */
 export const projectVideoUrl = (videoPath: string): string => `/${videoPath}`;
 
+/** 字幕を強調したクリップに付けた効果音を、完成動画の秒数に置く。 */
+const emphasisSfx = (segments: ProjectSegment[]) => {
+  let start = 0;
+  return segments.flatMap((segment) => {
+    const clipStart = start;
+    start += Math.max(segment.durationInSeconds, 0.3);
+    const preset = segment.emphasisSfxPresetId ? SFX_PRESETS.find((p) => p.id === segment.emphasisSfxPresetId) : undefined;
+    return preset ? [{ src: preset.src, label: preset.label, startFromSeconds: clipStart, volume: 1 }] : [];
+  });
+};
+
 /**
  * 編集状態(クリップ・スタイル・SE/BGM)からレンダー用のStandardVideoPropsを組み立てる。
  * 編集画面(未保存の最新state)と書き出し画面(localStorageから読み込んだVideoProject)の
@@ -288,6 +315,8 @@ export const buildStandardVideoProps = (params: {
   globalShapes?: VideoProject["globalShapes"];
   framing?: VideoProject["framing"];
   muteOriginalUnderNarration?: boolean;
+  captionTextStyleId?: string;
+  keywordHighlights?: VideoProject["keywordHighlights"];
 }): StandardVideoProps => {
   // 元の音を消すスイッチがONのとき、AIナレーションが付いているクリップだけ元の音量を0にする。
   // クリップの音量設定そのものは書き換えない(スイッチをOFFに戻せば元の音量に戻るように)。
@@ -323,6 +352,7 @@ export const buildStandardVideoProps = (params: {
       images: segment.images,
       faceBox: segment.faceBox,
       clipCaptionPosition: segment.clipCaptionPosition,
+      captionEmphasis: segment.captionEmphasis,
     })),
     theme: {
       primaryColor: params.primaryColor,
@@ -331,13 +361,19 @@ export const buildStandardVideoProps = (params: {
       captionStyle: params.captionStyle,
       fontSize: params.fontSize,
       fadeInOut: params.fadeInOut,
+      captionTextStyleId: params.captionTextStyleId,
+      keywordHighlights: params.keywordHighlights?.filter((highlight) => highlight.word.trim().length > 0),
     },
-    sfx: params.sfxClips.map((clip) => ({
-      src: clip.src,
-      label: clip.label,
-      startFromSeconds: clip.startFromSeconds,
-      volume: clip.volume,
-    })),
+    sfx: [
+      ...params.sfxClips.map((clip) => ({
+        src: clip.src,
+        label: clip.label,
+        startFromSeconds: clip.startFromSeconds,
+        volume: clip.volume,
+      })),
+      // 字幕を強調したクリップの効果音は、クリップの頭で鳴らす(クリップを並べ替えても付いていくよう、ここで秒数を出す)
+      ...emphasisSfx(params.segments),
+    ].slice(0, MAX_SFX_CLIPS),
     bgm: params.bgm
       ? {
           src: params.bgm.src,

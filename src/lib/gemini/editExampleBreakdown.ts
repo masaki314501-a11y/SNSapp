@@ -1,7 +1,6 @@
 import { GoogleGenAI, type Part } from "@google/genai";
 import {
   CAPTION_ANIMATION_OPTIONS,
-  CAPTION_FONT_FAMILY_OPTIONS,
   CAPTION_STYLE_OPTIONS,
 } from "@video/shared/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
@@ -51,8 +50,6 @@ const buildPrompt = (example: EditExample): string =>
   - theme.captionPosition: テロップの位置(top=上部 / middle=中央 / bottom=下部)
   - theme.captionStyle: テロップの背景の付き方。候補:
 ${hints(CAPTION_STYLE_OPTIONS)}
-  - theme.fontFamily: 一番近いフォントの系統。候補:
-${hints(CAPTION_FONT_FAMILY_OPTIONS)}
   - theme.primaryColor: テロップの差し色(#RRGGBB)
   - captionAnimation: テロップの出方。候補:
 ${hints(CAPTION_ANIMATION_OPTIONS)}

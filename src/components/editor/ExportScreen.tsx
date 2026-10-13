@@ -51,6 +51,8 @@ export const ExportScreen: React.FC = () => {
         globalShapes: current.globalShapes,
         framing: current.framing,
         muteOriginalUnderNarration: current.muteOriginalUnderNarration,
+        captionTextStyleId: current.captionTextStyleId,
+        keywordHighlights: current.keywordHighlights,
       }),
       exportFileName(current)
     );
