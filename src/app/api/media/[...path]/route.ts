@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { open, stat } from "node:fs/promises";
 import path from "node:path";
+import { resolveLibraryImageFile } from "@/lib/imageLibrary";
 
 export const runtime = "nodejs";
 
@@ -102,7 +103,15 @@ export async function GET(
     return NextResponse.json({ error: "不正なパスです" }, { status: 400 });
   }
 
-  const filePath = path.join(process.cwd(), "public", dir, ...rest);
+  // 画像の棚(images/library/<ファイル>)は public/ ではなく data/image-library/ に置いている
+  // (デプロイしても消えないようにリポジトリに入れるため。本番で作った分はR2から取ってくる)。
+  const filePath =
+    dir === "images" && rest[0] === "library" && rest.length === 2
+      ? await resolveLibraryImageFile(rest[1])
+      : path.join(process.cwd(), "public", dir, ...rest);
+  if (!filePath) {
+    return NextResponse.json({ error: "ファイルが見つかりません" }, { status: 404 });
+  }
 
   let size: number;
   try {

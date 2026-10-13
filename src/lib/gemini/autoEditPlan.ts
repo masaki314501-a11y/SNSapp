@@ -44,6 +44,8 @@ import {
 import type { EditTemplate } from "@/lib/editTemplates";
 import type { ResolvedMaterialImage } from "@/lib/materialImage";
 import { getOrGenerateImage, type GeneratedImageStyle } from "./generateImage";
+import { matchLibraryImages } from "./imageLibraryMatch";
+import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 
 /**
  * 自動編集は「どこを切り、どこで寄り、何を画面に出すか」という演出判断そのものなので、
@@ -72,6 +74,8 @@ const MAX_GLOBAL_SHAPES = 24;
 const MAX_FRAMING_SCALE = 1.5;
 /** 1回の自動編集でAIに作らせる画像の種類の上限(1枚数円〜十円かかるため。ランキング6〜8項目が収まる数)。 */
 const MAX_GENERATED_IMAGES = 8;
+/** 1回の自動編集で出す、作った画像(棚の画像を含む)の種類の上限。棚の画像は無料なので、作る上限より多くてよい。 */
+const MAX_REQUESTED_IMAGES = 16;
 /** 自動編集で寄る倍率の上限。 */
 const MAX_AUTO_ZOOM_SCALE = 1.35;
 /** ランキングの空枠(6個)と、そこを埋める項目名(6個)、タイトルが同時に置けるだけの数。描画側の上限と合わせる。 */
@@ -539,26 +543,51 @@ const generateMissingImages = async (
   plan: { clips: RawAutoEditClip[]; generatedImageStyle?: GeneratedImageStyle | null },
   materialImages: ResolvedMaterialImage[]
 ): Promise<Map<string, string>> => {
-  const descriptions = new Map<string, string>();
+  const requests = new Map<string, { name: string; description: string }>();
   for (const clip of plan.clips) {
     for (const image of clip.images ?? []) {
       if (findMaterialImage(image, materialImages)) continue;
       // 枠に入れる画像は、その前に大きく出していた画像を使い回す(finalizeAutoEditPlan)ので、別には作らない。
       if (isSlotImage(image)) continue;
       const key = generatedImageKey(image);
-      if (key && !descriptions.has(key) && descriptions.size < MAX_GENERATED_IMAGES) descriptions.set(key, image.description);
+      if (key && !requests.has(key) && requests.size < MAX_REQUESTED_IMAGES) {
+        requests.set(key, { name: image.name?.trim() ?? "", description: image.description });
+      }
     }
   }
+  if (requests.size === 0) return new Map();
   // 画風の指定が無ければ、誤解を招きにくいイラストにする。
   const style = plan.generatedImageStyle ?? "illustration";
   const paths = new Map<string, string>();
-  for (const [key, description] of descriptions) {
+
+  // まず画像の棚から探す(同じ物の画像が前に作ってあれば、作らずに使う)。画風が違う画像は混ぜない。
+  const entries = [...requests.entries()];
+  const library = (await loadImageLibrary()).filter((image) => image.style === style);
+  const exact = new Map(library.map((image) => [image.description.trim(), image]));
+  const unmatched = entries.filter(([key, request]) => {
+    const image = exact.get(request.description.trim());
+    if (image) paths.set(key, libraryImageSrc(image));
+    return !image;
+  });
+  const matches = await matchLibraryImages(
+    unmatched.map(([, request]) => request),
+    library.filter((image) => ![...paths.values()].includes(libraryImageSrc(image)))
+  );
+  for (const [index, image] of matches) paths.set(unmatched[index][0], libraryImageSrc(image));
+
+  // 棚に無い分だけ作る(作った画像は棚に足される)。
+  let generated = 0;
+  for (const [key, request] of entries) {
+    if (paths.has(key) || generated >= MAX_GENERATED_IMAGES) continue;
     try {
-      paths.set(key, (await getOrGenerateImage(description, style)).path);
+      const result = await getOrGenerateImage(request.description, style, request.name);
+      if (!result.cached) generated++;
+      paths.set(key, result.path);
     } catch (error) {
       console.warn(`[autoEditPlan] 画像「${key}」を作れなかったため、その画像は出しません`, error);
     }
   }
+  console.info(`[autoEditPlan] 画像${requests.size}種類のうち、${requests.size - generated}種類は棚の画像を使い、${generated}種類を作りました`);
   return paths;
 };
 

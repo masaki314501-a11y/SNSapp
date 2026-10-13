@@ -134,7 +134,7 @@ export const MaterialImagesPanel: React.FC<Props> = ({
           <span>画像が足りない所は、AIで画像を作る</span>
           <span className="text-xs" style={{ color: "var(--muted)" }}>
             医療・美容・健康の話は、本物の写真と誤解されないようイラスト風で作り、「※画像はイメージです」を添えます。
-            1枚につき数円〜十円ほどかかります(同じ画像は使い回します)
+            作った画像は貯めておき、同じ物の画像は次から作らずに使います(新しく作る時だけ1枚約10円かかります)
           </span>
         </span>
       </label>

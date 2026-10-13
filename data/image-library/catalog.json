@@ -1,0 +1,226 @@
+[
+  {
+    "id": "d7d579d15b959ede9a01ead1583e15ec",
+    "name": "八重歯",
+    "description": "上の犬歯が歯並びの外側に飛び出している八重歯の口元",
+    "style": "illustration",
+    "file": "d7d579d15b959ede9a01ead1583e15ec.jpg",
+    "createdAt": "2026-10-13T05:35:46.279Z"
+  },
+  {
+    "id": "618b39c32acea24793d5f4640cb35c36",
+    "name": "過蓋咬合",
+    "description": "噛んだ時に上の前歯が下の前歯を深く覆い隠している口元",
+    "style": "illustration",
+    "file": "618b39c32acea24793d5f4640cb35c36.jpg",
+    "createdAt": "2026-10-13T05:36:12.297Z"
+  },
+  {
+    "id": "497d043bff23bd0e20c1234222a6ffac",
+    "name": "すきっ歯",
+    "description": "前歯の間に隙間が空いているすきっ歯の口元",
+    "style": "illustration",
+    "file": "497d043bff23bd0e20c1234222a6ffac.jpg",
+    "createdAt": "2026-10-13T05:36:23.081Z"
+  },
+  {
+    "id": "2d7085e3adee641504945ebf735f437a",
+    "name": "ガミースマイル",
+    "description": "笑うと上の歯ぐきが大きく見えるガミースマイルの口元",
+    "style": "illustration",
+    "file": "2d7085e3adee641504945ebf735f437a.jpg",
+    "createdAt": "2026-10-13T05:36:33.925Z"
+  },
+  {
+    "id": "e72201ff570a5648789b4cf4d4629df6",
+    "name": "口ゴボ",
+    "description": "口元が前に盛り上がって唇が閉じにくい横顔",
+    "style": "illustration",
+    "file": "e72201ff570a5648789b4cf4d4629df6.jpg",
+    "createdAt": "2026-10-13T05:37:06.858Z"
+  },
+  {
+    "id": "10afca53715976af540ad76609e1e4ea",
+    "name": "きれいな歯並び",
+    "description": "上下の歯がきれいにそろって噛み合っている歯並びの口元",
+    "style": "illustration",
+    "file": "10afca53715976af540ad76609e1e4ea.jpg",
+    "createdAt": "2026-10-13T05:37:18.096Z"
+  },
+  {
+    "id": "ab8c180a3b40b22fcb8e459773c6fb7a",
+    "name": "ワイヤー矯正",
+    "description": "歯の表側にブラケットとワイヤーを付けた矯正装置の口元",
+    "style": "illustration",
+    "file": "ab8c180a3b40b22fcb8e459773c6fb7a.jpg",
+    "createdAt": "2026-10-13T05:37:28.825Z"
+  },
+  {
+    "id": "ba747b12935f06a96320370dbf882935",
+    "name": "マウスピース矯正",
+    "description": "透明なマウスピース型の矯正装置",
+    "style": "illustration",
+    "file": "ba747b12935f06a96320370dbf882935.jpg",
+    "createdAt": "2026-10-13T05:37:40.711Z"
+  },
+  {
+    "id": "53c0084a1a4d3fd397571605d7d4f81b",
+    "name": "裏側矯正",
+    "description": "歯の裏側に矯正装置を付けた状態",
+    "style": "illustration",
+    "file": "53c0084a1a4d3fd397571605d7d4f81b.jpg",
+    "createdAt": "2026-10-13T05:37:51.897Z"
+  },
+  {
+    "id": "add8638ce1315866a4b91f0ae32da382",
+    "name": "リテーナー",
+    "description": "矯正後に歯並びを保つ透明な保定装置(リテーナー)",
+    "style": "illustration",
+    "file": "add8638ce1315866a4b91f0ae32da382.jpg",
+    "createdAt": "2026-10-13T05:38:02.723Z"
+  },
+  {
+    "id": "8dbbdec37ef0ea07ae993bd944266c18",
+    "name": "虫歯",
+    "description": "歯の一部が黒く欠けている虫歯",
+    "style": "illustration",
+    "file": "8dbbdec37ef0ea07ae993bd944266c18.jpg",
+    "createdAt": "2026-10-13T05:38:13.530Z"
+  },
+  {
+    "id": "0d83a9acab74824164b4ec1bf9003e68",
+    "name": "歯周病",
+    "description": "歯ぐきが赤く腫れて下がっている歯周病の口元",
+    "style": "illustration",
+    "file": "0d83a9acab74824164b4ec1bf9003e68.jpg",
+    "createdAt": "2026-10-13T05:38:24.708Z"
+  },
+  {
+    "id": "f40fa1bd15d9e06b259d4702ac87869e",
+    "name": "歯磨き",
+    "description": "歯ブラシで歯を磨いている口元",
+    "style": "illustration",
+    "file": "f40fa1bd15d9e06b259d4702ac87869e.jpg",
+    "createdAt": "2026-10-13T05:38:37.249Z"
+  },
+  {
+    "id": "2384cc62258de09ea7fec97ae0b77588",
+    "name": "ホワイトニング",
+    "description": "白く輝く歯の口元",
+    "style": "illustration",
+    "file": "2384cc62258de09ea7fec97ae0b77588.jpg",
+    "createdAt": "2026-10-13T05:38:48.753Z"
+  },
+  {
+    "id": "e589785d446a81e48bff3b50b5315c1b",
+    "name": "歯科の診察",
+    "description": "歯科医師が診察台の患者の歯を診ている様子",
+    "style": "illustration",
+    "file": "e589785d446a81e48bff3b50b5315c1b.jpg",
+    "createdAt": "2026-10-13T05:39:00.666Z"
+  },
+  {
+    "id": "0d2d065681cf8d6b29df0d74025b5a1a",
+    "name": "抜歯",
+    "description": "抜いた奥歯とピンセット",
+    "style": "illustration",
+    "file": "0d2d065681cf8d6b29df0d74025b5a1a.jpg",
+    "createdAt": "2026-10-13T05:39:11.395Z"
+  },
+  {
+    "id": "d472970a797b9b36051c05d0335efdaa",
+    "name": "治療費",
+    "description": "お札と硬貨と電卓(費用のイメージ)",
+    "style": "illustration",
+    "file": "d472970a797b9b36051c05d0335efdaa.jpg",
+    "createdAt": "2026-10-13T05:39:22.418Z"
+  },
+  {
+    "id": "362f4398dc4cc4ad1bd04bed0892247b",
+    "name": "治療期間",
+    "description": "カレンダーと時計(期間のイメージ)",
+    "style": "illustration",
+    "file": "362f4398dc4cc4ad1bd04bed0892247b.jpg",
+    "createdAt": "2026-10-13T05:39:34.079Z"
+  },
+  {
+    "id": "c3cc77987f211937522660b99b4de012",
+    "name": "Eライン",
+    "description": "鼻先とあごを結ぶ線に唇が収まっている整った横顔",
+    "style": "illustration",
+    "file": "c3cc77987f211937522660b99b4de012.jpg",
+    "createdAt": "2026-10-13T05:39:46.287Z"
+  },
+  {
+    "id": "73107d4783bced42e66d2d38dfb912bd",
+    "name": "顎関節の痛み",
+    "description": "口を開けるとあごの関節が痛む様子",
+    "style": "illustration",
+    "file": "73107d4783bced42e66d2d38dfb912bd.jpg",
+    "createdAt": "2026-10-13T05:39:56.548Z"
+  },
+  {
+    "id": "182bc377dee03158b2faeb0f4f7aa434",
+    "name": "日本の国旗",
+    "description": "日本の国旗(白地に赤い丸の日の丸)",
+    "style": "illustration",
+    "file": "182bc377dee03158b2faeb0f4f7aa434.jpg",
+    "createdAt": "2026-10-13T05:40:06.586Z"
+  },
+  {
+    "id": "342700ecdca03e1145ab264908fe49a0",
+    "name": "韓国の国旗",
+    "description": "韓国の国旗(白地に赤と青の太極模様と四隅の黒い卦)",
+    "style": "illustration",
+    "file": "342700ecdca03e1145ab264908fe49a0.jpg",
+    "createdAt": "2026-10-13T05:40:18.111Z"
+  },
+  {
+    "id": "1e717af143282dc4848bf0cb597dfd68",
+    "name": "出っ歯",
+    "description": "上の前歯が前に突き出ている出っ歯の口元を横から見た状態",
+    "style": "illustration",
+    "file": "1e717af143282dc4848bf0cb597dfd68.jpg",
+    "createdAt": "2026-10-13T05:40:30.199Z"
+  },
+  {
+    "id": "1e1329e7b013e1de4f9127873e02efbd",
+    "name": "開咬",
+    "description": "奥歯を噛んでも前歯が噛み合わず隙間が空く開咬の口元",
+    "style": "illustration",
+    "file": "1e1329e7b013e1de4f9127873e02efbd.jpg",
+    "createdAt": "2026-10-13T05:40:30.201Z"
+  },
+  {
+    "id": "174178d2cc4df0ae54d8051aed5a24d6",
+    "name": "バニーティース",
+    "description": "上の前歯2本がほかの歯より大きく長い口元",
+    "style": "illustration",
+    "file": "174178d2cc4df0ae54d8051aed5a24d6.jpg",
+    "createdAt": "2026-10-13T05:40:30.202Z"
+  },
+  {
+    "id": "125eecec643a8ef74c94d69ec989d330",
+    "name": "矮小歯",
+    "description": "前歯が全体的に小さい歯の口元のアップ",
+    "style": "illustration",
+    "file": "125eecec643a8ef74c94d69ec989d330.jpg",
+    "createdAt": "2026-10-13T05:40:30.203Z"
+  },
+  {
+    "id": "b634901b95c3787e8dbf0998a3253e4e",
+    "name": "叢生",
+    "description": "歯の向きがばらばらで、前歯が前後に重なり合い、デコボコに並んでいるガタガタの歯並びを正面から見た口元",
+    "style": "illustration",
+    "file": "b634901b95c3787e8dbf0998a3253e4e.jpg",
+    "createdAt": "2026-10-13T05:41:16.457Z"
+  },
+  {
+    "id": "562f41b2d97a739d8fb4cf7843580631",
+    "name": "small_teeth",
+    "description": "前歯のサイズが平均より小さく歯の間に隙間が空いている口元のアップ写真",
+    "style": "illustration",
+    "file": "562f41b2d97a739d8fb4cf7843580631.jpg",
+    "createdAt": "2026-10-13T05:58:26.076Z"
+  }
+]

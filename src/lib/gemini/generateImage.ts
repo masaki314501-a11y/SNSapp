@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import { GoogleGenAI } from "@google/genai";
 import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { addToImageLibrary, libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 
 /**
  * 自動編集で「使える画像」が足りない所に出す画像を、Gemini(Nano Banana)で作る。
@@ -13,11 +14,12 @@ import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
  * そのため画風は自動編集の判断(generatedImageStyle)で「イラスト・図解風」か「写真風」を選ばせ、
  * 医療系はイラスト必須にしている。作った画像を使った動画には「※画像はイメージです」を添える(autoEditPlan.ts)。
  *
- * 1枚あたり数円〜十円ほどかかるため、「モデル+画風+描く内容」から決まるファイル名で保存して使い回す
- * (別の案を作る・やり直す、といった場面で同じ画像に何度も課金しないように。voiceoverCache.tsと同じ考え方)。
+ * 1枚あたり約10円かかるため、作った画像は名前と説明付きで画像の棚(imageLibrary.ts)に貯めて使い回す。
+ * 説明が一字一句同じならここでそのまま使い、言い方が違うだけの同じ画像は自動編集側(imageLibraryMatch.ts)で棚から選ぶ。
  */
 const DEFAULT_MODEL = "gemini-3.1-flash-image";
-const GENERATED_DIR = path.join(process.cwd(), "public", "images", "generated");
+/** 棚ができる前に作った画像の置き場所(手元に残っている分だけ使い回す)。 */
+const LEGACY_GENERATED_DIR = path.join(process.cwd(), "public", "images", "generated");
 const GEMINI_TIMEOUT_MS = 120_000;
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 8_000;
@@ -95,20 +97,32 @@ const generateImage = async (
   throw toFriendlyGeminiError(lastError);
 };
 
-/** 描く内容と画風から画像を作り(作ってあれば使い回し)、public/配下の相対パスを返す。 */
+/**
+ * 描く内容と画風から画像を作り(棚に同じ説明の画像があれば使い回し)、動画から参照するパスを返す。
+ * 作った画像は棚に足す。
+ */
 export const getOrGenerateImage = async (
   description: string,
-  style: GeneratedImageStyle
+  style: GeneratedImageStyle,
+  name = ""
 ): Promise<{ path: string; cached: boolean }> => {
+  const sameImage = (await loadImageLibrary()).find(
+    (image) => image.style === style && image.description.trim() === description.trim()
+  );
+  if (sameImage) return { path: libraryImageSrc(sameImage), cached: true };
+
   const key = cacheKeyFor(description, style);
   // 返ってくる形式(PNG/JPEG)はモデル次第なので、どの拡張子で保存してあっても使い回す。
   for (const extension of Object.values(EXTENSION_BY_MIME)) {
-    if (await fileExists(path.join(GENERATED_DIR, `${key}.${extension}`))) {
+    if (await fileExists(path.join(LEGACY_GENERATED_DIR, `${key}.${extension}`))) {
       return { path: `images/generated/${key}.${extension}`, cached: true };
     }
   }
   const { buffer, extension } = await generateImage(description, style);
-  await mkdir(GENERATED_DIR, { recursive: true });
-  await writeFile(path.join(GENERATED_DIR, `${key}.${extension}`), buffer);
-  return { path: `images/generated/${key}.${extension}`, cached: false };
+  const image = await addToImageLibrary(
+    { id: key, name: name.trim() || description.slice(0, 20), description: description.trim(), style },
+    buffer,
+    extension
+  );
+  return { path: libraryImageSrc(image), cached: false };
 };
