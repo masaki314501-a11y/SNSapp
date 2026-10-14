@@ -7,6 +7,7 @@ import { useAutoEditJob, type AutoEditResult } from "../useAutoEditJob";
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
+import { AutoEditProgressList } from "./AutoEditProgressList";
 import { cameraRuleForTemplate } from "@/lib/cameraRules";
 import {
   DEFAULT_MAX_GENERATED_IMAGES,
@@ -52,11 +53,9 @@ export const AutoEditScreen: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const { autoEditState, lastResult, handleStart } = useAutoEditJob();
+  const { autoEditState, lastResult, isRevision: isRevising, handleStart, resumePendingJob } = useAutoEditJob();
   /** 「ここを直して」の指示。直し終わったら空に戻す。 */
   const [revisionText, setRevisionText] = useState("");
-  /** 今動いているのが手直しか(処理中の表示を変える)。 */
-  const [isRevising, setIsRevising] = useState(false);
   /** 選んだテンプレート。nullならおまかせ。次に開いた時も同じ型を使えるようプロジェクトに保存する。 */
   const [templateId, setTemplateId] = useState<string | null>(null);
 
@@ -66,6 +65,9 @@ export const AutoEditScreen: React.FC = () => {
     setProject(loaded);
     setTemplateId(findEditTemplate(loaded?.editTemplateId)?.id ?? null);
     setHasCheckedProject(true);
+    // 待っている間に画面を閉じた・別のアプリへ切り替えて画面が作り直された時は、前に始めた自動編集の続きを見る
+    resumePendingJob();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 開いた時に一度だけ確かめる
   }, []);
 
   const keepRanges = project
@@ -79,7 +81,6 @@ export const AutoEditScreen: React.FC = () => {
 
   const handleRun = (revision?: { previousPlan: AutoEditResult["rawPlan"]; instruction: string }) => {
     if (!project) return;
-    setIsRevising(Boolean(revision));
     void handleStart({
       videoPath: project.videoPath,
       videoDurationInSeconds: project.videoDurationInSeconds,
@@ -193,6 +194,46 @@ export const AutoEditScreen: React.FC = () => {
             数分かかることがあります。字幕の強調は、次の画面で自分で選べます。
           </span>
         </div>
+
+        {/* 処理中の様子と失敗の知らせは、画面を開き直した時にもすぐ目に入るよう、入力欄より上に出す */}
+        {isProcessing ? (
+          <div className="panel flex flex-col gap-1 p-4">
+            <span className="text-sm font-bold">{isRevising ? "AIが手直し中…" : "AIが編集中…"}</span>
+            <AutoEditProgressList progress={autoEditState.progress} isRevision={isRevising} />
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              待っている間は、別のアプリに切り替えたり画面を閉じたりしても大丈夫です。この画面を開き直すと、続きから結果が見られます。
+            </span>
+            {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                {autoEditState.usedStyleReferenceCount === 0
+                  ? "見た目の手本がサーバー上に見つからなかったため、今回は手本無しで編集しています"
+                  : `見た目の手本${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
+                (見た目の手本の画面からもう一度選んでください)
+              </span>
+            ) : null}
+            {autoEditState.usedMaterialImageCount !== null && autoEditState.usedMaterialImageCount < materialImageCount ? (
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                使う画像{materialImageCount}枚のうち{materialImageCount - autoEditState.usedMaterialImageCount}
+                枚がサーバー上に見つからなかったため、残りで編集しています(消えた画像は✕で外して選び直してください)
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* 終わった時に実績を記録できるよう、処理中かどうかに関わらず置いておく(処理中だけ表示される) */}
+        <WaitTime
+          task="auto-edit"
+          units={totalSeconds(keepRanges)}
+          active={isProcessing}
+          failed={autoEditState.status === "error"}
+        />
+
+        {autoEditState.status === "error" ? (
+          <p className="badge-pill danger w-fit">
+            {autoEditState.message}
+            {result ? "(前の案はそのまま使えます)" : ""}
+          </p>
+        ) : null}
 
         {hasReference ? (
           <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
@@ -327,41 +368,6 @@ export const AutoEditScreen: React.FC = () => {
             </div>
           </div>
         </details>
-
-        {isProcessing ? (
-          <div className="panel flex flex-col gap-1 p-4">
-            <span className="text-sm font-bold">{isRevising ? "AIが手直し中…" : "AIが編集中…"}</span>
-            {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
-              <span className="text-xs" style={{ color: "var(--muted)" }}>
-                {autoEditState.usedStyleReferenceCount === 0
-                  ? "見た目の手本がサーバー上に見つからなかったため、今回は手本無しで編集しています"
-                  : `見た目の手本${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
-                (見た目の手本の画面からもう一度選んでください)
-              </span>
-            ) : null}
-            {autoEditState.usedMaterialImageCount !== null && autoEditState.usedMaterialImageCount < materialImageCount ? (
-              <span className="text-xs" style={{ color: "var(--muted)" }}>
-                使う画像{materialImageCount}枚のうち{materialImageCount - autoEditState.usedMaterialImageCount}
-                枚がサーバー上に見つからなかったため、残りで編集しています(消えた画像は✕で外して選び直してください)
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* 終わった時に実績を記録できるよう、処理中かどうかに関わらず置いておく(処理中だけ表示される) */}
-        <WaitTime
-          task="auto-edit"
-          units={totalSeconds(keepRanges)}
-          active={isProcessing}
-          failed={autoEditState.status === "error"}
-        />
-
-        {autoEditState.status === "error" ? (
-          <p className="badge-pill danger w-fit">
-            {autoEditState.message}
-            {result ? "(前の案はそのまま使えます)" : ""}
-          </p>
-        ) : null}
 
         {result ? (
           <div className="panel flex flex-col gap-3 p-4">

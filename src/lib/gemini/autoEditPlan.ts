@@ -49,6 +49,7 @@ import { getOrGenerateImage, type GeneratedImageStyle } from "./generateImage";
 import { matchLibraryImages } from "./imageLibraryMatch";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { applyCameraRule, cameraRuleForTemplate } from "@/lib/cameraRules";
+import type { AutoEditProgress } from "@/lib/autoEditProgress";
 
 /**
  * 自動編集は「どこを切り、どこで寄り、何を画面に出すか」という演出判断そのものなので、
@@ -105,6 +106,8 @@ export type AutoEditPlanInput = {
   title?: string;
   /** 完成動画をこの秒数くらいに収める。nullなら長さはAIにまかせる。 */
   targetDurationSeconds?: number | null;
+  /** 今どの段階かを知らせる(画面に進み具合を出すため)。 */
+  onProgress?: (progress: AutoEditProgress) => void;
   /** 本人がAIへの要望として書いた文(「保証は日本の方に〇」等)。手本より優先する。 */
   userRequest?: string;
   /**
@@ -576,7 +579,7 @@ type GeneratedImageSource = { path: string; source: "library" | "generated" };
  */
 const generateMissingImages = async (
   plan: { clips: RawAutoEditClip[]; generatedImageStyle?: GeneratedImageStyle | null },
-  input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "maxGeneratedImages">
+  input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "maxGeneratedImages" | "onProgress">
 ): Promise<Map<string, GeneratedImageSource>> => {
   const requests = new Map<string, { name: string; description: string }>();
   const usedClips = plan.clips.filter((clip) => fitClipToKeepRanges(clip, input.keepRanges)).slice(0, MAX_CLIPS);
@@ -614,14 +617,18 @@ const generateMissingImages = async (
 
   // 棚に無い分だけ、上限まで作る(作った画像は棚に足される)。話に出てくる順に作る。
   const limit = clamp(Math.floor(input.maxGeneratedImages), 0, MAX_GENERATED_IMAGES);
+  const toGenerate = Math.min(limit, entries.filter(([key]) => !sources.has(key)).length);
   let generated = 0;
   let skipped = 0;
+  let attempted = 0;
+  if (toGenerate > 0) input.onProgress?.({ stage: "images", done: 0, total: toGenerate });
   for (const [key, request] of entries) {
     if (sources.has(key)) continue;
     if (generated >= limit) {
       skipped++;
       continue;
     }
+    attempted++;
     try {
       const result = await getOrGenerateImage(request.description, style, request.name);
       if (!result.cached) generated++;
@@ -629,6 +636,7 @@ const generateMissingImages = async (
     } catch (error) {
       console.warn(`[autoEditPlan] 画像「${key}」を作れなかったため、その画像は出しません`, error);
     }
+    input.onProgress?.({ stage: "images", done: Math.min(attempted, toGenerate), total: toGenerate });
   }
   console.info(
     `[autoEditPlan] 画像${requests.size}種類: 棚から${requests.size - generated - skipped}種類・新しく作った${generated}種類` +
@@ -1372,12 +1380,13 @@ export const avoidTextOverlaps = (
 export const finalizeAutoEditPlan = async (
   data: RawAutoEditPlan,
   input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages"> &
-    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title" | "template">>,
+    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title" | "template" | "onProgress">>,
   options: { resolveImage?: ImageSourceResolver } = {}
 ): Promise<AutoEditPlan> => {
   const generatedImageSources = input.generateMissingImages
     ? await generateMissingImages(data, { ...input, maxGeneratedImages: input.maxGeneratedImages ?? MAX_GENERATED_IMAGES })
     : new Map<string, GeneratedImageSource>();
+  input.onProgress?.({ stage: "finishing" });
   // 枠に入れる画像のうち、番号も作った画像も結び付かない物は、直前に大きく出していた画像を使う。
   // 枠用の画像を、大きく出した画像と違う説明・名前で書いてくることがあり、以前はそのまま別の画像として作ろうとして
   // (作る数の上限で)作られず、枠が空のままになっていた。
@@ -2019,8 +2028,10 @@ const reviseAutoEditPlan = async (
   revision: NonNullable<AutoEditPlanInput["revision"]>,
   uploadedFileNames: string[]
 ): Promise<AutoEditPlan> => {
+  input.onProgress?.({ stage: "reading" });
   const videoPart = await uploadFileAsPart(ai, input.video.absolutePath, input.video.mimeType, uploadedFileNames);
   const materialImageParts = await buildMaterialImageParts(input.materialImages);
+  input.onProgress?.({ stage: "planning" });
   const revisionText = `【前回の編集案】(あなたが前回この動画のために作った答えのJSON)
 ${JSON.stringify(revision.previousPlan)}
 
@@ -2072,6 +2083,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
   const uploadedFileNames: string[] = [];
   try {
     if (input.revision) return await reviseAutoEditPlan(ai, model, input, input.revision, uploadedFileNames);
+    input.onProgress?.({ stage: "reading" });
 
     const contents: Content[] = [];
 
@@ -2108,6 +2120,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     // 2. 編集例(学習動画+正解動画のペア)。今回の動画に近いものを選んで見せる(editExampleSelection.ts)。
     // 書き起こし(正解動画を答えの形に起こしたもの)がまだ無い学習データは、ここで一度だけ作る(editExampleBreakdown.ts)。
     // 選んだ結果は近い順なので、逆にして一番近い手本を本人の動画の直前に置く(直前に見た物に一番引っ張られるため)。
+    input.onProgress?.({ stage: "examples" });
     const examples = await ensureEditExampleBreakdowns(await selectEditExamples(ai, videoPart));
     const fewShot = await loadEditFewShotContext(ai, [...examples].reverse());
     uploadedFileNames.push(...fewShot.uploadedFileNames);
@@ -2124,6 +2137,7 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     // 同じ依頼でも、要素(枠の図形・最後まで残す画像など)を丸ごと出し忘れた手抜きの答えが混ざる。
     // まず1案作り、失敗したか編集例の書き起こしから遠い時だけ2案目を作って、近い方を選ぶ(料金は作った案の数だけかかる)。
     // 2案目は同じ入力を送るので、Geminiの暗黙のキャッシュが効いて入力の料金も安くなる。
+    input.onProgress?.({ stage: "planning" });
     const breakdowns = examples.flatMap((example) => (example.breakdown ? [example.breakdown] : []));
     const scored: { candidate: RawAutoEditPlan; score: number }[] = [];
     let firstError: unknown;

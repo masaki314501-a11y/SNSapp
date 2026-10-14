@@ -7,7 +7,7 @@ import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import { generateAutoEditPlan } from "@/lib/gemini/autoEditPlan";
 import { rawAutoEditPlanSchema } from "@/lib/gemini/autoEditTypes";
-import { createAutoEditJob, updateAutoEditJob } from "@/lib/gemini/autoEditJobs";
+import { createAutoEditJob, updateAutoEditJob, updateAutoEditProgress } from "@/lib/gemini/autoEditJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { isStyleReferencePath, resolveStyleReference } from "@/lib/styleReference";
 import { MAX_STYLE_REFERENCES } from "@/lib/styleReferenceLimits";
@@ -106,6 +106,7 @@ export async function POST(request: Request) {
         maxGeneratedImages: parsed.data.maxGeneratedImages,
         title: parsed.data.title,
         targetDurationSeconds: parsed.data.targetDurationSeconds,
+        onProgress: (progress) => updateAutoEditProgress(jobId, progress),
         userRequest: parsed.data.userRequest,
         revision: parsed.data.revision ?? undefined,
       });
