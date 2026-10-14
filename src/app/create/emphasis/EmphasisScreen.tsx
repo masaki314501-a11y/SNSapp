@@ -9,6 +9,7 @@ import {
   KeywordHighlightFields,
 } from "@/components/editor/timeline/CaptionEmphasisFields";
 import { ChevronRightIcon } from "@/components/icons";
+import { ScenePreview, type PreviewScene } from "./ScenePreview";
 import { resolveFontFamilyStack, type CaptionEmphasis } from "@video/shared/schema";
 import { ensureCaptionFontLoaded } from "@video/shared/font";
 
@@ -25,6 +26,8 @@ export const EmphasisScreen: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
+  /** プレビューで流している場面(字幕のkeyと、流し直し用の番号)。 */
+  const [playing, setPlaying] = useState<{ key: string; nonce: number } | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
@@ -57,13 +60,16 @@ export const EmphasisScreen: React.FC = () => {
       ? { ...segment, captionEmphasis: preset.emphasis, emphasisSfxPresetId: preset.sfxPresetId }
       : { ...segment, captionEmphasis: undefined, emphasisSfxPresetId: undefined };
 
-  const toggle = (key: string) =>
+  const toggle = (key: string) => {
+    // 切り替えた字幕の場面を流し、強調した見た目をその場で見せる
+    setPlaying({ key, nonce: Date.now() });
     update({
       ...project,
       segments: project.segments.map((segment) =>
         segment.key === key ? withEmphasis(segment, segment.captionEmphasis === undefined) : segment
       ),
     });
+  };
 
   // 見た目を変えたら、もう強調してある字幕すべてに同じ見た目を付け直す(強調の見た目を動画の中でそろえるため)
   const changePreset = (patch: { emphasis?: CaptionEmphasis; sfxPresetId?: string }) => {
@@ -89,6 +95,16 @@ export const EmphasisScreen: React.FC = () => {
     segment.caption.trim() ? [{ segment, start: starts[index] }] : []
   );
   const selectedCount = captions.filter(({ segment }) => segment.captionEmphasis).length;
+  const playingSegment = playing ? project.segments.find((segment) => segment.key === playing.key) : undefined;
+  const playingScene: PreviewScene | null = playingSegment
+    ? {
+        from: playingSegment.startFromSeconds,
+        to: playingSegment.startFromSeconds + playingSegment.durationInSeconds,
+        caption: playingSegment.caption,
+        emphasis: playingSegment.captionEmphasis,
+        nonce: playing!.nonce,
+      }
+    : null;
 
   return (
     <>
@@ -139,6 +155,12 @@ export const EmphasisScreen: React.FC = () => {
           <span className="text-sm font-bold">
             字幕({captions.length}個中 {selectedCount}個を強調)
           </span>
+          {/* 一覧を下へ送っても見えるよう、プレビューは上に貼り付けておく */}
+          {captions.length > 0 ? (
+            <div className="sticky z-10 pb-1" style={{ top: 0, background: "var(--background)" }}>
+              <ScenePreview videoSrc={`/api/media/${project.videoPath}`} scene={playingScene} />
+            </div>
+          ) : null}
           {captions.length === 0 ? (
             <p className="text-xs" style={{ color: "var(--muted)" }}>
               字幕がありません。次の編集画面で字幕を付けてから、字幕タブで強調できます。
@@ -146,24 +168,43 @@ export const EmphasisScreen: React.FC = () => {
           ) : (
             captions.map(({ segment, start }) => {
               const selected = segment.captionEmphasis !== undefined;
+              const isPlaying = playing?.key === segment.key;
               return (
-                <button
+                <div
                   key={segment.key}
-                  type="button"
-                  onClick={() => toggle(segment.key)}
-                  aria-pressed={selected}
-                  className="flex items-center gap-3 rounded-lg p-3 text-left"
+                  className="flex items-stretch overflow-hidden rounded-lg"
                   style={{
                     border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
                     background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
                   }}
                 >
-                  <span className="shrink-0 text-xs" style={{ color: "var(--muted)", minWidth: 32 }}>
+                  {/* 場面を見る(押すとプレビューでその場面だけ流す)。強調の切り替えとは別のボタンにする */}
+                  <button
+                    type="button"
+                    onClick={() => setPlaying({ key: segment.key, nonce: Date.now() })}
+                    aria-label={`${formatTime(start)}の場面を見る`}
+                    className="flex shrink-0 flex-col items-center justify-center gap-0.5 px-3 text-xs"
+                    style={{
+                      color: isPlaying ? "var(--accent)" : "var(--muted)",
+                      borderRight: "1px solid var(--border)",
+                      minWidth: 56,
+                    }}
+                  >
+                    <span aria-hidden style={{ fontSize: 16 }}>▶</span>
                     {formatTime(start)}
-                  </span>
-                  <span className="flex-1 text-sm">{segment.caption}</span>
-                  <span className={`badge-pill ${selected ? "success" : "neutral"} shrink-0`}>{selected ? "強調" : "ふつう"}</span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggle(segment.key)}
+                    aria-pressed={selected}
+                    className="flex flex-1 items-center gap-3 p-3 text-left"
+                  >
+                    <span className="flex-1 text-sm">{segment.caption}</span>
+                    <span className={`badge-pill ${selected ? "success" : "neutral"} shrink-0`}>
+                      {selected ? "強調" : "ふつう"}
+                    </span>
+                  </button>
+                </div>
               );
             })
           )}
