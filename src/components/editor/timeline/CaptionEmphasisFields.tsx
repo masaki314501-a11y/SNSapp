@@ -6,21 +6,86 @@ import { SFX_PRESETS } from "../audioPresets";
 import { TextStylePicker } from "./TextStylePicker";
 
 /** 強調をONにした時の初期値。白い帯に黒い文字(シェイプテロップ)。 */
-const DEFAULT_EMPHASIS: CaptionEmphasis = { band: true, bandColor: "#FFFFFF", textColor: "#111111" };
+export const DEFAULT_EMPHASIS: CaptionEmphasis = { band: true, bandColor: "#FFFFFF", textColor: "#111111" };
+
+type StyleProps = {
+  emphasis: CaptionEmphasis;
+  sfxPresetId: string | undefined;
+  onChange: (patch: { emphasis?: CaptionEmphasis; sfxPresetId?: string | undefined }) => void;
+};
+
+/**
+ * 強調した字幕の見た目(帯・色・書体・文字スタイル)と効果音を選ぶ欄。強調を選ぶ画面(全部の強調にまとめて使う)と、
+ * 編集画面の字幕タブ(クリップごと)の両方で使う。選んだ内容はAIを使わず、決まった形でそのまま描く。
+ */
+export const EmphasisStyleFields: React.FC<StyleProps> = ({ emphasis, sfxPresetId, onChange }) => {
+  const update = (patch: Partial<CaptionEmphasis>) => onChange({ emphasis: { ...emphasis, ...patch } });
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="color-options">
+        <div className="color-option">
+          <label className="color-option-toggle">
+            <input type="checkbox" checked={emphasis.band} onChange={(e) => update({ band: e.target.checked })} />
+            帯を敷く(シェイプテロップ)
+          </label>
+          <input
+            type="color"
+            aria-label="帯の色"
+            value={emphasis.bandColor ?? "#FFFFFF"}
+            disabled={!emphasis.band}
+            onChange={(e) => update({ bandColor: e.target.value })}
+          />
+        </div>
+        <label className="color-option">
+          <span>文字の色</span>
+          <input
+            type="color"
+            value={emphasis.textColor ?? (emphasis.band ? "#111111" : "#FFFFFF")}
+            onChange={(e) => update({ textColor: e.target.value })}
+          />
+        </label>
+      </div>
+      <label className="editor-field">
+        <span>書体</span>
+        <select
+          value={emphasis.fontFamily ?? ""}
+          onChange={(e) => update({ fontFamily: (e.target.value || undefined) as CaptionFontFamily | undefined })}
+        >
+          <option value="">ふつうの字幕と同じ</option>
+          {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {/* 帯を敷く時は帯の見た目で描くので、文字スタイルは帯なしの時だけ選べる */}
+      {emphasis.band ? null : (
+        <TextStylePicker label="文字スタイル" value={emphasis.textStyleId} onChange={(textStyleId) => update({ textStyleId })} />
+      )}
+      <label className="editor-field">
+        <span>効果音(字幕が出る時に鳴らす)</span>
+        <select value={sfxPresetId ?? ""} onChange={(e) => onChange({ sfxPresetId: e.target.value || undefined })}>
+          <option value="">なし</option>
+          {SFX_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+};
 
 type Props = {
   segment: ProjectSegment;
   onChange: (patch: Partial<Pick<ProjectSegment, "captionEmphasis" | "emphasisSfxPresetId">>) => void;
 };
 
-/**
- * 選んだクリップの字幕を強調する欄。強調はAIに任せず本人が選ぶ(自動編集の字幕は、強調なし・書体は全体で1つ)。
- * 帯を敷くシェイプテロップにするか、書体・文字の色・文字スタイル、鳴らす効果音を選ぶ。選んだ内容は決まった形でそのまま描く。
- */
+/** 選んだクリップの字幕を強調する欄(編集画面の字幕タブ)。 */
 export const CaptionEmphasisFields: React.FC<Props> = ({ segment, onChange }) => {
   const emphasis = segment.captionEmphasis;
-  const update = (patch: Partial<CaptionEmphasis>) => onChange({ captionEmphasis: { ...(emphasis ?? DEFAULT_EMPHASIS), ...patch } });
-
   return (
     <div className="flex flex-col gap-2">
       <label className="flex items-center gap-2 text-sm">
@@ -38,67 +103,16 @@ export const CaptionEmphasisFields: React.FC<Props> = ({ segment, onChange }) =>
         このクリップの字幕を強調する
       </label>
       {emphasis ? (
-        <>
-          <div className="color-options">
-            <div className="color-option">
-              <label className="color-option-toggle">
-                <input type="checkbox" checked={emphasis.band} onChange={(e) => update({ band: e.target.checked })} />
-                帯を敷く(シェイプテロップ)
-              </label>
-              <input
-                type="color"
-                aria-label="帯の色"
-                value={emphasis.bandColor ?? "#FFFFFF"}
-                disabled={!emphasis.band}
-                onChange={(e) => update({ bandColor: e.target.value })}
-              />
-            </div>
-            <label className="color-option">
-              <span>文字の色</span>
-              <input
-                type="color"
-                value={emphasis.textColor ?? (emphasis.band ? "#111111" : "#FFFFFF")}
-                onChange={(e) => update({ textColor: e.target.value })}
-              />
-            </label>
-          </div>
-          <label className="editor-field">
-            <span>書体</span>
-            <select
-              value={emphasis.fontFamily ?? ""}
-              onChange={(e) => update({ fontFamily: (e.target.value || undefined) as CaptionFontFamily | undefined })}
-            >
-              <option value="">全体の字幕と同じ</option>
-              {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {/* 帯を敷く時は帯の見た目で描くので、文字スタイルは帯なしの時だけ選べる */}
-          {emphasis.band ? null : (
-            <TextStylePicker
-              label="文字スタイル"
-              value={emphasis.textStyleId}
-              onChange={(textStyleId) => update({ textStyleId })}
-            />
-          )}
-          <label className="editor-field">
-            <span>効果音(クリップの頭で鳴らす)</span>
-            <select
-              value={segment.emphasisSfxPresetId ?? ""}
-              onChange={(e) => onChange({ emphasisSfxPresetId: e.target.value || undefined })}
-            >
-              <option value="">なし</option>
-              {SFX_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </>
+        <EmphasisStyleFields
+          emphasis={emphasis}
+          sfxPresetId={segment.emphasisSfxPresetId}
+          onChange={(patch) =>
+            onChange({
+              ...(patch.emphasis ? { captionEmphasis: patch.emphasis } : {}),
+              ...("sfxPresetId" in patch ? { emphasisSfxPresetId: patch.sfxPresetId } : {}),
+            })
+          }
+        />
       ) : null}
     </div>
   );

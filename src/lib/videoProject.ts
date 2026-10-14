@@ -157,6 +157,8 @@ export type VideoProject = {
   keywordHighlights?: { word: string; color: string }[];
   /** カメラワークのルール(cameraRules.tsのid)。 */
   cameraRuleId?: string;
+  /** 強調を選ぶ画面で決めた、強調した字幕すべてに使う見た目と効果音。 */
+  emphasisPreset?: { emphasis: CaptionEmphasis; sfxPresetId?: string };
   /** 自動編集でAIに伝える要望。やり直すたびに書き直さなくて済むよう保存しておく。 */
   autoEditRequest?: string;
   /**

@@ -1673,7 +1673,7 @@ export const ClipEditor: React.FC = () => {
         onBack={handleGoToAutoEdit}
         onHome={handleBackToTop}
         title="編集"
-        step={{ current: 5, total: 6 }}
+        step={{ current: 6, total: 7 }}
         hideProgress
         actions={
           <>

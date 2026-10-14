@@ -73,7 +73,7 @@ const applyTrimPatch = (
 
 const EmptyState: React.FC = () => (
   <div className="flow-page">
-    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 6 }} />
+    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 7 }} />
     <main className="flow-main">
       <div className="panel flex flex-col items-center gap-3 p-10 text-center">
         <p className="text-sm font-medium">カットする動画がありません</p>
@@ -576,7 +576,7 @@ export const CutEditor: React.FC = () => {
         backHref="/create"
         onBack={handleBackToUpload}
         title="使う範囲を選ぶ"
-        step={{ current: 2, total: 6 }}
+        step={{ current: 2, total: 7 }}
         actions={
           <button type="button" className="btn-outline topbar-outline inline-flex" onClick={handleStartOver}>
             <RestartIcon size={16} />

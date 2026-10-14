@@ -8,7 +8,12 @@ import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/
 import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
 import { WaitTime } from "@/components/WaitTime";
 import { cameraRuleForTemplate } from "@/lib/cameraRules";
-import { DEFAULT_MAX_GENERATED_IMAGES, MaterialImagesPanel, type MaterialImage } from "./MaterialImagesPanel";
+import {
+  DEFAULT_MAX_GENERATED_IMAGES,
+  GenerateImagesField,
+  MaterialImagesPanel,
+  type MaterialImage,
+} from "./MaterialImagesPanel";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -128,7 +133,8 @@ export const AutoEditScreen: React.FC = () => {
       // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });
-    router.push("/edit");
+    // 次は、強調する字幕を選ぶ画面(自動編集の字幕は強調なしなので、強調は本人がここで選ぶ)
+    router.push("/create/emphasis");
   };
 
   if (!hasCheckedProject) return null;
@@ -214,6 +220,50 @@ export const AutoEditScreen: React.FC = () => {
           </div>
         )}
 
+        <div className="panel flex flex-col gap-2 p-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="auto-edit-title" className="text-sm font-bold">
+              左上のタイトル
+            </label>
+            <span className="badge-pill neutral">空ならAIが決めます</span>
+          </div>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            動画の最初から最後まで、画面の左上に出します。あとから編集画面でも直せます。
+          </span>
+          <input
+            id="auto-edit-title"
+            type="text"
+            value={project.autoEditTitle ?? ""}
+            onChange={(e) => changeTitle(e.target.value)}
+            maxLength={MAX_TITLE_LENGTH}
+            disabled={isProcessing}
+            placeholder="例: 矯正した方がいい歯並びTOP5"
+            className="field-input w-full text-sm"
+          />
+        </div>
+
+        <div className="panel flex flex-col gap-2 p-4">
+          <label htmlFor="auto-edit-length" className="text-sm font-bold">
+            完成動画の長さ
+          </label>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            使う範囲は合計{totalSeconds(keepRanges).toFixed(0)}秒です。短くしたい時は、要点を残して前置きや繰り返しから削ります。
+          </span>
+          <select
+            id="auto-edit-length"
+            value={project.targetDurationSeconds ?? ""}
+            disabled={isProcessing}
+            onChange={(e) => changeTargetDuration(e.target.value ? Number(e.target.value) : null)}
+            className="field-input w-full text-sm"
+          >
+            {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
+              <option key={seconds ?? "auto"} value={seconds ?? ""}>
+                {seconds === null ? "AIにまかせる(使う範囲から間を詰めるだけ)" : `${seconds}秒くらい`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(見た目の手本があればそちらが優先) */}
         <div className="panel flex flex-col gap-2 p-4">
           <span className="text-sm font-bold">テンプレート(編集の型)</span>
@@ -253,77 +303,42 @@ export const AutoEditScreen: React.FC = () => {
         <MaterialImagesPanel
           images={project.materialImages ?? []}
           onChange={changeMaterialImages}
-          generateMissing={project.generateMissingImages ?? true}
-          maxGenerated={project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES}
-          onChangeGenerate={changeGenerate}
           disabled={isProcessing}
         />
 
-        <div className="panel flex flex-col gap-2 p-4">
-          <label htmlFor="auto-edit-length" className="text-sm font-bold">
-            完成動画の長さ
-          </label>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            使う範囲は合計{totalSeconds(keepRanges).toFixed(0)}秒です。短くしたい時は、要点を残して前置きや繰り返しから削ります。
-          </span>
-          <select
-            id="auto-edit-length"
-            value={project.targetDurationSeconds ?? ""}
-            disabled={isProcessing}
-            onChange={(e) => changeTargetDuration(e.target.value ? Number(e.target.value) : null)}
-            className="field-input w-full text-sm"
-          >
-            {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
-              <option key={seconds ?? "auto"} value={seconds ?? ""}>
-                {seconds === null ? "AIにまかせる(使う範囲から間を詰めるだけ)" : `${seconds}秒くらい`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="panel flex flex-col gap-2 p-4">
-          <div className="flex items-center gap-2">
-            <label htmlFor="auto-edit-title" className="text-sm font-bold">
-              左上のタイトル
-            </label>
-            <span className="badge-pill neutral">空ならAIが決めます</span>
+        {/* 普段は触らなくてよい設定は畳んでおく(動画編集に詳しくない人が、どこを触ればいいか迷わないように) */}
+        <details className="panel p-4">
+          <summary className="cursor-pointer text-sm font-bold">詳しい設定(画像の作り方・AIへの要望)</summary>
+          <div className="mt-3 flex flex-col gap-4">
+            <GenerateImagesField
+              generateMissing={project.generateMissingImages ?? true}
+              maxGenerated={project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES}
+              onChange={changeGenerate}
+              disabled={isProcessing}
+            />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <label htmlFor="auto-edit-request" className="text-sm font-bold">
+                  AIへの要望
+                </label>
+                <span className="badge-pill neutral">なくてもOK</span>
+              </div>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                こうしてほしい所があれば書いてください。手本より優先します。
+              </span>
+              <textarea
+                id="auto-edit-request"
+                value={project.autoEditRequest ?? ""}
+                onChange={(e) => changeAutoEditRequest(e.target.value)}
+                maxLength={MAX_USER_TEXT_LENGTH}
+                rows={3}
+                disabled={isProcessing}
+                placeholder={"例: 保証の話は日本の方に〇を付ける\n例: 強調の文字は黄色を多めに\n例: 最後に「保存してね」を出す"}
+                className="field-input w-full text-sm"
+              />
+            </div>
           </div>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            動画の最初から最後まで、画面の左上に出します。あとから編集画面でも直せます。
-          </span>
-          <input
-            id="auto-edit-title"
-            type="text"
-            value={project.autoEditTitle ?? ""}
-            onChange={(e) => changeTitle(e.target.value)}
-            maxLength={MAX_TITLE_LENGTH}
-            disabled={isProcessing}
-            placeholder="例: 矯正した方がいい歯並びTOP5"
-            className="field-input w-full text-sm"
-          />
-        </div>
-
-        <div className="panel flex flex-col gap-2 p-4">
-          <div className="flex items-center gap-2">
-            <label htmlFor="auto-edit-request" className="text-sm font-bold">
-              AIへの要望
-            </label>
-            <span className="badge-pill neutral">なくてもOK</span>
-          </div>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            こうしてほしい所があれば書いてください。手本より優先します。
-          </span>
-          <textarea
-            id="auto-edit-request"
-            value={project.autoEditRequest ?? ""}
-            onChange={(e) => changeAutoEditRequest(e.target.value)}
-            maxLength={MAX_USER_TEXT_LENGTH}
-            rows={3}
-            disabled={isProcessing}
-            placeholder={"例: 保証の話は日本の方に〇を付ける\n例: 強調の文字は黄色を多めに\n例: 最後に「保存してね」を出す"}
-            className="field-input w-full text-sm"
-          />
-        </div>
+        </details>
 
         {isProcessing ? (
           <div className="panel flex flex-col gap-1 p-4">
@@ -388,7 +403,7 @@ export const AutoEditScreen: React.FC = () => {
                   result.plan.globalImages.length}
                 か所
                 {result.plan.imageSources
-                  ? `(あなたの画像${result.plan.imageSources.material}種類・貯めた画像${result.plan.imageSources.library}種類・新しく作った画像${result.plan.imageSources.generated}種類)`
+                  ? `(あなたの画像${result.plan.imageSources.material}種類・前に作った画像${result.plan.imageSources.library}種類・新しく作った画像${result.plan.imageSources.generated}種類)`
                   : result.plan.generatedImageCount > 0
                     ? `(うちAIで作った画像${result.plan.generatedImageCount}種類)`
                     : ""}
@@ -410,7 +425,7 @@ export const AutoEditScreen: React.FC = () => {
               ここを直してほしい
             </label>
             <span className="text-xs" style={{ color: "var(--muted)" }}>
-              直してほしい所だけを書くと、今の案を土台にその所だけ直します(ほかの所は変えません)。作り直すより安く済みます。
+              直してほしい所だけを書くと、今の案を土台にその所だけ直します(ほかの所は変えません)。
             </span>
             <textarea
               id="auto-edit-revision"

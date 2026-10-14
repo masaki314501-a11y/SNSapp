@@ -13,25 +13,52 @@ export type MaterialImage = { path: string; name: string };
 /** 新しく作る画像の上限の選択肢。noneはAIの画像を使わない、0は貯めた画像だけ使う。 */
 const GENERATE_OPTIONS: { value: string; label: string }[] = [
   { value: "none", label: "AIの画像は使わない" },
-  { value: "0", label: "貯めた画像だけ使う(無料)" },
-  { value: "2", label: "新しく作るのは2枚まで(約20円まで)" },
-  { value: "4", label: "新しく作るのは4枚まで(約40円まで)" },
-  { value: "8", label: "新しく作るのは8枚まで(約80円まで)" },
+  { value: "0", label: "前に作った画像だけ使う" },
+  { value: "2", label: "新しく作るのは2枚まで" },
+  { value: "4", label: "新しく作るのは4枚まで" },
+  { value: "8", label: "新しく作るのは8枚まで" },
 ];
 
-/** 新しく作る画像の上限の初期値。お金がかかるので少なめにする。 */
+/** 新しく作る画像の上限の初期値。1枚ごとに生成の費用がかかるので少なめにする。 */
 export const DEFAULT_MAX_GENERATED_IMAGES = 4;
 
 type Props = {
   images: MaterialImage[];
   onChange: (images: MaterialImage[]) => void;
+  disabled: boolean;
+};
+
+type GenerateProps = {
   /** 画像が足りない所に、AIが作った画像(貯めた画像・新しく作る画像)を出すか。 */
   generateMissing: boolean;
   /** 新しく作ってよい画像の数。 */
   maxGenerated: number;
-  onChangeGenerate: (generateMissing: boolean, maxGenerated: number) => void;
+  onChange: (generateMissing: boolean, maxGenerated: number) => void;
   disabled: boolean;
 };
+
+/** 使う画像が足りない所の画像をどうするか(AIの画像を使うか、新しく何枚まで作るか)を選ぶ欄。 */
+export const GenerateImagesField: React.FC<GenerateProps> = ({ generateMissing, maxGenerated, onChange, disabled }) => (
+  <label className="flex flex-col gap-1 text-sm">
+    <span className="font-bold">足りない所の画像</span>
+    <select
+      value={generateMissing ? String(maxGenerated) : "none"}
+      disabled={disabled}
+      onChange={(e) => (e.target.value === "none" ? onChange(false, maxGenerated) : onChange(true, Number(e.target.value)))}
+      className="field-input w-full text-sm"
+    >
+      {GENERATE_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+    <span className="text-xs" style={{ color: "var(--muted)" }}>
+      使う画像を先に使い、足りない所は前に作った画像から探します。それでも無い分だけ新しく作ります。
+      上限を超えた分は画像を出さず、ランキングの枠は項目名の文字で埋めます。医療・美容・健康の話はイラスト風で作り、「※画像はイメージです」を添えます
+    </span>
+  </label>
+);
 
 /**
  * 自動編集で使う画像(症例写真・商品写真など)を渡す欄。AIが話の内容に合わせて、いつ・どこに出すかを決める
@@ -41,9 +68,6 @@ type Props = {
 export const MaterialImagesPanel: React.FC<Props> = ({
   images,
   onChange,
-  generateMissing,
-  maxGenerated,
-  onChangeGenerate,
   disabled,
 }) => {
   const [uploading, setUploading] = useState(false);
@@ -137,28 +161,6 @@ export const MaterialImagesPanel: React.FC<Props> = ({
           void handleAddFiles(selected);
         }}
       />
-      <label className="flex flex-col gap-1 text-sm">
-        <span>足りない所の画像</span>
-        <select
-          value={generateMissing ? String(maxGenerated) : "none"}
-          disabled={disabled}
-          onChange={(e) =>
-            e.target.value === "none" ? onChangeGenerate(false, maxGenerated) : onChangeGenerate(true, Number(e.target.value))
-          }
-          className="field-input w-full text-sm"
-        >
-          {GENERATE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <span className="text-xs" style={{ color: "var(--muted)" }}>
-          ここで選んだ画像を先に使い、足りない所は前に作って貯めた画像(無料)から探します。それでも無い分だけ新しく作ります(1枚約10円)。
-          上限を超えた分は画像を出さず、ランキングの枠は項目名の文字で埋めます。医療・美容・健康の話はイラスト風で作り、「※画像はイメージです」を添えます
-        </span>
-      </label>
-
       {canAddMore ? (
         <label
           htmlFor="material-image-file"

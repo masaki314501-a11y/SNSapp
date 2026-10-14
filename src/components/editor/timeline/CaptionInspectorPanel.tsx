@@ -9,11 +9,10 @@ import {
   type CaptionPosition,
 } from "@video/shared/schema";
 import { CaptionIcon, EditIcon, HighlightIcon, MicIcon, PaletteIcon, SparkleIcon, TrashIcon } from "@/components/icons";
-import { SettingsSection } from "../SettingsSection";
+import { Collapsible, SettingsSection } from "../SettingsSection";
 import { CaptionEmphasisFields, KeywordHighlightFields } from "./CaptionEmphasisFields";
-import { TextStylePicker } from "./TextStylePicker";
+import { RECOMMENDED_CAPTION_STYLE_IDS, TextStylePicker } from "./TextStylePicker";
 
-const DEFAULT_EMPHASIS_COLOR = "#FFE600";
 
 type Props = {
   segments: ProjectSegment[];
@@ -60,7 +59,7 @@ type Props = {
 
 /**
  * 「字幕」タブのパネル。上から順に、全クリップへの一括操作(字幕とAIナレーションの一括生成) →
- * 選んだクリップの字幕 → 字幕の見た目(強調する単語と、旧「見た目」タブの設定) →
+ * 選んだクリップの字幕 → このクリップの強調 → 重大ワード → 字幕の見た目(文字スタイルと、旧「見た目」タブの設定) →
  * クリップごとのAIナレーション(旧「AI音声」タブ) → 出現演出、と並べる。
  */
 export const CaptionInspectorPanel: React.FC<Props> = ({
@@ -206,41 +205,23 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           />
         </SettingsSection>
 
-        {/* 強調する単語(クリップごと)と、全クリップ共通の見た目を1つの欄にまとめる */}
-        <SettingsSection title="字幕の見た目" icon={<PaletteIcon size={16} />}>
-          {target ? (
-            <div className="editor-field-row">
-              <label className="editor-field">
-                <span>強調する単語(、区切り)</span>
-                <input
-                  type="text"
-                  value={(target.emphasisWords ?? []).join("、")}
-                  placeholder="例: 3倍、結論"
-                  onChange={(e) => {
-                    const words = e.target.value
-                      .split(/[、,]/)
-                      .map((w) => w.trim())
-                      .filter((w) => w.length > 0);
-                    onUpdateEmphasis(target.key, { emphasisWords: words.length > 0 ? words : undefined });
-                  }}
-                />
-              </label>
-              <label className="editor-field">
-                <span>強調の色</span>
-                <input
-                  type="color"
-                  value={target.emphasisColor ?? DEFAULT_EMPHASIS_COLOR}
-                  onChange={(e) => onUpdateEmphasis(target.key, { emphasisColor: e.target.value })}
-                />
-              </label>
-            </div>
-          ) : null}
+        {/* 字幕の見た目はここ1か所。まず文字スタイルのおすすめから選び、配色・フォント・位置などは「詳しい設定」に畳む */}
+        <SettingsSection title="字幕の見た目(全クリップ共通)" icon={<PaletteIcon size={16} />}>
           <TextStylePicker
-            label="字幕の文字スタイル(全クリップ共通)"
+            label="文字スタイル"
             value={captionTextStyleId}
             onChange={(id) => onUpdateCaptionLook({ captionTextStyleId: id })}
+            recommendedIds={RECOMMENDED_CAPTION_STYLE_IDS}
+            emptyLabel="ふつう(下の詳しい設定の見た目)"
           />
-          {lookSettings}
+          <Collapsible summary="詳しい設定(配色・フォント・位置・大きさ)">
+            {captionTextStyleId ? (
+              <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+                文字スタイルを選んでいる間は、配色・見た目・フォントは文字スタイルのものになります(位置・大きさは効きます)
+              </span>
+            ) : null}
+            {lookSettings}
+          </Collapsible>
         </SettingsSection>
 
         {narrationSection}
