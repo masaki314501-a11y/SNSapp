@@ -40,7 +40,6 @@ const MAX_TITLE_LENGTH = 40;
 /** 完成動画の長さの選択肢(秒)。nullはAIにまかせる。 */
 const TARGET_DURATION_OPTIONS: (number | null)[] = [null, 15, 30, 45, 60, 90];
 
-const AI_DECIDES = ["切り方", "左上のタイトル", "寄り(ズーム)", "強調テキスト", "画像", "効果音", "冒頭の見出し", "締めの一言"];
 
 /**
  * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
@@ -188,17 +187,10 @@ export const AutoEditScreen: React.FC = () => {
   return (
     <>
       <main className="flow-main">
-        <div className="panel flex flex-col gap-3 p-4">
-          <span className="text-sm font-bold">AIがまとめて決めること</span>
-          <div className="flex flex-wrap gap-1.5">
-            {AI_DECIDES.map((label) => (
-              <span key={label} className="badge-pill neutral" style={{ fontWeight: 400 }}>
-                {label}
-              </span>
-            ))}
-          </div>
+        <div className="panel flex flex-col gap-1 p-4">
+          <span className="text-sm font-bold">AIが切り方・タイトル・画像・寄り・効果音までまとめて編集します</span>
           <span className="text-xs" style={{ color: "var(--muted)" }}>
-            数分かかることがあります。話している言葉は、書体をそろえた基本の字幕として付けます。字幕の強調(帯・書体・色・効果音)と重大ワードは、AIでは付けず、次の編集画面で自分で選べます。
+            数分かかることがあります。字幕の強調は、次の画面で自分で選べます。
           </span>
         </div>
 
@@ -266,12 +258,9 @@ export const AutoEditScreen: React.FC = () => {
 
         {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(見た目の手本があればそちらが優先) */}
         <div className="panel flex flex-col gap-2 p-4">
-          <span className="text-sm font-bold">テンプレート(編集の型)</span>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            作りたい動画に近いものを選んでください。文字の言葉やタイミングは、あなたの動画に合わせて作ります
-            {hasReference ? "。見た目の手本と違う所は手本に合わせます" : ""}
-          </span>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <span className="text-sm font-bold">動画の型</span>
+          {/* スマホで縦に長くならないよう、型は名前だけの小さいボタンを2列に並べ、説明は選んだ型の分だけ下に出す */}
+          <div className="grid grid-cols-2 gap-2">
             {[null, ...EDIT_TEMPLATES].map((template) => {
               const id = template?.id ?? null;
               const selected = templateId === id;
@@ -282,22 +271,21 @@ export const AutoEditScreen: React.FC = () => {
                   disabled={isProcessing}
                   onClick={() => selectTemplate(id)}
                   aria-pressed={selected}
-                  className="flex flex-col items-start gap-0.5 rounded-lg p-3 text-left"
+                  className="rounded-lg px-2 py-2.5 text-center text-sm font-medium"
                   style={{
                     border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
                     background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
                   }}
                 >
-                  <span className="text-sm font-medium">
-                    {template ? template.label : "おまかせ"}
-                  </span>
-                  <span className="text-xs" style={{ color: "var(--muted)" }}>
-                    {template ? template.description : "型を決めず、動画の中身に合わせてAIが自由に編集します"}
-                  </span>
+                  {template ? template.label : "おまかせ"}
                 </button>
               );
             })}
           </div>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            {findEditTemplate(templateId)?.description ?? "型を決めず、動画の中身に合わせてAIが自由に編集します"}
+            {hasReference ? "(見た目の手本と違う所は手本に合わせます)" : ""}
+          </span>
         </div>
 
         <MaterialImagesPanel
