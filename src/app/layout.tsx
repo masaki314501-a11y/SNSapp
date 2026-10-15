@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+/**
+ * 画面の文字。デジタル庁デザインシステムの指定どおりNoto Sans JP(本文400・見出しや強調700)。
+ * テロップ用に同梱している書体(public/fonts)を使い、Googleから別に読み込まない。
+ */
+const notoSansJp = localFont({
+  variable: "--font-noto-sans-jp",
+  src: [
+    { path: "../../public/fonts/noto-sans-jp/noto-sans-jp-japanese-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../public/fonts/noto-sans-jp/noto-sans-jp-japanese-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
+  fallback: ["Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", "sans-serif"],
 });
 
 const geistMono = Geist_Mono({
@@ -22,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${notoSansJp.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">{children}</body>
     </html>

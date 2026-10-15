@@ -278,7 +278,7 @@ export const StyleAndTranscribe: React.FC = () => {
                     type="button"
                     onClick={() => void handleRemoveReference(reference.path)}
                     disabled={isBusy}
-                    className="absolute right-1 top-1 rounded-full px-1.5 text-xs"
+                    className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-md text-base"
                     style={{ background: "rgba(0,0,0,0.65)", color: "#fff" }}
                     aria-label={`手本${index + 1}を外す`}
                   >

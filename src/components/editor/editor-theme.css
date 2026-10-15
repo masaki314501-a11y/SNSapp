@@ -144,21 +144,23 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }
 .editor-tabbar-btn span {
   white-space: nowrap;
 }
+/* 選んでいるタブは、キーカラーの太い線と文字色で示す(デザインシステムの「タブ」) */
 .editor-tabbar-btn.active {
   color: var(--accent);
   font-weight: 700;
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow: inset 0 4px 0 var(--accent);
+  background: var(--accent-soft);
 }
-/* 書き出し画面へ進む「編集完了」。タブではなく最後に押すボタンなので、赤く塗って区別する */
+/* 書き出し画面へ進む「編集完了」。タブではなく最後に押すボタンなので、キーカラーで塗って区別する */
 .editor-tabbar-btn.finish {
   margin: 6px 4px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 700;
@@ -167,7 +169,8 @@
   background: var(--accent-hover);
 }
 .editor-tabbar-btn.finish:disabled {
-  opacity: 0.4;
+  background: var(--color-neutral-solid-gray-300);
+  color: var(--color-neutral-solid-gray-50);
   cursor: not-allowed;
 }
 
@@ -232,24 +235,26 @@
   font-weight: 700;
 }
 .editor-settings-title span {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--muted);
 }
-/* シートを閉じる「閉じる」。赤は「編集完了」(書き出しへ進む)に使うので、文字の色で塗って目立たせる */
+/* シートを閉じる「閉じる」(デザインシステムの枠線ボタン・小) */
 .editor-settings-close {
-  height: 36px;
-  padding: 0 14px 0 12px;
-  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--foreground);
-  color: var(--background-elevated);
-  font-size: 13px;
+  border: 1px solid currentcolor;
+  background: var(--color-neutral-white);
+  color: var(--accent);
+  font-size: 14px;
   font-weight: 700;
 }
 .editor-settings-close:hover {
-  opacity: 0.85;
+  background: var(--color-primitive-blue-200);
+  text-decoration: underline;
 }
 .editor-settings-body {
   flex: 1;
@@ -276,24 +281,25 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .clip-nav button {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background: var(--background-elevated);
   color: var(--foreground);
 }
 .clip-nav button:disabled {
-  opacity: 0.35;
+  color: var(--color-neutral-solid-gray-300);
+  border-color: var(--color-neutral-solid-gray-300);
   cursor: not-allowed;
 }
 
@@ -335,8 +341,8 @@
 
 /* 押すと開く折りたたみ(SettingsSection.tsx の Collapsible) */
 .collapsible {
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
   background: var(--background-elevated);
 }
 .collapsible > summary {
@@ -344,10 +350,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 12px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
   cursor: pointer;
 }
 .collapsible > summary::-webkit-details-marker {
@@ -366,7 +373,7 @@
 }
 .collapsible-chevron {
   flex-shrink: 0;
-  color: var(--muted);
+  color: var(--accent);
   transition: transform 0.15s ease;
 }
 .collapsible[open] > summary {
@@ -378,8 +385,10 @@
 .collapsible-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 12px;
+  padding: 16px 12px;
+  color: var(--foreground);
+  font-weight: 400;
 }
 
 /* 文字色・縁取り・帯。チェックボックスは文言のすぐ横、チェックが無い時は色を選べない */
@@ -393,9 +402,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--foreground);
 }
 .color-option-toggle {
   display: inline-flex;
@@ -404,14 +413,15 @@
   cursor: pointer;
   color: var(--foreground);
 }
+/* チェックボックス(デザインシステムでは24px四方) */
 .color-option-toggle input {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   accent-color: var(--accent);
 }
 .color-option input[type="color"] {
-  width: 40px;
-  height: 32px;
+  width: 48px;
+  height: 40px;
 }
 .color-option input[type="color"]:disabled {
   opacity: 0.3;
@@ -462,7 +472,7 @@
   border-radius: 50%;
   background: var(--background-elevated);
   border: 2px solid var(--accent);
-  box-shadow: 0 1px 3px rgba(31, 27, 23, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   cursor: grab;
 }
 .time-range input[type="range"]::-moz-range-thumb {
@@ -497,7 +507,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--muted);
 }
@@ -505,7 +515,7 @@
 /* 小見出しの下に添える説明(どこに出るか・空にするとどうなるか) */
 .settings-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -548,27 +558,28 @@
 }
 
 /* 演出タブの「クリップごと ｜ 動画全体」の切り替え */
+/* 切り替え(デザインシステムの「タブ」と同じく、選んでいる方をキーカラーの下線と文字色で示す) */
 .segmented {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 4px;
-  padding: 3px;
   margin-bottom: 14px;
-  border-radius: 10px;
-  background: var(--background-elevated-2);
+  border-bottom: 1px solid var(--border-strong);
 }
 .segmented button {
-  height: 36px;
-  border-radius: 8px;
-  font-size: 13px;
+  min-height: 44px;
+  font-size: 14px;
   color: var(--muted);
+  border-bottom: 4px solid transparent;
+}
+.segmented button:hover {
+  color: var(--foreground);
+  text-decoration: underline;
 }
 .segmented button.active {
-  background: var(--background-elevated);
-  color: var(--foreground);
+  color: var(--accent);
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(31, 27, 23, 0.15);
+  border-bottom-color: var(--accent);
 }
 
 /* 「…」メニュー(EditorMenu.tsx) */
@@ -590,7 +601,7 @@
   padding: 6px;
   border-radius: 14px;
   background: var(--background-elevated);
-  box-shadow: 0 12px 40px rgba(31, 27, 23, 0.18);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
 }
@@ -633,7 +644,7 @@
   font-weight: 700;
 }
 .editor-menu-description {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -644,7 +655,7 @@
 /* スマホでは画面の下からせり上がるシートにする(ボタンの下に出すと画面の左外にはみ出すため) */
 @media (max-width: 767px) {
   .editor-menu-backdrop {
-    background: rgba(31, 27, 23, 0.45);
+    background: rgba(0, 0, 0, 0.45);
   }
   .editor-menu-popover {
     position: fixed;
@@ -685,7 +696,7 @@
   margin-top: 6px;
   padding: 10px 12px 6px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--muted);
   display: flex;
@@ -967,23 +978,27 @@
   background: var(--background-elevated);
 }
 
+/* 小さいボタン(デザインシステムの枠線ボタン・小。高さ36px、角の丸み6px) */
 .editor-toolbar-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 6px 12px;
-  font-size: 12px;
+  min-height: 36px;
+  padding: 2px 12px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--foreground);
-  background: var(--background-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  transition: background-color 0.12s ease;
+  line-height: 1.3;
+  color: var(--accent);
+  background: var(--color-neutral-white);
+  border: 1px solid currentcolor;
+  border-radius: 6px;
 }
 .editor-toolbar-btn:hover:not(:disabled) {
-  background: var(--background-elevated-2);
+  background: var(--color-primitive-blue-200);
+  text-decoration: underline;
 }
-/* 基本となる操作(AIナレーションの一括生成など)。赤く塗って、補助の操作と見分ける */
+/* 基本となる操作(AIナレーションの一括生成など)。キーカラーで塗って、補助の操作と見分ける */
 .editor-toolbar-btn.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -993,14 +1008,23 @@
   background: var(--accent-hover);
 }
 .editor-toolbar-btn:disabled {
-  opacity: 0.4;
+  color: var(--color-neutral-solid-gray-300);
+  background: var(--color-neutral-white);
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
 }
+.editor-toolbar-btn.primary:disabled {
+  background: var(--color-neutral-solid-gray-300);
+  border-color: var(--color-neutral-solid-gray-300);
+  color: var(--color-neutral-solid-gray-50);
+}
 .editor-toolbar-btn.danger {
-  color: var(--danger);
-  border-color: var(--danger);
+  color: var(--danger-text);
+  border-color: var(--danger-text);
+  background: var(--color-neutral-white);
+}
+.editor-toolbar-btn.danger:hover:not(:disabled) {
   background: var(--danger-soft);
 }
 .editor-toolbar-btn.cursor-pointer {
@@ -1202,7 +1226,7 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--foreground);
-  background: rgba(255, 252, 247, 0.85);
+  background: rgba(255, 255, 255, 0.85);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1228,7 +1252,7 @@
 }
 .editor-clip-handle:hover,
 .editor-clip-handle:active {
-  background: rgba(36, 28, 21, 0.18);
+  background: rgba(0, 0, 0, 0.18);
 }
 /* つまめる位置だと分かるよう、縦の粒3つで指がかりを示す(細い枠線だけだと
    タッチ操作でどこがハンドルか見えづらかったため)。 */
@@ -1237,8 +1261,8 @@
   width: 3px;
   height: 16px;
   border-radius: 2px;
-  background: rgba(36, 28, 21, 0.45);
-  box-shadow: 0 -6px 0 rgba(36, 28, 21, 0.45), 0 6px 0 rgba(36, 28, 21, 0.45);
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 -6px 0 rgba(0, 0, 0, 0.45), 0 6px 0 rgba(0, 0, 0, 0.45);
 }
 
 .editor-clip-fade {
@@ -1246,17 +1270,17 @@
   top: 0;
   bottom: 0;
   pointer-events: none;
-  background: linear-gradient(to right, rgba(36, 28, 21, 0.35), transparent);
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.35), transparent);
 }
 .editor-clip-fade.right {
   right: 0;
-  background: linear-gradient(to left, rgba(36, 28, 21, 0.35), transparent);
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.35), transparent);
 }
 
 .editor-waveform {
   position: absolute;
   inset: 0;
-  fill: rgba(36, 28, 21, 0.4);
+  fill: rgba(0, 0, 0, 0.4);
   pointer-events: none;
 }
 
@@ -1299,7 +1323,7 @@
   gap: 10px;
   align-items: flex-start;
   color: var(--muted-2);
-  font-size: 12px;
+  font-size: 14px;
 }
 .editor-inspector-fields {
   display: flex;
@@ -1311,41 +1335,57 @@
   font-weight: 700;
   color: var(--foreground);
 }
+/* 入力欄の名前(デザインシステムの「フォームコントロールラベル」: 本文の色・太字) */
 .editor-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--foreground);
 }
 .editor-field textarea {
   min-height: 56px;
   resize: vertical;
   font-family: inherit;
 }
+/* 入力欄(デザインシステムの「テキスト入力」: 白地・濃い灰色の線・角の丸み8px・文字16px) */
 .editor-field input,
 .editor-field select,
 .editor-field textarea {
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 13px;
+  background: var(--color-neutral-white);
+  border: 1px solid var(--color-neutral-solid-gray-600);
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  /* 16px未満だとiPhoneで入力時に画面が拡大されるため */
+  font-size: 16px;
   font-weight: 400;
-  color: var(--foreground);
+  color: var(--color-neutral-solid-gray-900);
 }
-.editor-field input:focus,
-.editor-field select:focus,
-.editor-field textarea:focus {
-  outline: none;
-  border-color: var(--foreground);
+@media (hover: hover) {
+  .editor-field input:hover,
+  .editor-field select:hover,
+  .editor-field textarea:hover {
+    border-color: var(--color-neutral-black);
+  }
 }
 .editor-field input[type="range"] {
   accent-color: var(--accent);
   padding: 0;
   border: none;
   background: none;
+  min-height: 32px;
+}
+.editor-field input[type="checkbox"] {
+  min-height: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.editor-field input[type="color"] {
+  padding: 3px;
 }
 .editor-field-row {
   display: flex;

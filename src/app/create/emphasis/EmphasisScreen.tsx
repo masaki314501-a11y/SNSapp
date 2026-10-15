@@ -174,7 +174,7 @@ export const EmphasisScreen: React.FC = () => {
                   key={segment.key}
                   className="flex items-stretch overflow-hidden rounded-lg"
                   style={{
-                    border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                    border: `2px solid ${selected ? "var(--accent)" : "var(--color-neutral-solid-gray-420)"}`,
                     background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
                   }}
                 >

@@ -123,7 +123,7 @@ export const MaterialImagesPanel: React.FC<Props> = ({
                   type="button"
                   onClick={() => onChange(images.filter((other) => other.path !== image.path))}
                   disabled={disabled || uploading}
-                  className="absolute right-1 top-1 rounded-full px-1.5 text-xs"
+                  className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-md text-base"
                   style={{ background: "rgba(0,0,0,0.65)", color: "#fff" }}
                   aria-label={`画像${index + 1}を外す`}
                 >

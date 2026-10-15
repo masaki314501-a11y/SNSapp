@@ -1,57 +1,90 @@
 @import "tailwindcss";
 
 /*
- * 見出し用の表示フォント。テロップ用に同梱済みのDela Gothic One(public/fonts/)を
- * 流用する(remotion/shared/font.tsのレンダー用ロードとは独立した、ブラウザ表示専用の@font-face)。
- * -japaneseサブセットのためラテン文字のグリフが無い可能性があるが、CSSのfont-familyは
- * 文字単位でフォールバックするため、次の書体(Hiragino Sans等)に自動で逃げて崩れない。
+ * 画面の見た目は「デジタル庁デザインシステム」(https://design.digital.go.jp/)に合わせる。
+ * 色・文字・角の丸み・フォーカスの見せ方は、公開されているデザイントークン(@digital-go-jp/design-tokens 2.0.1)と
+ * サンプル実装(digital-go-jp/design-system-example-components-html)の値をそのまま使う。
+ * 誰でも読みやすく操作しやすいこと(文字と背景の濃さの差、キーボードでの操作が見えること)を優先する。
  */
-@font-face {
-  font-family: "Dela Gothic One";
-  src: url("/fonts/dela-gothic-one/dela-gothic-one-japanese-400-normal.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  /* すっきりしたアプリ風。面は白、地は少しだけ暖かい灰色 */
-  --background: #faf8f5;
-  --background-elevated: #ffffff;
-  --background-elevated-2: #f4f1ed;
-  --foreground: #1f1b17;
-  --muted: #6b635b;
-  --muted-2: #7d746b;
-  --border: #e8e4de;
-  --border-strong: #d9d3cb;
+  /* デザイントークン(使う分だけ) */
+  --color-primitive-blue-50: #e8f1fe;
+  --color-primitive-blue-100: #d9e6ff;
+  --color-primitive-blue-200: #c5d7fb;
+  --color-primitive-blue-300: #9db7f9;
+  --color-primitive-blue-900: #0017c1;
+  --color-primitive-blue-1000: #00118f;
+  --color-primitive-blue-1200: #000060;
+  --color-primitive-green-50: #e6f5ec;
+  --color-primitive-green-600: #259d63;
+  --color-primitive-green-800: #197a4b;
+  --color-primitive-yellow-50: #fbf5e0;
+  --color-primitive-yellow-300: #ffd43d;
+  --color-primitive-yellow-500: #ebb700;
+  --color-primitive-yellow-1100: #6e5600;
+  --color-primitive-red-50: #fdeeee;
+  --color-primitive-red-800: #ec0000;
+  --color-primitive-red-1000: #a90000;
+  --color-primitive-light-blue-800: #0066be;
+  --color-neutral-white: #ffffff;
+  --color-neutral-black: #000000;
+  --color-neutral-solid-gray-50: #f2f2f2;
+  --color-neutral-solid-gray-100: #e6e6e6;
+  --color-neutral-solid-gray-200: #cccccc;
+  --color-neutral-solid-gray-300: #b3b3b3;
+  --color-neutral-solid-gray-420: #949494;
+  --color-neutral-solid-gray-600: #666666;
+  --color-neutral-solid-gray-700: #4d4d4d;
+  --color-neutral-solid-gray-800: #333333;
+  --color-neutral-solid-gray-900: #1a1a1a;
+  --elevation-1: 0 2px 8px 1px rgba(0, 0, 0, 0.1), 0 1px 5px 0 rgba(0, 0, 0, 0.3);
+  --elevation-4: 0 6px 20px 4px rgba(0, 0, 0, 0.1), 0 2px 6px 0 rgba(0, 0, 0, 0.3);
 
-  /* アクセントは白文字が読める濃さのコーラル。ほか3色は区別用の補助色 */
-  --accent: #d63f20;
-  --accent-hover: #bf3519;
-  --accent-contrast: #ffffff;
-  --accent-soft: #fdebe5;
-  --accent-2: #0e9384;
-  --accent-2-soft: #dcefea;
-  --accent-3: #f2a900;
-  --accent-3-soft: #fdf3d7;
-  --accent-4: #2f6fed;
-  --accent-4-soft: #e1e8fb;
+  /* 画面で使う役割ごとの色(名前は既存の参照箇所のため残し、値をデザインシステムに合わせる) */
+  --background: var(--color-neutral-solid-gray-50);
+  --background-elevated: var(--color-neutral-white);
+  --background-elevated-2: var(--color-neutral-solid-gray-50);
+  --foreground: var(--color-neutral-solid-gray-900);
+  --muted: var(--color-neutral-solid-gray-700);
+  --muted-2: var(--color-neutral-solid-gray-600);
+  /* 区切り線と、入力欄・枠のような操作できる物の線(背景との差3:1以上) */
+  --border: var(--color-neutral-solid-gray-200);
+  --border-strong: var(--color-neutral-solid-gray-600);
 
-  --success: #12b76a;
-  --success-soft: #d7f5e6;
-  --warning: #b98200;
-  --warning-soft: #fdf3d7;
-  --danger: #d1345b;
-  --danger-soft: #fbdde7;
+  /* キーカラーは青(blue-900)。押せる物・選んでいる物に使う */
+  --accent: var(--color-primitive-blue-900);
+  --accent-hover: var(--color-primitive-blue-1000);
+  --accent-active: var(--color-primitive-blue-1200);
+  --accent-contrast: var(--color-neutral-white);
+  --accent-soft: var(--color-primitive-blue-50);
+  --accent-2: var(--color-primitive-green-800);
+  --accent-2-soft: var(--color-primitive-green-50);
+  --accent-3: var(--color-primitive-yellow-500);
+  --accent-3-soft: var(--color-primitive-yellow-50);
+  --accent-4: var(--color-primitive-light-blue-800);
+  --accent-4-soft: var(--color-primitive-blue-50);
 
-  /* 太枠+ハードシャドウはやめ、浮かせたい要素だけ柔らかい影にする(変数名は既存の参照箇所のため残す) */
-  --shadow-pop: 0 1px 2px rgba(31, 27, 23, 0.06);
+  --success: var(--color-primitive-green-600);
+  --success-soft: var(--color-primitive-green-50);
+  --success-text: var(--color-primitive-green-800);
+  --warning: var(--color-primitive-yellow-500);
+  --warning-soft: var(--color-primitive-yellow-50);
+  --warning-text: var(--color-primitive-yellow-1100);
+  --danger: var(--color-primitive-red-800);
+  --danger-soft: var(--color-primitive-red-50);
+  --danger-text: var(--color-primitive-red-1000);
+
+  /* フォーカスの見せ方(デザインシステム共通): 黒い太線+黄色の縁 */
+  --focus-outline: 4px solid var(--color-neutral-black);
+  --focus-ring: 0 0 0 2px var(--color-primitive-yellow-300);
+
+  --shadow-pop: none;
   --shadow-pop-sm: none;
-  --shadow-pop-hover: 0 2px 8px rgba(31, 27, 23, 0.1);
+  --shadow-pop-hover: var(--elevation-1);
   --shadow-pop-active: none;
-  --shadow-sheet: 0 -6px 20px rgba(31, 27, 23, 0.12);
+  --shadow-sheet: var(--elevation-4);
 
-  --stage-background: #1f1b17;
+  --stage-background: var(--color-neutral-solid-gray-900);
 }
 
 @theme inline {
@@ -70,9 +103,13 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
-  --font-sans: var(--font-geist-sans);
+  /* 文字はデザインシステムの指定どおりNoto Sans JP */
+  --font-sans: var(--font-noto-sans-jp);
   --font-mono: var(--font-geist-mono);
-  --font-display: "Dela Gothic One", var(--font-geist-sans);
+  --font-display: var(--font-noto-sans-jp);
+  /* デザインシステムでいちばん小さい文字は14px。補足の文字(text-xs)も14pxにして読みやすくする */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.5;
 }
 
 html {
@@ -83,6 +120,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), "Hiragino Sans", "Noto Sans JP", sans-serif;
+  /* デザインシステムの本文: 行の高さ1.7、字間0.02em */
+  line-height: 1.7;
+  letter-spacing: 0.02em;
   min-height: 100%;
   /*
    * 以前は overflow-wrap: anywhere で長い英数字のはみ出しを防いでいたが、要素の最小幅が1文字まで
@@ -103,6 +143,25 @@ body {
   li {
     text-wrap: pretty;
   }
+}
+
+/*
+ * キーボードで操作した時のフォーカス(デザインシステム共通)。押せる物・入力欄すべてに同じ見せ方をする。
+ * 色だけに頼らず、黒い太線と黄色の縁で、どんな背景の上でも見えるようにする。
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+/* チェックボックス・ラジオボタン(デザインシステムでは押しやすい大きさで、選んだ印はキーカラー) */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .break-anywhere {
@@ -157,20 +216,20 @@ textarea {
 
 .font-display {
   font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .panel {
   background: var(--background-elevated);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .panel-flat {
   background: var(--background-elevated);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .divider-row {
@@ -181,78 +240,121 @@ textarea {
 }
 
 .field-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--muted);
+  letter-spacing: 0.02em;
+  color: var(--foreground);
 }
 
+/* 入力欄(デザインシステムの「テキスト入力」「テキストエリア」「セレクトボックス」) */
 .field-input {
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: var(--foreground);
-  transition: border-color 0.15s ease;
+  background: var(--color-neutral-white);
+  border: 1px solid var(--color-neutral-solid-gray-600);
+  border-radius: 8px;
+  padding: 12px 16px;
+  /* 16px未満だとiPhoneで入力時に画面が拡大されるため、デザインシステムどおり16pxにする */
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 48px;
+  color: var(--color-neutral-solid-gray-900);
   width: 100%;
 }
 .field-input::placeholder {
-  color: var(--muted-2);
+  color: var(--color-neutral-solid-gray-600);
 }
-.field-input:focus {
-  outline: none;
-  border-color: var(--foreground);
+@media (hover: hover) {
+  .field-input:not(:disabled):hover {
+    border-color: var(--color-neutral-black);
+  }
 }
 .field-input:disabled {
-  opacity: 0.5;
+  border-color: var(--color-neutral-solid-gray-300);
+  background: var(--color-neutral-solid-gray-50);
+  color: var(--color-neutral-solid-gray-420);
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 700;
-  border-radius: 999px;
-  border: none;
-  transition: background-color 0.15s ease;
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.btn-primary:disabled {
-  background: var(--border);
-  color: var(--muted-2);
-  cursor: not-allowed;
+/*
+ * ボタン(デザインシステムの「ボタン」)。塗り=いちばん大事な操作、枠線=ほかの操作。
+ * 大きさ・並べ方は components の層に置き、画面ごとに付けた hidden・px-4 などの指定(utilities の層)が勝つようにする
+ * (層に入れないと、スマホで隠しているボタンまで出てしまう)。
+ */
+@layer components {
+  .btn-primary,
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 48px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-underline-offset: 3px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border: 1px solid transparent;
+  }
+  @media (hover: hover) {
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      text-decoration: underline;
+    }
+  }
+  .btn-primary:active:not(:disabled) {
+    background: var(--accent-active);
+    text-decoration: underline;
+  }
+  .btn-primary:disabled {
+    background: var(--color-neutral-solid-gray-300);
+    color: var(--color-neutral-solid-gray-50);
+    cursor: not-allowed;
+  }
+
+  .btn-outline {
+    border: 1px solid currentcolor;
+    color: var(--accent);
+    background: var(--color-neutral-white);
+  }
+  @media (hover: hover) {
+    .btn-outline:hover:not(:disabled) {
+      background: var(--color-primitive-blue-200);
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+  }
+  .btn-outline:active:not(:disabled) {
+    background: var(--color-primitive-blue-300);
+    color: var(--accent-active);
+  }
+  .btn-outline:disabled {
+    color: var(--color-neutral-solid-gray-300);
+    cursor: not-allowed;
+  }
 }
 
-.btn-outline {
-  border: 1px solid var(--border-strong);
-  color: var(--foreground);
-  border-radius: 999px;
-  background: var(--background-elevated);
-  transition: background-color 0.15s ease;
-}
-.btn-outline:hover:not(:disabled) {
-  background: var(--background-elevated-2);
-}
-.btn-outline:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
+/* テキストボタン(デザインシステムの「テキスト」型)。削除など控えめな操作 */
 .btn-ghost {
-  color: var(--muted);
-  border-radius: 8px;
-  font-weight: 600;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  color: var(--accent);
+  border-radius: 6px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-.btn-ghost:hover:not(:disabled) {
-  color: var(--danger);
-  background: var(--danger-soft);
+@media (hover: hover) {
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--danger-text);
+    background: var(--danger-soft);
+    text-decoration-thickness: 3px;
+  }
 }
 .btn-ghost:disabled {
-  opacity: 0.35;
+  color: var(--color-neutral-solid-gray-300);
   cursor: not-allowed;
 }
 
@@ -271,8 +373,8 @@ textarea {
 }
 
 .upload-drop {
-  border: 1.5px dashed var(--border-strong);
-  border-radius: 14px;
+  border: 2px dashed var(--border-strong);
+  border-radius: 12px;
   background: var(--background-elevated);
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -281,30 +383,39 @@ textarea {
   background: var(--accent-soft);
 }
 
+/* ラベル(デザインシステムの「チップラベル」filled-1型)。状態や種類を、枠線+薄い塗り+濃い文字で示す */
 .badge-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  border: none;
+  gap: 4px;
+  min-height: 28px;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  border: 1px solid var(--color-neutral-solid-gray-700);
+  color: var(--color-neutral-solid-gray-800);
+  background: var(--color-neutral-solid-gray-50);
 }
 .badge-pill.neutral {
-  color: var(--muted);
-  background: var(--background-elevated-2);
+  border-color: var(--color-neutral-solid-gray-700);
+  color: var(--color-neutral-solid-gray-800);
+  background: var(--color-neutral-solid-gray-50);
 }
 .badge-pill.success {
-  color: #0b6e4a;
+  border-color: var(--success-text);
+  color: var(--success-text);
   background: var(--success-soft);
 }
 .badge-pill.warning {
-  color: #6b4b00;
+  border-color: var(--warning-text);
+  color: var(--warning-text);
   background: var(--warning-soft);
 }
 .badge-pill.danger {
-  color: #9b1c3e;
+  border-color: var(--danger-text);
+  color: var(--danger-text);
   background: var(--danger-soft);
 }
 
@@ -315,16 +426,16 @@ input[type="file"] {
 input[type="file"]::file-selector-button {
   margin-right: 12px;
   padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  background: var(--background-elevated);
-  color: var(--foreground);
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--color-neutral-white);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
 input[type="file"]::file-selector-button:hover {
-  background: var(--background-elevated-2);
+  background: var(--color-primitive-blue-200);
 }
 
 .tab-bar {
@@ -340,22 +451,24 @@ input[type="file"]::file-selector-button:hover {
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
-  border-radius: 999px;
+  border-radius: 0;
   border: none;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  border-bottom: 4px solid transparent;
 }
 .tab-button:hover {
   color: var(--foreground);
+  text-decoration: underline;
 }
+/* 選んでいるタブは、キーカラーの下線と文字色で示す(デザインシステムの「タブ」) */
 .tab-button.active {
   color: var(--accent);
-  background: var(--accent-soft);
+  border-bottom-color: var(--accent);
 }
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(31, 27, 23, 0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,8 +479,8 @@ input[type="file"]::file-selector-button:hover {
 .modal-panel {
   background: var(--background-elevated);
   border: none;
-  border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(31, 27, 23, 0.2);
+  border-radius: 12px;
+  box-shadow: var(--elevation-4);
   max-width: 560px;
   width: 100%;
   max-height: 80vh;
@@ -376,8 +489,8 @@ input[type="file"]::file-selector-button:hover {
 }
 
 .preset-card {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
   background: var(--background-elevated);
   transition: border-color 0.15s ease, background-color 0.15s ease;
   text-align: left;
@@ -388,7 +501,7 @@ input[type="file"]::file-selector-button:hover {
 }
 
 input[type="color"] {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--color-neutral-solid-gray-600);
   border-radius: 8px;
   background: var(--background-elevated);
   padding: 3px;
@@ -409,7 +522,7 @@ input[type="color"]::-webkit-color-swatch {
   overflow: hidden;
   border-radius: 999px;
   border: none;
-  background: var(--background-elevated-2);
+  background: var(--color-neutral-solid-gray-100);
 }
 .progress-fill {
   height: 100%;
@@ -490,8 +603,9 @@ input[type="color"]::-webkit-color-swatch {
 }
 .bottom-action-bar > .btn-primary,
 .bottom-action-bar > .btn-outline {
-  height: 52px;
-  font-size: 15px;
+  /* デザインシステムの大きいボタン(高さ56px) */
+  min-height: 56px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -516,7 +630,7 @@ input[type="color"]::-webkit-color-swatch {
 }
 .bottom-action-row > .btn-primary,
 .bottom-action-row > .btn-outline {
-  height: 52px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -525,7 +639,7 @@ input[type="color"]::-webkit-color-swatch {
 }
 .bottom-action-row > .btn-primary {
   flex: 1;
-  font-size: 15px;
+  font-size: 16px;
 }
 .bottom-action-row > .btn-outline {
   flex-shrink: 0;
@@ -569,17 +683,20 @@ input[type="color"]::-webkit-color-swatch {
   object-fit: contain;
 }
 
+/* リンク(デザインシステムの「リンクテキスト」): 青い文字に下線 */
 .text-link {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  color: var(--muted);
-  text-decoration: none;
+  font-size: 16px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .text-link:hover {
-  color: var(--accent);
+  color: var(--accent-hover);
+  text-decoration-thickness: 3px;
 }
 
 /* --- 上部バー(AppTopBar.tsx) --- */
@@ -619,7 +736,7 @@ input[type="color"]::-webkit-color-swatch {
   text-overflow: ellipsis;
 }
 .app-topbar-step {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .app-topbar-actions {
@@ -644,12 +761,12 @@ input[type="color"]::-webkit-color-swatch {
   background: var(--accent);
 }
 .topbar-icon-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--muted);
 }
 .topbar-icon-btn:hover:not(:disabled) {
@@ -665,8 +782,8 @@ input[type="color"]::-webkit-color-swatch {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
   background: var(--background-elevated);
   font-size: 13px;
   font-weight: 500;
@@ -681,8 +798,9 @@ input[type="color"]::-webkit-color-swatch {
 }
 /* 上部バーに並べる枠付きの小さなボタン(表示の切り替えはTailwindの hidden 等に任せるため display は指定しない) */
 .topbar-outline {
-  height: 36px;
+  min-height: 36px;
   padding: 0 12px;
+  border-radius: 6px;
   align-items: center;
   gap: 4px;
   font-size: 13px;
@@ -691,12 +809,15 @@ input[type="color"]::-webkit-color-swatch {
 .topbar-text-btn {
   height: 36px;
   padding: 0 8px;
-  font-size: 13px;
-  color: var(--muted);
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
   white-space: nowrap;
 }
 .topbar-text-btn:hover {
-  color: var(--foreground);
+  color: var(--accent-hover);
+  text-decoration-thickness: 3px;
 }
 
 /* --- 操作ボタン(ToolButtons.tsx) --- */
@@ -710,7 +831,7 @@ input[type="color"]::-webkit-color-swatch {
 .tool-grid-btn {
   height: 56px;
   min-width: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--background-elevated-2);
   color: var(--foreground);
   display: flex;

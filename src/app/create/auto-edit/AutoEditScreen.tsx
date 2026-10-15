@@ -239,8 +239,8 @@ export const AutoEditScreen: React.FC = () => {
           <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
         ) : (
           <div
-            className="flex gap-2.5 rounded-[14px] p-3.5"
-            style={{ background: "var(--warning-soft)", color: "#6b4b00" }}
+            className="flex gap-2.5 rounded-xl p-3.5"
+            style={{ background: "var(--warning-soft)", border: "1px solid var(--warning-text)", color: "var(--foreground)" }}
           >
             <InfoIcon size={20} className="mt-0.5 shrink-0" />
             <div className="flex flex-col gap-1.5 text-sm">
@@ -291,7 +291,7 @@ export const AutoEditScreen: React.FC = () => {
           >
             {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
               <option key={seconds ?? "auto"} value={seconds ?? ""}>
-                {seconds === null ? "AIにまかせる(使う範囲から間を詰めるだけ)" : `${seconds}秒くらい`}
+                {seconds === null ? "AIにまかせる(間を詰めるだけ)" : `${seconds}秒くらい`}
               </option>
             ))}
           </select>
@@ -314,7 +314,7 @@ export const AutoEditScreen: React.FC = () => {
                   aria-pressed={selected}
                   className="rounded-lg px-2 py-2.5 text-center text-sm font-medium"
                   style={{
-                    border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                    border: `2px solid ${selected ? "var(--accent)" : "var(--color-neutral-solid-gray-420)"}`,
                     background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
                   }}
                 >
