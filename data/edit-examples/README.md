@@ -18,7 +18,7 @@ Render等へのデプロイはコンテナが実行時に書いたファイル�
 
 - `examples.json` — 登録済み編集例のメタデータ(1件ごとに
   `{ id, label, notes?, correctMediaFilename, correctMimeType, rawMediaFilename?, rawMimeType?, profile?, createdAt }`)。
-  自動生成されるので手で編集しない。
+  手本を変える時は直接編集する。
 - `media/correct/` — 正解動画(完成度の高い参考動画)の実体。
   ファイル名は `{ラベルから作ったスラッグ}-{短いランダムID}.{拡張子}`
   (OSのファイルエクスプローラーから見ても中身が分かるように、UUIDそのままにはしていない)。
@@ -26,14 +26,6 @@ Render等へのデプロイはコンテナが実行時に書いたファイル�
 
 ## 登録方法
 
-`npm run dev` を起動し、`/dev/edit-examples` を開く(エンドユーザー向けの導線は無いので
-直接アクセスする)。ラベル・正解動画(必須)・学習動画(任意)・メモ(任意)を入力して登録する。
-一括取り込み(inbox)は今のところ無い(1件ずつの登録で足りるため)。
-
-登録・削除は `/dev/edit-examples` のUI、または以下のAPIから行う。
-
-- `GET /api/dev/edit-examples` — 一覧
-- `POST /api/dev/edit-examples` — 1件登録(multipart: `label` + 任意の `notes` +
-  `correct` ファイル(必須) + 任意の `raw` ファイル)
-- `DELETE /api/dev/edit-examples/[id]` — 1件削除
-- `GET /api/dev/edit-examples/[id]/media?which=correct|raw` — 動画本体の取得(UIのプレビュー用)
+登録用の開発者ページ(`/dev/edit-examples`)と、本番から手元へ取り込むスクリプトは廃止した。手本を変える時は、
+`media/correct/`(と`media/raw/`)に動画を置き、`examples.json` に1件ぶんの情報を書き足してgitコミットする。
+`profile`(どんな動画か)・`breakdown`(正解動画の書き起こし)が無い手本は、`breakdown`だけ自動編集の時に一度作られる。

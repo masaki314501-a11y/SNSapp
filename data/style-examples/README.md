@@ -14,26 +14,10 @@ Render等へのデプロイはコンテナが実行時に書いたファイル�
 
 - `examples.json` — 登録済み正解データのメタデータ(1件ごとに
   `{ id, kind, mediaFilename, mimeType, correctStyle, label?, createdAt }`)。
-  自動生成されるので手で編集しない。
+  手本を変える時は直接編集する。
 - `media/` — 登録済みの参考画像/参考動画の実体(`{id}.{拡張子}`)。
-- `inbox/` — 手元に用意した動画・画像をまとめて取り込むための受け皿。
-  詳しくは `inbox/README.md` を参照。
 
 ## 登録方法
 
-1. `npm run dev` を起動し、`/dev/style-examples` を開く(エンドユーザー向けの導線は
-   無いので直接アクセスする)。1件ずつ画像/動画をアップロードしてフォームで正解の
-   スタイル値を入力する。
-2. まとめて手元にある場合は `inbox/` にファイルを置いて
-   `POST /api/dev/style-examples/import` を叩く(`/dev/style-examples` 画面の
-   「inboxから取り込み」ボタンから実行できる)。
-
-登録・削除は `/dev/style-examples` のUI、または以下のAPIから行う。
-
-- `GET /api/dev/style-examples` — 一覧
-- `POST /api/dev/style-examples` — 1件登録(multipart: `image` ファイル +
-  `correctStyle`(JSON文字列) + 任意の `label`)
-- `DELETE /api/dev/style-examples/[id]` — 1件削除
-- `GET /api/dev/style-examples/[id]/media` — 画像/動画本体の取得(UIのサムネイル表示用)
-- `GET /api/dev/style-examples/import` — inbox内の未取り込みファイル数の確認
-- `POST /api/dev/style-examples/import` — inboxから一括取り込み
+登録用の開発者ページ(`/dev/style-examples`)と一括取り込み(inbox)は廃止した。手本を変える時は、
+`media/` にファイルを置き、`examples.json` に1件ぶんの情報を書き足してgitコミットする。
