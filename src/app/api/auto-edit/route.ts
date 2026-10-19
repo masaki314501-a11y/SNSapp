@@ -6,6 +6,7 @@ import { MAX_SFX_CLIPS } from "@video/templates/standard/schema";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import type { ProjectSegment, ProjectSfxClip } from "@/lib/videoProject";
 import { generateAutoEditPlan } from "@/lib/gemini/autoEditPlan";
+import { analyzeSpeechActivity, snapToQuiet } from "@/lib/audio/speechActivity";
 import { rawAutoEditPlanSchema } from "@/lib/gemini/autoEditTypes";
 import { createAutoEditJob, updateAutoEditJob, updateAutoEditProgress } from "@/lib/gemini/autoEditJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
@@ -96,6 +97,12 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
+      // 音から話している所と間を調べる(カットの位置を間に寄せ、字幕を話に合わせて見せるため)。
+      // 調べられなくても自動編集は続ける(寄せない・字幕は全文のまま)。
+      const speech = await analyzeSpeechActivity(video.absolutePath).catch((error) => {
+        console.warn("[auto-edit] 音を調べられなかったため、カットの位置の補正と字幕の話への合わせは行いません", error);
+        return null;
+      });
       const plan = await generateAutoEditPlan({
         video: { ...video, durationInSeconds: parsed.data.videoDurationInSeconds },
         keepRanges: parsed.data.keepRanges,
@@ -107,6 +114,7 @@ export async function POST(request: Request) {
         title: parsed.data.title,
         targetDurationSeconds: parsed.data.targetDurationSeconds,
         onProgress: (progress) => updateAutoEditProgress(jobId, progress),
+        snapCut: speech ? (seconds) => snapToQuiet(speech, seconds) : undefined,
         userRequest: parsed.data.userRequest,
         revision: parsed.data.revision ?? undefined,
       });
@@ -166,6 +174,7 @@ export async function POST(request: Request) {
           imageSources: plan.imageSources,
         },
         rawPlan: plan.rawPlan,
+        speechSpans: speech?.spans ?? null,
         segments,
         generatedClips,
       });

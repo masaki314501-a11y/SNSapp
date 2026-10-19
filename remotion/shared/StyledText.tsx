@@ -27,7 +27,7 @@ const roundStrokeShadow = (color: string, widthPx: number): string => {
 };
 
 /** 1行の中の、色や大きさを変える一部分(字幕の重大ワード・強調する語)。 */
-export type StyledTextPart = { text: string; color?: string; scale?: number };
+export type StyledTextPart = { text: string; color?: string; scale?: number; hidden?: boolean };
 
 type Props = {
   preset: TextStylePreset;
@@ -61,11 +61,13 @@ export const StyledText: React.FC<Props> = ({ preset, fontSizePx, lines, italic,
         {typeof line === "string"
           ? line
           : line.map((part, partIndex) =>
-              part.color || part.scale ? (
+              part.color || part.scale || part.hidden ? (
                 <span
                   key={partIndex}
                   style={{
                     fontSize: part.scale ? `${part.scale}em` : undefined,
+                    // まだ話していない言葉(話に合わせて順に出す時)は、場所は取ったまま見えなくする(行の位置がずれないように)
+                    visibility: part.hidden ? "hidden" : undefined,
                     // グラデーションの文字(背景を文字の形に切り抜く)の中でも色が出るよう、色は文字の色で塗る
                     ...(withColor && part.color ? { color: part.color, WebkitTextFillColor: part.color } : {}),
                   }}

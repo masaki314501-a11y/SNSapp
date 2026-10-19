@@ -26,7 +26,7 @@ export type SegmentEffectsPatch = Partial<
   >
 >;
 export type ProjectEffectsPatch = Partial<
-  Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages" | "captionTextStyleId" | "keywordHighlights" | "cameraRuleId">
+  Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages" | "captionTextStyleId" | "keywordHighlights" | "cameraRuleId" | "captionWordSync" | "captionWordHighlightColor">
 >;
 export type EffectsScope = "clip" | "global";
 

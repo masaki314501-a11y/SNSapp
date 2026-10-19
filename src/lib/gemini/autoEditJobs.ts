@@ -16,6 +16,8 @@ export type AutoEditJob =
       generatedClips: ProjectSfxClip[];
       /** Geminiの生の答え。手直しのときに画面から送り返してもらう。 */
       rawPlan: RawAutoEditPlan;
+      /** 元の動画で話している区間(元の動画の秒数)。音を調べられなかった時はnull。 */
+      speechSpans: [number, number][] | null;
     }
   | { status: "error"; message: string };
 

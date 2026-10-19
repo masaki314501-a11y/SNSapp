@@ -39,6 +39,8 @@ export type AutoEditResult = {
   generatedClips: ProjectSfxClip[];
   /** Geminiの生の答え。手直しのときに前回の案として送り返す。 */
   rawPlan: RawAutoEditPlan;
+  /** 元の動画で話している区間。字幕を話に合わせて見せるのに使う。古いサーバーからの答えには無い。 */
+  speechSpans?: [number, number][] | null;
 };
 
 export type AutoEditJobState =

@@ -11,8 +11,9 @@ import type {
   CaptionStyle,
 } from "./schema";
 import { CAPTION_FONT_SIZE_SCALE, resolveFontFamilyStack } from "./schema";
-import { LINE_STYLE, breakIntoLines } from "./textWrap";
-import { StyledText } from "./StyledText";
+import { LINE_STYLE, breakIntoLines, phraseEnds } from "./textWrap";
+import { StyledText, type StyledTextPart } from "./StyledText";
+import { currentPhraseRange, type WordSyncMode } from "./wordSync";
 import { findTextStylePreset } from "./textStylePresets";
 
 type Props = {
@@ -35,6 +36,10 @@ type Props = {
   keywordHighlights?: { word: string; color: string }[];
   /** このクリップの字幕の強調(帯・書体・色。本人が選ぶ)。 */
   emphasis?: CaptionEmphasis;
+  /** 話している言葉に合わせて見せるか、そのための「話している区間」(クリップの先頭からの秒数)と光らせる色。 */
+  wordSync?: WordSyncMode;
+  speechSpans?: [number, number][];
+  wordHighlightColor?: string;
 };
 
 /**
@@ -53,6 +58,9 @@ const splitByEmphasis = (text: string, words: string[]): { text: string; emphasi
     .filter((part) => part.length > 0)
     .map((part) => ({ text: part, emphasized: targets.includes(part) }));
 };
+
+/** 今話している言葉を光らせる色の既定。白い字幕の中で目立つ黄色。 */
+const DEFAULT_WORD_HIGHLIGHT_COLOR = "#FFE600";
 
 /** 強調した字幕の文字の大きさ(倍)。 */
 const EMPHASIZED_CAPTION_SCALE = 1.15;
@@ -91,9 +99,12 @@ export const AnimatedCaption: React.FC<Props> = ({
   textStyleId,
   keywordHighlights,
   emphasis,
+  wordSync = "none",
+  speechSpans = [],
+  wordHighlightColor = DEFAULT_WORD_HIGHLIGHT_COLOR,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(animation, frame, fps);
   // 強調で文字スタイルを選んだ時はそれを、無ければ全体の字幕の文字スタイルを使う。帯を敷く時は帯の見た目が優先。
   const preset = emphasis?.band ? undefined : findTextStylePreset(emphasis?.textStyleId ?? textStyleId);
@@ -160,11 +171,43 @@ export const AnimatedCaption: React.FC<Props> = ({
   const fontSizePx = preset ? 48 * sizeScale : Number(textStyle.fontSize);
   const hasBox = !preset && (emphasis?.band || captionStyle === "pill");
   const lines = breakIntoLines(text, fontSizePx, CAPTION_MAX_WIDTH_PX - (hasBox ? 64 : 0), highlightWords, EMPHASIS_SCALE);
-  const lineParts = lines.map((line) =>
-    splitByEmphasis(line, highlightWords).map((part) =>
-      part.emphasized ? { text: part.text, color: wordColors.get(part.text), scale: EMPHASIS_SCALE } : { text: part.text }
-    )
-  );
+  // 話に合わせる時の、今話している言葉のかたまり(全行をつないだ文字の位置)。
+  const current =
+    wordSync === "none"
+      ? null
+      : currentPhraseRange(lines.join(""), speechSpans, durationInFrames / fps, frame / fps);
+  // 順に出す時は、話し始める前でも最初のかたまりだけは出しておく(字幕の枠だけが先に出て空にならないように)
+  const revealEnd = wordSync === "reveal" ? (current?.end ?? phraseEnds(lines.join(""))[0] ?? 0) : Infinity;
+  // 各行の頭が、全行をつないだ文字の何文字目か
+  const lineStarts = lines.map((_, index) => lines.slice(0, index).join("").length);
+  const lineParts: StyledTextPart[][] = lines.map((line, lineIndex) => {
+    const parts: StyledTextPart[] = [];
+    let offset = lineStarts[lineIndex];
+    for (const part of splitByEmphasis(line, highlightWords)) {
+      const base: StyledTextPart = part.emphasized
+        ? { text: part.text, color: wordColors.get(part.text), scale: EMPHASIS_SCALE }
+        : { text: part.text };
+      // 今話しているかたまり・まだ話していない所の境目で区切り、それぞれに見せ方を付ける
+      const cuts = [0, part.text.length];
+      for (const boundary of [current?.start, current?.end, revealEnd]) {
+        if (boundary !== undefined && boundary > offset && boundary < offset + part.text.length) cuts.push(boundary - offset);
+      }
+      const sorted = [...new Set(cuts)].sort((a, b) => a - b);
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const from = offset + sorted[i];
+        const isCurrent = wordSync === "highlight" && current !== null && from >= current.start && from < current.end;
+        parts.push({
+          ...base,
+          text: part.text.slice(sorted[i], sorted[i + 1]),
+          // 重大ワード・強調する語の色はそのまま。それ以外の今話している言葉だけ色を変える
+          color: base.color ?? (isCurrent ? wordHighlightColor : undefined),
+          hidden: from >= revealEnd || undefined,
+        });
+      }
+      offset += part.text.length;
+    }
+    return parts;
+  });
 
   return (
     <AbsoluteFill
@@ -186,8 +229,15 @@ export const AnimatedCaption: React.FC<Props> = ({
             {lineParts.map((parts, lineIndex) => (
               <span key={lineIndex} style={LINE_STYLE}>
                 {parts.map((part, i) =>
-                  part.color ? (
-                    <span key={i} style={{ color: part.color, fontSize: `${EMPHASIS_SCALE}em` }}>
+                  part.color || part.scale || part.hidden ? (
+                    <span
+                      key={i}
+                      style={{
+                        color: part.color,
+                        fontSize: part.scale ? `${part.scale}em` : undefined,
+                        visibility: part.hidden ? "hidden" : undefined,
+                      }}
+                    >
                       {part.text}
                     </span>
                   ) : (

@@ -25,6 +25,7 @@ import {
   DEFAULT_CLIP_VOLUME,
   buildStandardVideoProps,
   clearProject,
+  resolveWordSync,
   loadProject,
   parseProjectJson,
   saveProject,
@@ -254,6 +255,17 @@ export const ClipEditor: React.FC = () => {
       }
     }
     setHasCheckedProject(true);
+    // 話している区間がまだ無いプロジェクト(自動編集を使わずに作った・この仕組みより前に作った)は、ここで調べておく
+    // (字幕を話に合わせて見せるため)。調べられなくても編集はそのまま続けられる。
+    if (loaded && !loaded.speechSpans && loaded.videoPath) {
+      void fetch(`/api/speech-activity?videoPath=${encodeURIComponent(loaded.videoPath)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { spans?: [number, number][] } | null) => {
+          const spans = data?.spans;
+          if (spans) setProject((prev) => (prev ? { ...prev, speechSpans: spans } : prev));
+        })
+        .catch(() => {});
+    }
   }, []);
 
   // 編集内容(クリップ構成・スタイル・SE・BGM)を自動保存する(操作のたびに書き込まないよう
@@ -335,6 +347,9 @@ export const ClipEditor: React.FC = () => {
         muteOriginalUnderNarration,
         captionTextStyleId: project?.captionTextStyleId,
         keywordHighlights: project?.keywordHighlights,
+        speechSpans: project?.speechSpans,
+        captionWordSync: project?.captionWordSync,
+        captionWordHighlightColor: project?.captionWordHighlightColor,
       }),
     [
       muteOriginalUnderNarration,
@@ -348,6 +363,9 @@ export const ClipEditor: React.FC = () => {
       project?.framing,
       project?.captionTextStyleId,
       project?.keywordHighlights,
+      project?.speechSpans,
+      project?.captionWordSync,
+      project?.captionWordHighlightColor,
       primaryColor,
       captionStyle,
       fontFamily,
@@ -1583,6 +1601,8 @@ export const ClipEditor: React.FC = () => {
           onUpdateEmphasis={updateSegmentEffects}
           captionTextStyleId={project?.captionTextStyleId}
           keywordHighlights={project?.keywordHighlights ?? []}
+          captionWordSync={resolveWordSync(project?.captionWordSync, project?.speechSpans)}
+          captionWordHighlightColor={project?.captionWordHighlightColor}
           onUpdateCaptionLook={updateProjectEffects}
           onApplyAnimationToAll={applyAnimationToAll}
           onOpenBulkEdit={openBulkEdit}

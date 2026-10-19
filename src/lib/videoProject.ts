@@ -16,6 +16,7 @@ import {
   type VideoFraming,
 } from "@video/shared/schema";
 import { MAX_SFX_CLIPS, type StandardVideoProps } from "@video/templates/standard/schema";
+import type { WordSyncMode } from "@video/shared/wordSync";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 
 /**
@@ -157,6 +158,12 @@ export type VideoProject = {
   keywordHighlights?: { word: string; color: string }[];
   /** カメラワークのルール(cameraRules.tsのid)。 */
   cameraRuleId?: string;
+  /** 元の動画で話している区間(元の動画の秒数)。字幕を話に合わせて見せるのに使う。 */
+  speechSpans?: [number, number][];
+  /** 字幕を話している言葉に合わせて見せるか。未指定なら、話している区間が分かっていれば光らせる。 */
+  captionWordSync?: WordSyncMode;
+  /** 今話している言葉を光らせる色。 */
+  captionWordHighlightColor?: string;
   /** 強調を選ぶ画面で決めた、強調した字幕すべてに使う見た目と効果音。 */
   emphasisPreset?: { emphasis: CaptionEmphasis; sfxPresetId?: string };
   /** 自動編集でAIに伝える要望。やり直すたびに書き直さなくて済むよう保存しておく。 */
@@ -283,6 +290,13 @@ export const clearProject = (): void => {
 /** アップロード済み動画をブラウザで直接再生するためのURL(public/配下の静的パス)。 */
 export const projectVideoUrl = (videoPath: string): string => `/${videoPath}`;
 
+/**
+ * 字幕を話に合わせて見せるか。選んでいなければ、話している区間が分かっている時(自動編集で調べた時)だけ光らせる
+ * (分からない時に光らせると、クリップの長さで割り振るだけになり、話とずれやすいため)。
+ */
+export const resolveWordSync = (mode: WordSyncMode | undefined, spans: VideoProject["speechSpans"]): WordSyncMode =>
+  mode ?? (spans && spans.length > 0 ? "highlight" : "none");
+
 /** 字幕を強調したクリップに付けた効果音を、完成動画の秒数に置く。 */
 const emphasisSfx = (segments: ProjectSegment[]) => {
   let start = 0;
@@ -319,6 +333,9 @@ export const buildStandardVideoProps = (params: {
   muteOriginalUnderNarration?: boolean;
   captionTextStyleId?: string;
   keywordHighlights?: VideoProject["keywordHighlights"];
+  speechSpans?: VideoProject["speechSpans"];
+  captionWordSync?: WordSyncMode;
+  captionWordHighlightColor?: string;
 }): StandardVideoProps => {
   // 元の音を消すスイッチがONのとき、AIナレーションが付いているクリップだけ元の音量を0にする。
   // クリップの音量設定そのものは書き換えない(スイッチをOFFに戻せば元の音量に戻るように)。
@@ -329,6 +346,7 @@ export const buildStandardVideoProps = (params: {
     globalImages: params.globalImages && params.globalImages.length > 0 ? params.globalImages : undefined,
     globalShapes: params.globalShapes && params.globalShapes.length > 0 ? params.globalShapes : undefined,
     framing: params.framing ?? undefined,
+    speechSpans: params.speechSpans && params.speechSpans.length > 0 ? params.speechSpans : undefined,
     globalOverlays: params.globalOverlays && params.globalOverlays.length > 0 ? params.globalOverlays : undefined,
     hook: params.hook ?? undefined,
     cta: params.cta ?? undefined,
@@ -365,6 +383,8 @@ export const buildStandardVideoProps = (params: {
       fadeInOut: params.fadeInOut,
       captionTextStyleId: params.captionTextStyleId,
       keywordHighlights: params.keywordHighlights?.filter((highlight) => highlight.word.trim().length > 0),
+      captionWordSync: resolveWordSync(params.captionWordSync, params.speechSpans),
+      captionWordHighlightColor: params.captionWordHighlightColor,
     },
     sfx: [
       ...params.sfxClips.map((clip) => ({

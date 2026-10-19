@@ -126,6 +126,10 @@ export const themeSchema = z.object({
    * 配色の代わりにこのスタイルで字幕を描く(書体もスタイルの書体)。
    */
   captionTextStyleId: z.string().optional(),
+  /** 字幕を話している言葉に合わせて見せるか(wordSync.ts)。省略時は合わせない。 */
+  captionWordSync: z.enum(["none", "highlight", "reveal"]).optional(),
+  /** 今話している言葉を光らせる時の色。 */
+  captionWordHighlightColor: zColor().optional(),
   /** 重大ワード。全クリップの字幕で、この言葉を指定の色で大きく見せる。 */
   keywordHighlights: z
     .array(z.object({ word: z.string().min(1), color: zColor() }))

@@ -51,6 +51,7 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
   globalImages,
   globalShapes,
   framing,
+  speechSpans,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -94,6 +95,9 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
               framing={framing}
               captionTextStyleId={theme.captionTextStyleId}
               keywordHighlights={theme.keywordHighlights}
+              wordSync={theme.captionWordSync}
+              speechSpans={speechSpans}
+              wordHighlightColor={theme.captionWordHighlightColor}
               layer="base"
             />
           </Series.Sequence>

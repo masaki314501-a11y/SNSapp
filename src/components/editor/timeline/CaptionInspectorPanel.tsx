@@ -8,6 +8,7 @@ import {
   type CaptionAnimation,
   type CaptionPosition,
 } from "@video/shared/schema";
+import { WORD_SYNC_OPTIONS, type WordSyncMode } from "@video/shared/wordSync";
 import { CaptionIcon, EditIcon, HighlightIcon, MicIcon, PaletteIcon, SparkleIcon, TrashIcon } from "@/components/icons";
 import { Collapsible, SettingsSection } from "../SettingsSection";
 import { CaptionEmphasisFields, KeywordHighlightFields } from "./CaptionEmphasisFields";
@@ -35,9 +36,14 @@ type Props = {
   /** 全クリップ共通の字幕の文字スタイルと重大ワード。 */
   captionTextStyleId: string | undefined;
   keywordHighlights: { word: string; color: string }[];
+  /** 字幕を話に合わせて見せるか(未指定の時に実際に使われる値を渡す)と、光らせる色。 */
+  captionWordSync: WordSyncMode;
+  captionWordHighlightColor: string | undefined;
   onUpdateCaptionLook: (patch: {
     captionTextStyleId?: string | undefined;
     keywordHighlights?: { word: string; color: string }[];
+    captionWordSync?: WordSyncMode;
+    captionWordHighlightColor?: string;
   }) => void;
   onApplyAnimationToAll: (animation: CaptionAnimation) => void;
   onOpenBulkEdit: () => void;
@@ -70,6 +76,8 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   onUpdateEmphasis,
   captionTextStyleId,
   keywordHighlights,
+  captionWordSync,
+  captionWordHighlightColor,
   onUpdateCaptionLook,
   onApplyAnimationToAll,
   onOpenBulkEdit,
@@ -207,6 +215,31 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
 
         {/* 字幕の見た目はここ1か所。まず文字スタイルのおすすめから選び、配色・フォント・位置などは「詳しい設定」に畳む */}
         <SettingsSection title="字幕の見た目(全クリップ共通)" icon={<PaletteIcon size={16} />}>
+          <div className="editor-field-row">
+            <label className="editor-field">
+              <span>話に合わせて</span>
+              <select
+                value={captionWordSync}
+                onChange={(e) => onUpdateCaptionLook({ captionWordSync: e.target.value as WordSyncMode })}
+              >
+                {WORD_SYNC_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {captionWordSync === "highlight" ? (
+              <label className="editor-field" style={{ flex: "0 0 auto" }}>
+                <span>光らせる色</span>
+                <input
+                  type="color"
+                  value={captionWordHighlightColor ?? "#FFE600"}
+                  onChange={(e) => onUpdateCaptionLook({ captionWordHighlightColor: e.target.value })}
+                />
+              </label>
+            ) : null}
+          </div>
           <TextStylePicker
             label="文字スタイル"
             value={captionTextStyleId}

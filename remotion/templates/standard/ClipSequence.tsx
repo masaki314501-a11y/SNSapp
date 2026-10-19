@@ -7,6 +7,7 @@ import { TextOverlays } from "../../shared/TextOverlays";
 import { ImageOverlays } from "../../shared/ImageOverlays";
 import { MediaBackground } from "../../shared/MediaBackground";
 import { AnimatedCaption } from "../../shared/AnimatedCaption";
+import type { WordSyncMode } from "../../shared/wordSync";
 
 type Props = ClipProps & {
   index: number;
@@ -20,12 +21,26 @@ type Props = ClipProps & {
   /** 字幕の文字スタイルと重大ワード(全クリップ共通)。 */
   captionTextStyleId?: string;
   keywordHighlights?: { word: string; color: string }[];
+  /** 字幕を話に合わせて見せるか、元の動画で話している区間(元の動画の秒数)、光らせる色。 */
+  wordSync?: WordSyncMode;
+  speechSpans?: [number, number][];
+  wordHighlightColor?: string;
   /**
    * 描く層。base=映像・テロップ・画像、text=強調テキストだけ。強調テキストを動画全体の画像・図形
    * (ランキングの枠など)より上に重ねるため、StandardVideoで層を分けて2回描く。
    */
   layer: "base" | "text";
 };
+
+/** 元の動画で話している区間のうち、このクリップに入る分を、クリップの先頭からの秒数にして返す。 */
+const clipSpeechSpans = (
+  spans: [number, number][] | undefined,
+  startFromSeconds: number,
+  durationInSeconds: number
+): [number, number][] =>
+  (spans ?? [])
+    .filter(([a, b]) => b > startFromSeconds && a < startFromSeconds + durationInSeconds)
+    .map(([a, b]) => [Math.max(0, a - startFromSeconds), Math.min(durationInSeconds, b - startFromSeconds)]);
 
 /**
  * 本題パート(3-20秒)の1カット分。動画/プレースホルダー背景 + アニメーション付きテロップ。
@@ -54,6 +69,10 @@ export const ClipSequence: React.FC<Props> = ({
   captionEmphasis,
   captionTextStyleId,
   keywordHighlights,
+  wordSync,
+  speechSpans,
+  wordHighlightColor,
+  durationInSeconds,
   framing,
   layer,
 }) => {
@@ -87,6 +106,9 @@ export const ClipSequence: React.FC<Props> = ({
         textStyleId={captionTextStyleId}
         keywordHighlights={keywordHighlights}
         emphasis={captionEmphasis}
+        wordSync={wordSync}
+        speechSpans={clipSpeechSpans(speechSpans, startFromSeconds, durationInSeconds)}
+        wordHighlightColor={wordHighlightColor}
       />
       {/* 強調テキストはlayer="text"で、動画全体の画像・図形より上に別に描く。 */}
       {images && images.length > 0 ? <ImageOverlays images={images} /> : null}

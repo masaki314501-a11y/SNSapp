@@ -41,6 +41,11 @@ export const standardVideoSchema = z.object({
   globalImages: z.array(imageOverlaySchema).max(24).optional().describe("動画全体に重ねる画像(ロゴ等)"),
   globalShapes: z.array(shapeOverlaySchema).max(24).optional().describe("動画全体に重ねる図形(ランキングの枠等)"),
   framing: videoFramingSchema.optional().describe("動画全体の画角(全クリップの映像の寄せ方)"),
+  /**
+   * 元の動画で話している区間(元の動画の秒数)。字幕を話に合わせて見せるのに使う(src/lib/audio/speechActivity.ts)。
+   * クリップごとではなく元の動画全体で持つので、編集画面でクリップを切り直しても使える。
+   */
+  speechSpans: z.array(z.tuple([z.number(), z.number()])).max(20000).optional(),
 });
 
 export type ClipProps = z.infer<typeof clipSchema>;

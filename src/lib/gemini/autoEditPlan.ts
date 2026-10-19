@@ -108,6 +108,11 @@ export type AutoEditPlanInput = {
   targetDurationSeconds?: number | null;
   /** 今どの段階かを知らせる(画面に進み具合を出すため)。 */
   onProgress?: (progress: AutoEditProgress) => void;
+  /**
+   * カットの位置(元の動画の秒数)を、近くの音の切れ目へ寄せる(speechActivity.tsのsnapToQuiet)。
+   * AIが動画を見て決めた秒数のままだと、言葉の頭や語尾が少し切れることがあったため。音を調べられなかった時は無し。
+   */
+  snapCut?: (seconds: number) => number;
   /** 本人がAIへの要望として書いた文(「保証は日本の方に〇」等)。手本より優先する。 */
   userRequest?: string;
   /**
@@ -1380,7 +1385,7 @@ export const avoidTextOverlaps = (
 export const finalizeAutoEditPlan = async (
   data: RawAutoEditPlan,
   input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages"> &
-    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title" | "template" | "onProgress">>,
+    Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title" | "template" | "onProgress" | "snapCut">>,
   options: { resolveImage?: ImageSourceResolver } = {}
 ): Promise<AutoEditPlan> => {
   const generatedImageSources = input.generateMissingImages
@@ -1408,8 +1413,16 @@ export const finalizeAutoEditPlan = async (
   // クリップに置いた図形(〇印など)は描画側にクリップごとの図形が無いので、すべて全体の図形へ移す。
   const liftedShapes: RawAutoEditShape[] = [];
   let outputStartSeconds = 0;
-  for (const raw of data.clips) {
+  for (const original of data.clips) {
     if (clips.length >= MAX_CLIPS) break;
+    // カットの位置を音の切れ目へ寄せる。続けて使う区間どうし(前のクリップの終わり=次の頭)は同じ位置へ寄るので、間は空かない
+    const raw = input.snapCut
+      ? {
+          ...original,
+          sourceStartSeconds: input.snapCut(original.sourceStartSeconds),
+          sourceEndSeconds: input.snapCut(original.sourceEndSeconds),
+        }
+      : original;
     const fitted = fitClipToKeepRanges(raw, input.keepRanges);
     if (!fitted) continue;
     const clipDuration = fitted.durationInSeconds;

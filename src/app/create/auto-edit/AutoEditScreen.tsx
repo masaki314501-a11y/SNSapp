@@ -130,6 +130,8 @@ export const AutoEditScreen: React.FC = () => {
       framing: plan.framing,
       // 寄りは選んだテンプレートのカメラワークのルールで付けてある。編集画面で付け直す時も同じルールを選んでおく
       cameraRuleId: cameraRuleForTemplate(templateId),
+      // 字幕を話に合わせて見せるための、話している区間(音を調べられなかった時は前のまま)
+      speechSpans: result.speechSpans ?? project.speechSpans,
       // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });

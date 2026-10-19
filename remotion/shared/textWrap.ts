@@ -202,6 +202,20 @@ export const breakIntoLines = (
 };
 
 /**
+ * 文を、言葉のかたまり(だいたい文節)ごとに区切った時の、各かたまりの終わりの文字位置。
+ * 字幕を話に合わせて言葉ごとに光らせる・出す時の区切りに使う(wordSync.ts)。
+ */
+export const phraseEnds = (text: string): number[] => {
+  const ends: number[] = [];
+  let position = 0;
+  for (const phrase of splitIntoPhrases(text, [])) {
+    position += phrase.join("").length;
+    ends.push(position);
+  }
+  return ends;
+};
+
+/**
  * 1行ずつの見た目。行ごとに別のブロックにして、行の中では折り返さない(breakIntoLinesで決めた所でだけ改行する)。
  * ブラウザ内の書き出しでも、行の位置がずれて重なることがない。
  */
