@@ -5,7 +5,7 @@ import type { RawAutoEditPlan } from "./autoEditTypes";
 import type { AutoEditProgress } from "@/lib/autoEditProgress";
 
 /** 画面に見せる編集案の概要(クリップ自体はsegmentsとして組み立て済みで返す)。 */
-export type AutoEditPlanSummary = Pick<AutoEditPlan, "summary" | "referenceNotes" | "theme" | "hook" | "cta" | "globalOverlays" | "globalImages" | "globalShapes" | "framing" | "generatedImageCount" | "imageSources">;
+export type AutoEditPlanSummary = Pick<AutoEditPlan, "summary" | "referenceNotes" | "theme" | "hook" | "hookCandidates" | "cta" | "globalOverlays" | "globalImages" | "globalShapes" | "framing" | "generatedImageCount" | "imageSources">;
 
 export type AutoEditJob =
   | ({ status: "processing" } & Partial<AutoEditProgress>)

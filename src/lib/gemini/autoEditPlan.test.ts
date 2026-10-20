@@ -580,3 +580,26 @@ describe("カメラワークのルール", () => {
     expect(plan.clips[2].zoom?.scale).toBe(1.15);
   });
 });
+
+describe("冒頭の見出しの候補", () => {
+  it("おすすめを先頭に、別の案を並べ、タイトルと同じ案・同じ案は外して最大3つにする", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 2 }], {
+        title: "矯正した方がいい歯並び",
+        hook: { headline: "9割が知らない歯並びの話" },
+        hookAlternatives: ["矯正した方がいい歯並び", "あなたの歯は大丈夫?", "9割が知らない 歯並びの話", "結論:受け口は早めに"],
+      }),
+      input
+    );
+    expect(plan.hookCandidates).toEqual(["9割が知らない歯並びの話", "あなたの歯は大丈夫?", "結論:受け口は早めに"]);
+  });
+
+  it("おすすめが無い(hookがnull)時も、別の案は候補に出す", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan([{ sourceStartSeconds: 0, sourceEndSeconds: 2 }], { hook: null, hookAlternatives: ["あなたの歯は大丈夫?"] }),
+      input
+    );
+    expect(plan.hook).toBeNull();
+    expect(plan.hookCandidates).toEqual(["あなたの歯は大丈夫?"]);
+  });
+});

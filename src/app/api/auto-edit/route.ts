@@ -165,6 +165,7 @@ export async function POST(request: Request) {
           referenceNotes: plan.referenceNotes,
           theme: plan.theme,
           hook: plan.hook,
+          hookCandidates: plan.hookCandidates,
           cta: plan.cta,
           globalOverlays: plan.globalOverlays,
           globalImages: plan.globalImages,

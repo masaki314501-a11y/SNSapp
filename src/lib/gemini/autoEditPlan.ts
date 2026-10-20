@@ -80,6 +80,8 @@ const MAX_FRAMING_SCALE = 1.5;
 const MAX_GENERATED_IMAGES = 8;
 /** 1回の自動編集で出す、作った画像(棚の画像を含む)の種類の上限。棚の画像は無料なので、作る上限より多くてよい。 */
 const MAX_REQUESTED_IMAGES = 16;
+/** 冒頭の見出しの候補の数(本人が選ぶ)。 */
+const MAX_HOOK_CANDIDATES = 3;
 /** 自動編集で寄る倍率の上限。 */
 const MAX_AUTO_ZOOM_SCALE = 1.35;
 /** ランキングの空枠(6個)と、そこを埋める項目名(6個)、タイトルが同時に置けるだけの数。描画側の上限と合わせる。 */
@@ -156,6 +158,8 @@ export type AutoEditPlan = {
     captionFontSize?: CaptionFontSize;
   };
   hook: { headline: string; subline?: string } | null;
+  /** 冒頭の見出しの候補(AIのおすすめ=hookが先頭。最大3つ)。本人が選ぶ。 */
+  hookCandidates: string[];
   cta: { text: string } | null;
   /** 動画全体に重ね続ける文字(上部のタイトル等)。秒数は動画全体の先頭から。 */
   globalOverlays: TextOverlay[];
@@ -404,6 +408,8 @@ ${sfxPresetHints}
 13. hook: 冒頭0〜3秒に本人の映像の上へ重ねる大見出し(スクロールを止める一言。数字・意外性)。subline(補足)は任意。
     冒頭の本人の一言だけで十分に引きがあるならnullでよい。上部のタイトルをずっと出しているなら、同じ言葉を繰り返さない(null)。
     参考や編集例に冒頭の大見出しが無いなら、真似してnullにする。
+13-2. hookAlternatives: 冒頭の見出しの別の案を2つ。hookと切り口を変える(数字で引く・意外な事実・問いかけ・結論を先に言う、など)。
+    hookをnullにした時も、本人が選べるように2つ書く。titleと同じ言葉は使わない。どれも全角15文字くらいまでの短い一言にする。
 14. cta: 最後の数秒に、画面下から2割あたりへ帯付きで重ねる一言(「保存して見返してね」など)。不要ならnull。
     最後のクリップのoverlaysで締めの言葉をすでに出しているなら、同じ内容を繰り返さない(null)。
     参考や編集例に下の帯の締めの一言が無いなら、真似してnullにする。
@@ -1582,6 +1588,11 @@ export const finalizeAutoEditPlan = async (
           subline: data.hook?.subline ? tidyLineBreaks(data.hook.subline) || undefined : undefined,
         }
       : null;
+  // 冒頭の見出しの候補: おすすめ(hook)と別の案。タイトルと同じ言葉の案・同じ案は外す
+  const hookCandidates = [hookHeadline, ...(data.hookAlternatives ?? []).map((text) => tidyLineBreaks(text))]
+    .filter((text) => text.length > 0 && !repeatsShownText(text, titleTexts))
+    .filter((text, index, all) => all.findIndex((other) => comparableText(other) === comparableText(text)) === index)
+    .slice(0, MAX_HOOK_CANDIDATES);
   const ctaText = data.cta ? tidyLineBreaks(data.cta.text) : "";
   const endingTexts = clips.slice(-3).flatMap((clip) => (clip.overlays ?? []).map((overlay) => overlay.text));
   const cta = ctaText && !repeatsShownText(ctaText, endingTexts) ? { text: ctaText } : null;
@@ -1632,6 +1643,7 @@ export const finalizeAutoEditPlan = async (
       captionFontSize: (theme.captionFontSize ?? undefined) as CaptionFontSize | undefined,
     },
     hook,
+    hookCandidates,
     cta,
     globalOverlays: arranged.globalOverlays,
     globalImages: arranged.globalImages,

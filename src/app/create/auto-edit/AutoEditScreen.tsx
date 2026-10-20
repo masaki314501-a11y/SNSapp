@@ -108,6 +108,12 @@ export const AutoEditScreen: React.FC = () => {
     setRevisionText("");
   };
 
+  // 冒頭の見出しの選択。案が変わったら(作り直し・手直し)AIのおすすめに戻す
+  const [hookChoice, setHookChoice] = useState<{ result: AutoEditResult; headline: string | null } | null>(null);
+  const hookCandidates = result?.plan.hookCandidates ?? (result?.plan.hook ? [result.plan.hook.headline] : []);
+  const selectedHook =
+    hookChoice && hookChoice.result === result ? hookChoice.headline : (result?.plan.hook?.headline ?? null);
+
   const applyPlan = () => {
     if (!project || !result) return;
     const { plan, segments, generatedClips } = result;
@@ -122,7 +128,10 @@ export const AutoEditScreen: React.FC = () => {
       captionPosition: plan.theme.captionPosition ?? project.captionPosition,
       captionStyle: plan.theme.captionStyle ?? project.captionStyle,
       fontSize: plan.theme.captionFontSize ?? project.fontSize,
-      hook: plan.hook,
+      // 選んだ見出しを使う。補足(subline)はAIのおすすめの見出しに付けた物なので、それを選んだ時だけ付ける
+      hook: selectedHook
+        ? { headline: selectedHook, subline: selectedHook === plan.hook?.headline ? plan.hook.subline : undefined }
+        : null,
       cta: plan.cta,
       globalOverlays: plan.globalOverlays,
       globalImages: plan.globalImages,
@@ -384,7 +393,6 @@ export const AutoEditScreen: React.FC = () => {
                 {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {result.segments.length}
                 クリップ・{totalSeconds(result.segments).toFixed(1)}秒
               </li>
-              {result.plan.hook ? <li>冒頭の見出し: {result.plan.hook.headline}</li> : null}
               {result.plan.cta ? <li>締めの一言: {result.plan.cta.text}</li> : null}
               {result.plan.globalOverlays.length > 0 ? (
                 <li>ずっと出す文字: {result.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
@@ -408,6 +416,28 @@ export const AutoEditScreen: React.FC = () => {
                 効果音: {result.generatedClips.length}個
               </li>
             </ul>
+            {/* 冒頭の見出しは動画が見られるかを一番左右するので、AIの案から本人が選ぶ */}
+            {hookCandidates.length > 0 ? (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm font-bold">冒頭の見出し(最初の3秒に大きく出す一言)</legend>
+                {[...hookCandidates, null].map((headline) => (
+                  <label key={headline ?? "none"} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="hook-choice"
+                      checked={selectedHook === headline}
+                      onChange={() => result && setHookChoice({ result, headline })}
+                    />
+                    <span>
+                      {headline ?? "出さない"}
+                      {headline !== null && headline === result.plan.hook?.headline ? (
+                        <span className="badge-pill neutral ml-2">AIのおすすめ</span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
             <p className="text-xs" style={{ color: "var(--muted-2)" }}>
               この案を使うと、クリップ構成と効果音が置き換わり、付けてあったAI音声は外れます(BGMはそのまま)。
             </p>

@@ -21,6 +21,8 @@ export type AutoEditPlanSummary = {
     captionFontSize?: CaptionFontSize;
   };
   hook: VideoProject["hook"];
+  /** 冒頭の見出しの候補(おすすめが先頭)。古いサーバーからの答えには無い。 */
+  hookCandidates?: string[];
   cta: VideoProject["cta"];
   globalOverlays: NonNullable<VideoProject["globalOverlays"]>;
   globalImages: NonNullable<VideoProject["globalImages"]>;

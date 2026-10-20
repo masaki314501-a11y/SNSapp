@@ -159,6 +159,8 @@ export const rawAutoEditPlanSchema = z.object({
     .nullable()
     .optional(),
   hook: z.object({ headline: z.string(), subline: z.string().nullable().optional() }).nullable().optional(),
+  /** 冒頭の見出しの別の案(切り口を変えた2つ)。本人が3案から選べるように出させる。 */
+  hookAlternatives: z.array(z.string()).nullable().optional(),
   cta: z.object({ text: z.string() }).nullable().optional(),
   /** 動画全体の画角(人物を片側に寄せて、空いた側に枠などを置く)。 */
   framing: z
@@ -278,6 +280,7 @@ export const autoEditResponseSchema = {
       properties: { headline: { type: Type.STRING }, subline: nullableString },
       required: ["headline"],
     },
+    hookAlternatives: { type: Type.ARRAY, nullable: true, items: { type: Type.STRING } },
     cta: {
       type: Type.OBJECT,
       nullable: true,
@@ -376,6 +379,7 @@ export const autoEditResponseSchema = {
     "generatedImageStyle",
     "clips",
     "hook",
+    "hookAlternatives",
     "cta",
     "summary",
   ],
