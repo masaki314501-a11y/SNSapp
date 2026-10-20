@@ -65,6 +65,24 @@ const saveImage = async (blob: Blob, fileName: string) => {
  * サーバーには負担をかけない。
  */
 export const CoverMaker: React.FC<Props> = ({ project }) => {
+  // 開くまではプレビュー(動画の読み込み)をしない。書き出しの最中にプレビューでも動画を読むと、スマホの書き出しが重くなるため
+  const [open, setOpen] = useState(false);
+  return open ? (
+    <CoverMakerBody project={project} />
+  ) : (
+    <div className="panel flex flex-col gap-2 p-4">
+      <span className="text-sm font-bold">表紙(サムネイル)を作る</span>
+      <span className="text-xs" style={{ color: "var(--muted)" }}>
+        動画の場面を選び、タイトルを大きく重ねた画像を作れます。動画の書き出しが終わってから開くと軽く動きます。
+      </span>
+      <button type="button" className="btn-outline" onClick={() => setOpen(true)}>
+        表紙を作る
+      </button>
+    </div>
+  );
+};
+
+const CoverMakerBody: React.FC<Props> = ({ project }) => {
   const totalSeconds = project.segments.reduce((sum, segment) => sum + segment.durationInSeconds, 0);
   const [outputSeconds, setOutputSeconds] = useState(() => Math.min(1, totalSeconds / 2));
   const [title, setTitle] = useState(() => defaultTitle(project));

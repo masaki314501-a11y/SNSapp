@@ -91,7 +91,8 @@ const PENDING_JOB_STORAGE_KEY = "sns-app:auto-edit-job:v1";
 /** これより古い番号は、サーバー側で結果が消えているので使わない(autoEditJobs.tsのJOB_TTL_MSより短め)。 */
 const PENDING_JOB_MAX_AGE_MS = 50 * 60 * 1000;
 
-type PendingJob = { jobId: string; isRevision: boolean; startedAt: number };
+/** videoPath: どの動画の自動編集か(別の動画に切り替えた後に、前の動画の結果を出さないため)。 */
+type PendingJob = { jobId: string; isRevision: boolean; startedAt: number; videoPath: string };
 
 const loadPendingJob = (): PendingJob | null => {
   try {
@@ -186,10 +187,13 @@ export const useAutoEditJob = () => {
     };
   };
 
-  /** 前に始めて、まだ結果を受け取っていないジョブがあれば、続きから見る。あればtrue。 */
-  const resumePendingJob = (): boolean => {
+  /**
+   * 前に始めて、まだ結果を受け取っていないジョブがあれば、続きから見る。あればtrue。
+   * 今の動画のジョブだけを続きから見る(待っている間に別の動画を選び直していたら、前の動画の結果は捨てる)。
+   */
+  const resumePendingJob = (videoPath: string): boolean => {
     const pending = loadPendingJob();
-    if (!pending) {
+    if (!pending || pending.videoPath !== videoPath) {
       savePendingJob(null);
       return false;
     }
@@ -210,7 +214,12 @@ export const useAutoEditJob = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "自動編集の開始に失敗しました");
-      savePendingJob({ jobId: data.jobId, isRevision: Boolean(request.revision), startedAt: Date.now() });
+      savePendingJob({
+        jobId: data.jobId,
+        isRevision: Boolean(request.revision),
+        startedAt: Date.now(),
+        videoPath: request.videoPath,
+      });
       // 参考スクショがサーバー側で見つからなかった(再起動で消えた等)場合は、手本無しで進んでいることを表示する。
       setAutoEditState({
         status: "processing",

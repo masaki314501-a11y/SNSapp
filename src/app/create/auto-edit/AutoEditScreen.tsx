@@ -66,7 +66,7 @@ export const AutoEditScreen: React.FC = () => {
     setTemplateId(findEditTemplate(loaded?.editTemplateId)?.id ?? null);
     setHasCheckedProject(true);
     // 待っている間に画面を閉じた・別のアプリへ切り替えて画面が作り直された時は、前に始めた自動編集の続きを見る
-    resumePendingJob();
+    if (loaded) resumePendingJob(loaded.videoPath);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 開いた時に一度だけ確かめる
   }, []);
 
