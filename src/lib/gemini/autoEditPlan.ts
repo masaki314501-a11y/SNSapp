@@ -237,6 +237,9 @@ const buildPrompt = (input: AutoEditPlanInput, hasExamples: boolean): string => 
    どこが特徴か。文字は入れない前提で。「バニーティース」のような比喩の名前はそのまま書かず、「上の前歯2本が
    ほかの歯より大きく長い口元」のように見た目で書く)、nameにその画像の短い名前を付ける。同じ画像を2回出す(大きく出す→枠に入れる)
    ときは、nameとdescriptionを同じにする。前に作った画像を貯めてあり、同じ物の画像はそれを使う(無料)。
+   お金・時計・カレンダー・王冠・トロフィー・メダル・チェック・バツ・注意・電球・グラフ・スマホ・病院・薬・歯・歯ブラシ・
+   驚く顔・考える顔などの絵文字のアイコンと、日本・韓国・アメリカ・中国・台湾・イギリス・フランス・ドイツ・イタリア・タイの国旗も
+   用意してある(無料)。話の要点を一目で伝えたい所は、こうしたアイコン・国旗で足りるなら、descriptionに「〇〇のアイコン」「〇〇の国旗」と書く。
    新しく作れるのは${input.maxGeneratedImages}種類までで、1枚ごとに料金がかかるので、画像があると本当に伝わりやすくなる場面に絞る。
    画像を作るなら、generatedImageStyleで画風を選ぶ: 医療・歯科・美容・健康・薬・体の話はillustration(図解風イラスト)必須。
    作った画像を本物の症例写真のように見せると誤解を招くため。それ以外(料理・商品・場所など)はphoto(写真風)でもよい。
@@ -583,7 +586,7 @@ const findMaterialImage = (raw: RawAutoEditImage, materialImages: ResolvedMateri
   raw.imageNumber != null ? materialImages[raw.imageNumber - 1] : undefined;
 
 /** AIが作った画像の出どころ。棚(前に作った画像)は無料、新しく作った画像は1枚約10円。 */
-type GeneratedImageSource = { path: string; source: "library" | "generated" };
+type GeneratedImageSource = { path: string; source: "library" | "generated" | "icon" };
 
 /**
  * 使える画像に無い画像(imageNumberがnull)を、画像の棚から探し、無い分だけAIに作らせる。目印→画像のパスを返す。
@@ -614,11 +617,12 @@ const generateMissingImages = async (
 
   // まず画像の棚から探す(同じ物の画像が前に作ってあれば、作らずに使う)。画風が違う画像は混ぜない。
   const entries = [...requests.entries()];
-  const library = (await loadImageLibrary()).filter((image) => image.style === style);
+  // アイコン・国旗(icon)は、どちらの画風の動画にも合うので一緒に探す
+  const library = (await loadImageLibrary()).filter((image) => image.style === style || image.style === "icon");
   const exact = new Map(library.map((image) => [image.description.trim(), image]));
   const unmatched = entries.filter(([key, request]) => {
     const image = exact.get(request.description.trim());
-    if (image) sources.set(key, { path: libraryImageSrc(image), source: "library" });
+    if (image) sources.set(key, { path: libraryImageSrc(image), source: image.style === "icon" ? "icon" : "library" });
     return !image;
   });
   const usedPaths = new Set([...sources.values()].map((entry) => entry.path));
@@ -626,7 +630,9 @@ const generateMissingImages = async (
     unmatched.map(([, request]) => request),
     library.filter((image) => !usedPaths.has(libraryImageSrc(image)))
   );
-  for (const [index, image] of matches) sources.set(unmatched[index][0], { path: libraryImageSrc(image), source: "library" });
+  for (const [index, image] of matches) {
+    sources.set(unmatched[index][0], { path: libraryImageSrc(image), source: image.style === "icon" ? "icon" : "library" });
+  }
 
   // 棚に無い分だけ、上限まで作る(作った画像は棚に足される)。話に出てくる順に作る。
   const limit = clamp(Math.floor(input.maxGeneratedImages), 0, MAX_GENERATED_IMAGES);
@@ -1539,7 +1545,7 @@ export const finalizeAutoEditPlan = async (
   const usedGeneratedPaths = new Set([...usedSrcs].filter((src) => sourceByPath.has(src)));
   const imageSources = {
     material: [...usedSrcs].filter((src) => materialPaths.has(src)).length,
-    library: [...usedGeneratedPaths].filter((src) => sourceByPath.get(src) === "library").length,
+    library: [...usedGeneratedPaths].filter((src) => sourceByPath.get(src) !== "generated").length,
     generated: [...usedGeneratedPaths].filter((src) => sourceByPath.get(src) === "generated").length,
   };
 
@@ -1564,7 +1570,8 @@ export const finalizeAutoEditPlan = async (
       MAX_GLOBAL_OVERLAYS
     ) ?? []
   );
-  if (usedGeneratedPaths.size > 0) {
+  // 注意書きは、AIが描いた画像を使った時だけ(アイコン・国旗だけなら本物の写真と誤解されないので付けない)
+  if ([...usedGeneratedPaths].some((src) => sourceByPath.get(src) !== "icon")) {
     // 注意書きは上限で切られないよう先頭に入れる。
     globalOverlays.unshift(GENERATED_IMAGE_NOTICE);
   }

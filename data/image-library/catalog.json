@@ -222,5 +222,565 @@
     "style": "illustration",
     "file": "562f41b2d97a739d8fb4cf7843580631.jpg",
     "createdAt": "2026-10-13T05:58:26.076Z"
+  },
+  {
+    "id": "free-tooth",
+    "name": "歯",
+    "description": "白い歯が1本のアイコン",
+    "style": "icon",
+    "file": "free-tooth.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-toothbrush",
+    "name": "歯ブラシ",
+    "description": "歯ブラシのアイコン",
+    "style": "icon",
+    "file": "free-toothbrush.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-money-bag",
+    "name": "お金の袋",
+    "description": "お金が入った袋のアイコン(費用・お金の話)",
+    "style": "icon",
+    "file": "free-money-bag.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-coin",
+    "name": "金貨",
+    "description": "金色のコインのアイコン",
+    "style": "icon",
+    "file": "free-coin.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-yen-banknote",
+    "name": "円のお札",
+    "description": "円のお札のアイコン(値段・費用)",
+    "style": "icon",
+    "file": "free-yen-banknote.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-credit-card",
+    "name": "クレジットカード",
+    "description": "クレジットカードのアイコン(支払い)",
+    "style": "icon",
+    "file": "free-credit-card.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-chart-increasing-with-yen",
+    "name": "円の値上がりグラフ",
+    "description": "円の記号と右肩上がりのグラフのアイコン(値上がり・費用が増える)",
+    "style": "icon",
+    "file": "free-chart-increasing-with-yen.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-chart-increasing",
+    "name": "右肩上がりのグラフ",
+    "description": "右肩上がりの折れ線グラフのアイコン(増える・良くなる)",
+    "style": "icon",
+    "file": "free-chart-increasing.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-chart-decreasing",
+    "name": "右肩下がりのグラフ",
+    "description": "右肩下がりの折れ線グラフのアイコン(減る・悪くなる)",
+    "style": "icon",
+    "file": "free-chart-decreasing.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-bar-chart",
+    "name": "棒グラフ",
+    "description": "棒グラフのアイコン(比べる・データ)",
+    "style": "icon",
+    "file": "free-bar-chart.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-alarm-clock",
+    "name": "目覚まし時計",
+    "description": "目覚まし時計のアイコン(時間・朝)",
+    "style": "icon",
+    "file": "free-alarm-clock.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-hourglass-not-done",
+    "name": "砂時計",
+    "description": "砂が落ちている砂時計のアイコン(時間がかかる・待つ)",
+    "style": "icon",
+    "file": "free-hourglass-not-done.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-stopwatch",
+    "name": "ストップウォッチ",
+    "description": "ストップウォッチのアイコン(時間を測る・早い)",
+    "style": "icon",
+    "file": "free-stopwatch.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-calendar",
+    "name": "カレンダー",
+    "description": "カレンダーのアイコン(日付・期間)",
+    "style": "icon",
+    "file": "free-calendar.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-crown",
+    "name": "王冠",
+    "description": "金色の王冠のアイコン(1位・一番)",
+    "style": "icon",
+    "file": "free-crown.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-trophy",
+    "name": "トロフィー",
+    "description": "金色のトロフィーのアイコン(優勝・1位)",
+    "style": "icon",
+    "file": "free-trophy.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-1st-place-medal",
+    "name": "金メダル",
+    "description": "1と書かれた金メダルのアイコン(1位)",
+    "style": "icon",
+    "file": "free-1st-place-medal.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-2nd-place-medal",
+    "name": "銀メダル",
+    "description": "2と書かれた銀メダルのアイコン(2位)",
+    "style": "icon",
+    "file": "free-2nd-place-medal.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-3rd-place-medal",
+    "name": "銅メダル",
+    "description": "3と書かれた銅メダルのアイコン(3位)",
+    "style": "icon",
+    "file": "free-3rd-place-medal.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-check-mark-button",
+    "name": "緑のチェック",
+    "description": "緑の四角に白いチェックのアイコン(正解・OK・できている)",
+    "style": "icon",
+    "file": "free-check-mark-button.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-cross-mark",
+    "name": "赤いバツ",
+    "description": "赤いバツ印のアイコン(不正解・NG・だめ)",
+    "style": "icon",
+    "file": "free-cross-mark.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-warning",
+    "name": "注意マーク",
+    "description": "黄色い三角の注意マークのアイコン(注意・危険)",
+    "style": "icon",
+    "file": "free-warning.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-prohibited",
+    "name": "禁止マーク",
+    "description": "赤い丸に斜線の禁止マークのアイコン(やってはいけない)",
+    "style": "icon",
+    "file": "free-prohibited.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-light-bulb",
+    "name": "電球",
+    "description": "光っている電球のアイコン(ひらめき・コツ・アイデア)",
+    "style": "icon",
+    "file": "free-light-bulb.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-fire",
+    "name": "炎",
+    "description": "燃えている炎のアイコン(人気・話題・熱い)",
+    "style": "icon",
+    "file": "free-fire.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-sparkles",
+    "name": "キラキラ",
+    "description": "黄色いキラキラのアイコン(きれい・新しい)",
+    "style": "icon",
+    "file": "free-sparkles.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-star",
+    "name": "星",
+    "description": "黄色い星のアイコン(評価・おすすめ)",
+    "style": "icon",
+    "file": "free-star.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-red-heart",
+    "name": "ハート",
+    "description": "赤いハートのアイコン(好き・愛)",
+    "style": "icon",
+    "file": "free-red-heart.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-thumbs-up",
+    "name": "いいね",
+    "description": "親指を立てた手のアイコン(いいね・おすすめ)",
+    "style": "icon",
+    "file": "free-thumbs-up.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-thumbs-down",
+    "name": "よくない",
+    "description": "親指を下に向けた手のアイコン(よくない・おすすめしない)",
+    "style": "icon",
+    "file": "free-thumbs-down.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-thinking-face",
+    "name": "考える顔",
+    "description": "あごに手を当てて考えている顔のアイコン(疑問・どっち?)",
+    "style": "icon",
+    "file": "free-thinking-face.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-face-screaming-in-fear",
+    "name": "驚く顔",
+    "description": "頬に手を当てて叫ぶ顔のアイコン(衝撃・驚き)",
+    "style": "icon",
+    "file": "free-face-screaming-in-fear.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-crying-face",
+    "name": "泣く顔",
+    "description": "涙を流す顔のアイコン(悲しい・残念)",
+    "style": "icon",
+    "file": "free-crying-face.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-exploding-head",
+    "name": "衝撃の顔",
+    "description": "頭が爆発している顔のアイコン(衝撃の事実)",
+    "style": "icon",
+    "file": "free-exploding-head.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-party-popper",
+    "name": "クラッカー",
+    "description": "お祝いのクラッカーのアイコン(お祝い・おめでとう)",
+    "style": "icon",
+    "file": "free-party-popper.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-wrapped-gift",
+    "name": "プレゼント",
+    "description": "リボンの付いたプレゼントの箱のアイコン(特典・プレゼント)",
+    "style": "icon",
+    "file": "free-wrapped-gift.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-shopping-cart",
+    "name": "ショッピングカート",
+    "description": "買い物カートのアイコン(買い物)",
+    "style": "icon",
+    "file": "free-shopping-cart.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-house",
+    "name": "家",
+    "description": "家のアイコン(自宅・住まい)",
+    "style": "icon",
+    "file": "free-house.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-hospital",
+    "name": "病院",
+    "description": "病院の建物のアイコン(病院・クリニック)",
+    "style": "icon",
+    "file": "free-hospital.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-pill",
+    "name": "薬",
+    "description": "カプセルの薬のアイコン(薬)",
+    "style": "icon",
+    "file": "free-pill.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-syringe",
+    "name": "注射器",
+    "description": "注射器のアイコン(注射・ワクチン)",
+    "style": "icon",
+    "file": "free-syringe.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-stethoscope",
+    "name": "聴診器",
+    "description": "聴診器のアイコン(診察・医療)",
+    "style": "icon",
+    "file": "free-stethoscope.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-mobile-phone",
+    "name": "スマホ",
+    "description": "スマートフォンのアイコン(スマホ・SNS)",
+    "style": "icon",
+    "file": "free-mobile-phone.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-laptop",
+    "name": "ノートパソコン",
+    "description": "ノートパソコンのアイコン(パソコン・仕事)",
+    "style": "icon",
+    "file": "free-laptop.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-camera",
+    "name": "カメラ",
+    "description": "カメラのアイコン(写真・撮影)",
+    "style": "icon",
+    "file": "free-camera.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-magnifying-glass-tilted-left",
+    "name": "虫眼鏡",
+    "description": "虫眼鏡のアイコン(調べる・検索・詳しく見る)",
+    "style": "icon",
+    "file": "free-magnifying-glass-tilted-left.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-memo",
+    "name": "メモ",
+    "description": "メモ帳と鉛筆のアイコン(メモ・まとめ)",
+    "style": "icon",
+    "file": "free-memo.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-books",
+    "name": "本",
+    "description": "積み重なった本のアイコン(勉強・知識)",
+    "style": "icon",
+    "file": "free-books.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-graduation-cap",
+    "name": "卒業帽",
+    "description": "卒業帽のアイコン(学び・資格)",
+    "style": "icon",
+    "file": "free-graduation-cap.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-rocket",
+    "name": "ロケット",
+    "description": "飛び立つロケットのアイコン(急上昇・スタート)",
+    "style": "icon",
+    "file": "free-rocket.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-hundred-points",
+    "name": "100点",
+    "description": "赤い100点の印のアイコン(完璧・満点)",
+    "style": "icon",
+    "file": "free-hundred-points.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-red-question-mark",
+    "name": "はてなマーク",
+    "description": "赤いはてなマークのアイコン(疑問・クイズ)",
+    "style": "icon",
+    "file": "free-red-question-mark.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-red-exclamation-mark",
+    "name": "びっくりマーク",
+    "description": "赤いびっくりマークのアイコン(重要・注意)",
+    "style": "icon",
+    "file": "free-red-exclamation-mark.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-megaphone",
+    "name": "メガホン",
+    "description": "メガホンのアイコン(お知らせ・発表)",
+    "style": "icon",
+    "file": "free-megaphone.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-handshake",
+    "name": "握手",
+    "description": "握手している手のアイコン(協力・約束)",
+    "style": "icon",
+    "file": "free-handshake.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-clapping-hands",
+    "name": "拍手",
+    "description": "拍手している手のアイコン(すごい・おめでとう)",
+    "style": "icon",
+    "file": "free-clapping-hands.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flexed-biceps",
+    "name": "力こぶ",
+    "description": "力こぶを作った腕のアイコン(がんばる・強い)",
+    "style": "icon",
+    "file": "free-flexed-biceps.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-bell",
+    "name": "ベル",
+    "description": "金色のベルのアイコン(通知・お知らせ)",
+    "style": "icon",
+    "file": "free-bell.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-japan",
+    "name": "日本の国旗",
+    "description": "日の丸(日本の国旗)",
+    "style": "icon",
+    "file": "free-flag-japan.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-south-korea",
+    "name": "韓国の国旗",
+    "description": "太極旗(韓国の国旗)",
+    "style": "icon",
+    "file": "free-flag-south-korea.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-united-states",
+    "name": "アメリカの国旗",
+    "description": "星条旗(アメリカの国旗)",
+    "style": "icon",
+    "file": "free-flag-united-states.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-peoples-republic-of-china",
+    "name": "中国の国旗",
+    "description": "五星紅旗(中国の国旗)",
+    "style": "icon",
+    "file": "free-flag-peoples-republic-of-china.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-republic-of-china",
+    "name": "台湾の国旗",
+    "description": "青天白日満地紅旗(台湾の国旗)",
+    "style": "icon",
+    "file": "free-flag-republic-of-china.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-united-kingdom",
+    "name": "イギリスの国旗",
+    "description": "ユニオンジャック(イギリスの国旗)",
+    "style": "icon",
+    "file": "free-flag-united-kingdom.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-germany",
+    "name": "ドイツの国旗",
+    "description": "黒・赤・金の三色旗(ドイツの国旗)",
+    "style": "icon",
+    "file": "free-flag-germany.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-thailand",
+    "name": "タイの国旗",
+    "description": "赤・白・青の横縞(タイの国旗)",
+    "style": "icon",
+    "file": "free-flag-thailand.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-star-struck",
+    "name": "目がキラキラの顔",
+    "description": "目が星になっている顔のアイコン(すごい・憧れ)",
+    "style": "icon",
+    "file": "free-star-struck.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-money-mouth-face",
+    "name": "お金の顔",
+    "description": "目と舌がお札になった顔のアイコン(お得・もうかる)",
+    "style": "icon",
+    "file": "free-money-mouth-face.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-france",
+    "name": "フランスの国旗",
+    "description": "三色旗(フランスの国旗)",
+    "style": "icon",
+    "file": "free-flag-france.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "free-flag-italy",
+    "name": "イタリアの国旗",
+    "description": "緑・白・赤の三色旗(イタリアの国旗)",
+    "style": "icon",
+    "file": "free-flag-italy.png",
+    "createdAt": "2026-10-20T11:29:37.000Z"
   }
 ]

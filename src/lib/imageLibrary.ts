@@ -28,7 +28,11 @@ const libraryImageSchema = z.object({
   name: z.string(),
   /** 何が描いてあるか。棚から選ぶときに、AIが欲しい画像の説明と見比べる。 */
   description: z.string(),
-  style: z.enum(["illustration", "photo"]),
+  /**
+   * 画風。iconは、絵文字のアイコン・国旗のような、イラストの動画にも写真の動画にも合う素材
+   * (data/image-library/CREDITS.md の無料素材)。
+   */
+  style: z.enum(["illustration", "photo", "icon"]),
   file: z.string().regex(LIBRARY_FILE_PATTERN),
   createdAt: z.string(),
 });
