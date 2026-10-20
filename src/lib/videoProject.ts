@@ -207,8 +207,11 @@ const isVideoProjectLike = (value: unknown): value is Partial<VideoProject> => {
 /**
  * 保存データを最新の形へ補完する。fontSize/fadeInOut/sfx/bgm/segment.volumeなどは
  * 後から追加したフィールドのため、古い保存データには無いことがある。
+ * 既定値の要らない項目(タイトル・重大ワード・話している区間など)は、保存されている値をそのまま引き継ぐ
+ * (以前は下に並べた項目だけを読み直していたため、後から足した項目が読み込むたびに消えていた)。
  */
 const normalizeProject = (raw: Partial<VideoProject>): VideoProject => ({
+  ...raw,
   videoPath: raw.videoPath ?? "",
   videoFileName: raw.videoFileName ?? null,
   videoDurationInSeconds: raw.videoDurationInSeconds ?? 0,

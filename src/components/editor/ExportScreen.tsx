@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MIN_CLIPS, MAX_CLIPS } from "@video/templates/standard/schema";
 import { buildStandardVideoProps, loadProject, type VideoProject } from "@/lib/videoProject";
+import { CoverMaker } from "./CoverMaker";
 import { useWebRender } from "./useWebRender";
 import { RenderPanel } from "./RenderPanel";
 
@@ -117,6 +118,7 @@ export const ExportScreen: React.FC = () => {
         onRender={() => startRender(project)}
         result={result}
       />
+      <CoverMaker project={project} />
     </div>
   );
 };
