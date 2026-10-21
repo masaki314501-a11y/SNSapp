@@ -53,7 +53,7 @@ export const AutoEditScreen: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const { autoEditState, lastResult, isRevision: isRevising, handleStart, resumePendingJob } = useAutoEditJob();
+  const { autoEditState, lastResult, isRevision: isRevising, handleStart, resumePendingJob, cancel } = useAutoEditJob();
   /** 「ここを直して」の指示。直し終わったら空に戻す。 */
   const [revisionText, setRevisionText] = useState("");
   /** 選んだテンプレート。nullならおまかせ。次に開いた時も同じ型を使えるようプロジェクトに保存する。 */
@@ -86,6 +86,13 @@ export const AutoEditScreen: React.FC = () => {
     if (status === "processing") window.scrollTo({ top: 0, behavior: "smooth" });
     if (status === "done") resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [status]);
+
+  const handleCancel = () => {
+    const message = isRevising
+      ? "手直しをやめますか?(前の案はそのまま残ります)"
+      : "自動編集をやめますか?(ここまでの分は残りません)";
+    if (window.confirm(message)) cancel();
+  };
 
   const handleRun = (revision?: { previousPlan: AutoEditResult["rawPlan"]; instruction: string }) => {
     if (!project) return;
@@ -500,27 +507,23 @@ export const AutoEditScreen: React.FC = () => {
               別の案を作る
             </button>
           </>
+        ) : isProcessing ? (
+          // 処理中は、ほかの操作をさせずに「やめる」だけを出す(途中で別の画面へ進むと、結果が後から来て分かりにくいため)
+          <button type="button" onClick={handleCancel} className="btn-outline">
+            {isRevising ? "手直しをやめる" : "自動編集をやめる"}
+          </button>
         ) : (
-          <button
-            type="button"
-            onClick={() => handleRun()}
-            disabled={isProcessing}
-            className="btn-primary"
-          >
+          <button type="button" onClick={() => handleRun()} className="btn-primary">
             <SparkleIcon size={18} />
-            {autoEditState.status === "processing"
-              ? isRevising
-                ? "AIが手直し中…"
-                : "AIが編集中…"
-              : autoEditState.status === "error"
-                ? "もう一度自動編集する"
-                : "AIで自動編集する"}
+            {autoEditState.status === "error" ? "もう一度自動編集する" : "AIで自動編集する"}
           </button>
         )}
-        <button type="button" onClick={goToEditorWithoutChanges} className="btn-outline">
-          <EditIcon size={18} />
-          AIを使わず自分で編集する
-        </button>
+        {isProcessing ? null : (
+          <button type="button" onClick={goToEditorWithoutChanges} className="btn-outline">
+            <EditIcon size={18} />
+            AIを使わず自分で編集する
+          </button>
+        )}
       </div>
     </>
   );

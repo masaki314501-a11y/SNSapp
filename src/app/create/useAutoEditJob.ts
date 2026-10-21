@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle } from "@video/shared/schema";
 import type { ProjectSegment, ProjectSfxClip, VideoProject } from "@/lib/videoProject";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
@@ -138,6 +138,8 @@ export const useAutoEditJob = () => {
   const [lastResult, setLastResult] = useState<AutoEditResult | null>(null);
   /** 今動いている(最後に動かした)のが手直しか。 */
   const [isRevision, setIsRevision] = useState(false);
+  /** 今見ているジョブの番号と、確認を止める関数(キャンセルで使う)。 */
+  const currentJob = useRef<{ jobId: string | null; stop: () => void } | null>(null);
 
   const pollJob = (jobId: string) => {
     let finished = false;
@@ -185,6 +187,20 @@ export const useAutoEditJob = () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
+    currentJob.current = { jobId, stop };
+  };
+
+  /**
+   * 処理中の自動編集をやめる。サーバーにも知らせて、まだ始めていない段階(画像づくり等)は行わせない。
+   * 前にできた案があれば、その案に戻す。
+   */
+  const cancel = () => {
+    const job = currentJob.current;
+    job?.stop();
+    currentJob.current = null;
+    savePendingJob(null);
+    if (job?.jobId) void fetch(`/api/auto-edit/${job.jobId}`, { method: "DELETE" }).catch(() => undefined);
+    setAutoEditState(lastResult ?? { status: "idle" });
   };
 
   /**
@@ -204,6 +220,12 @@ export const useAutoEditJob = () => {
   };
 
   const handleStart = async (request: AutoEditRequest) => {
+    // 始める前にキャンセルされたら、番号が届いた所で止める
+    let cancelledBeforeStart = false;
+    currentJob.current = { jobId: null, stop: () => {
+        cancelledBeforeStart = true;
+      },
+    };
     setIsRevision(Boolean(request.revision));
     setAutoEditState({ status: "processing", usedStyleReferenceCount: null, usedMaterialImageCount: null, progress: null });
     try {
@@ -214,6 +236,10 @@ export const useAutoEditJob = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "自動編集の開始に失敗しました");
+      if (cancelledBeforeStart) {
+        void fetch(`/api/auto-edit/${data.jobId}`, { method: "DELETE" }).catch(() => undefined);
+        return;
+      }
       savePendingJob({
         jobId: data.jobId,
         isRevision: Boolean(request.revision),
@@ -229,6 +255,7 @@ export const useAutoEditJob = () => {
       });
       pollJob(data.jobId);
     } catch (error) {
+      if (cancelledBeforeStart) return;
       setAutoEditState({
         status: "error",
         message: toFriendlyErrorMessage(error, "自動編集の開始に失敗しました"),
@@ -236,5 +263,5 @@ export const useAutoEditJob = () => {
     }
   };
 
-  return { autoEditState, lastResult, isRevision, handleStart, resumePendingJob };
+  return { autoEditState, lastResult, isRevision, handleStart, resumePendingJob, cancel };
 };

@@ -38,7 +38,12 @@ export const createAutoEditJob = (): string => {
   return id;
 };
 
+/** 止めたジョブ。動いている処理は次の段階に進む所で止まる(isAutoEditJobCancelled で確かめる)。 */
+const cancelled = new Set<string>();
+
 export const updateAutoEditJob = (id: string, job: AutoEditJob) => {
+  // 止めた後に処理の結果が届いても書き込まない
+  if (cancelled.has(id)) return;
   jobs.set(id, job);
   if (job.status === "done" || job.status === "error") {
     setTimeout(() => jobs.delete(id), JOB_TTL_MS).unref();
@@ -51,3 +56,14 @@ export const updateAutoEditProgress = (id: string, progress: AutoEditProgress) =
 };
 
 export const getAutoEditJob = (id: string): AutoEditJob | undefined => jobs.get(id);
+
+/** ジョブを止める。処理中でなければ(もう終わっていれば)何もせずfalse。 */
+export const cancelAutoEditJob = (id: string): boolean => {
+  if (jobs.get(id)?.status !== "processing") return false;
+  cancelled.add(id);
+  jobs.delete(id);
+  setTimeout(() => cancelled.delete(id), JOB_TTL_MS).unref();
+  return true;
+};
+
+export const isAutoEditJobCancelled = (id: string): boolean => cancelled.has(id);
