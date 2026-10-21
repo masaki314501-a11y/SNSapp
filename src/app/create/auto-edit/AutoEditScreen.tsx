@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import { useAutoEditJob, type AutoEditResult } from "../useAutoEditJob";
@@ -78,6 +78,14 @@ export const AutoEditScreen: React.FC = () => {
     : [];
 
   const goToEditorWithoutChanges = () => router.push("/edit");
+
+  // 始めたら一番上(進み具合)を、終わったら案の中身を見せる。押すボタンは画面の下にあるため、そのままだと何も起きていないように見える
+  const resultRef = useRef<HTMLDivElement>(null);
+  const status = autoEditState.status;
+  useEffect(() => {
+    if (status === "processing") window.scrollTo({ top: 0, behavior: "smooth" });
+    if (status === "done") resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [status]);
 
   const handleRun = (revision?: { previousPlan: AutoEditResult["rawPlan"]; instruction: string }) => {
     if (!project) return;
@@ -199,14 +207,17 @@ export const AutoEditScreen: React.FC = () => {
   return (
     <>
       <main className="flow-main">
-        <div className="panel flex flex-col gap-1 p-4">
-          <span className="text-sm font-bold">AIが切り方・タイトル・画像・寄り・効果音までまとめて編集します</span>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            数分かかることがあります。字幕の強調は、次の画面で自分で選べます。
-          </span>
-        </div>
+        {isProcessing ? null : (
+          <div className="panel flex flex-col gap-1 p-4">
+            <span className="text-sm font-bold">AIが切り方・タイトル・画像・寄り・効果音までまとめて編集します</span>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              数分かかることがあります。字幕の強調は、次の画面で自分で選べます。
+            </span>
+          </div>
+        )}
 
-        {/* 処理中の様子と失敗の知らせは、画面を開き直した時にもすぐ目に入るよう、入力欄より上に出す */}
+        {/* 処理中の様子と失敗の知らせは、画面を開き直した時にもすぐ目に入るよう、入力欄より上に出す。
+            処理中は入力欄を隠し(変えても今の編集には効かないため)、進み具合だけを見せる */}
         {isProcessing ? (
           <div className="panel flex flex-col gap-1 p-4">
             <span className="text-sm font-bold">{isRevising ? "AIが手直し中…" : "AIが編集中…"}</span>
@@ -246,142 +257,146 @@ export const AutoEditScreen: React.FC = () => {
           </p>
         ) : null}
 
-        {hasReference ? (
-          <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
-        ) : (
-          <div
-            className="flex gap-2.5 rounded-xl p-3.5"
-            style={{ background: "var(--warning-soft)", border: "1px solid var(--warning-text)", color: "var(--foreground)" }}
-          >
-            <InfoIcon size={20} className="mt-0.5 shrink-0" />
-            <div className="flex flex-col gap-1.5 text-sm">
-              <span>見た目の手本が未設定です。設定すると、その雰囲気に寄せて編集します。</span>
-              <a href="/create/style" className="btn-outline flex w-fit items-center gap-1 px-4 py-2 text-sm font-bold">
-                見た目の手本を設定する
-                <ChevronRightIcon size={16} />
-              </a>
-            </div>
-          </div>
-        )}
+        {isProcessing ? null : (
+          <>
+            {hasReference ? (
+              <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
+            ) : (
+              <div
+                className="flex gap-2.5 rounded-xl p-3.5"
+                style={{ background: "var(--warning-soft)", border: "1px solid var(--warning-text)", color: "var(--foreground)" }}
+              >
+                <InfoIcon size={20} className="mt-0.5 shrink-0" />
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <span>見た目の手本が未設定です。設定すると、その雰囲気に寄せて編集します。</span>
+                  <a href="/create/style" className="btn-outline flex w-fit items-center gap-1 px-4 py-2 text-sm font-bold">
+                    見た目の手本を設定する
+                    <ChevronRightIcon size={16} />
+                  </a>
+                </div>
+              </div>
+            )}
 
-        <div className="panel flex flex-col gap-2 p-4">
-          <div className="flex items-center gap-2">
-            <label htmlFor="auto-edit-title" className="text-sm font-bold">
-              左上のタイトル
-            </label>
-            <span className="badge-pill neutral">空ならAIが決めます</span>
-          </div>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            動画の最初から最後まで、画面の左上に出します。あとから編集画面でも直せます。
-          </span>
-          <input
-            id="auto-edit-title"
-            type="text"
-            value={project.autoEditTitle ?? ""}
-            onChange={(e) => changeTitle(e.target.value)}
-            maxLength={MAX_TITLE_LENGTH}
-            disabled={isProcessing}
-            placeholder="例: 矯正した方がいい歯並びTOP5"
-            className="field-input w-full text-sm"
-          />
-        </div>
-
-        <div className="panel flex flex-col gap-2 p-4">
-          <label htmlFor="auto-edit-length" className="text-sm font-bold">
-            完成動画の長さ
-          </label>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            使う範囲は合計{totalSeconds(keepRanges).toFixed(0)}秒です。短くしたい時は、要点を残して前置きや繰り返しから削ります。
-          </span>
-          <select
-            id="auto-edit-length"
-            value={project.targetDurationSeconds ?? ""}
-            disabled={isProcessing}
-            onChange={(e) => changeTargetDuration(e.target.value ? Number(e.target.value) : null)}
-            className="field-input w-full text-sm"
-          >
-            {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
-              <option key={seconds ?? "auto"} value={seconds ?? ""}>
-                {seconds === null ? "AIにまかせる(間を詰めるだけ)" : `${seconds}秒くらい`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(見た目の手本があればそちらが優先) */}
-        <div className="panel flex flex-col gap-2 p-4">
-          <span className="text-sm font-bold">動画の型</span>
-          {/* スマホで縦に長くならないよう、型は名前だけの小さいボタンを2列に並べ、説明は選んだ型の分だけ下に出す */}
-          <div className="grid grid-cols-2 gap-2">
-            {[null, ...EDIT_TEMPLATES].map((template) => {
-              const id = template?.id ?? null;
-              const selected = templateId === id;
-              return (
-                <button
-                  key={id ?? "none"}
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={() => selectTemplate(id)}
-                  aria-pressed={selected}
-                  className="rounded-lg px-2 py-2.5 text-center text-sm font-medium"
-                  style={{
-                    border: `2px solid ${selected ? "var(--accent)" : "var(--color-neutral-solid-gray-420)"}`,
-                    background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
-                  }}
-                >
-                  {template ? template.label : "おまかせ"}
-                </button>
-              );
-            })}
-          </div>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            {findEditTemplate(templateId)?.description ?? "型を決めず、動画の中身に合わせてAIが自由に編集します"}
-            {hasReference ? "(見た目の手本と違う所は手本に合わせます)" : ""}
-          </span>
-        </div>
-
-        <MaterialImagesPanel
-          images={project.materialImages ?? []}
-          onChange={changeMaterialImages}
-          disabled={isProcessing}
-        />
-
-        {/* 普段は触らなくてよい設定は畳んでおく(動画編集に詳しくない人が、どこを触ればいいか迷わないように) */}
-        <details className="panel p-4">
-          <summary className="cursor-pointer text-sm font-bold">詳しい設定(画像の作り方・AIへの要望)</summary>
-          <div className="mt-3 flex flex-col gap-4">
-            <GenerateImagesField
-              generateMissing={project.generateMissingImages ?? true}
-              maxGenerated={project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES}
-              onChange={changeGenerate}
-              disabled={isProcessing}
-            />
-            <div className="flex flex-col gap-2">
+            <div className="panel flex flex-col gap-2 p-4">
               <div className="flex items-center gap-2">
-                <label htmlFor="auto-edit-request" className="text-sm font-bold">
-                  AIへの要望
+                <label htmlFor="auto-edit-title" className="text-sm font-bold">
+                  左上のタイトル
                 </label>
-                <span className="badge-pill neutral">なくてもOK</span>
+                <span className="badge-pill neutral">空ならAIが決めます</span>
               </div>
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                こうしてほしい所があれば書いてください。手本より優先します。
+                動画の最初から最後まで、画面の左上に出します。あとから編集画面でも直せます。
               </span>
-              <textarea
-                id="auto-edit-request"
-                value={project.autoEditRequest ?? ""}
-                onChange={(e) => changeAutoEditRequest(e.target.value)}
-                maxLength={MAX_USER_TEXT_LENGTH}
-                rows={3}
+              <input
+                id="auto-edit-title"
+                type="text"
+                value={project.autoEditTitle ?? ""}
+                onChange={(e) => changeTitle(e.target.value)}
+                maxLength={MAX_TITLE_LENGTH}
                 disabled={isProcessing}
-                placeholder={"例: 保証の話は日本の方に〇を付ける\n例: 強調の文字は黄色を多めに\n例: 最後に「保存してね」を出す"}
+                placeholder="例: 矯正した方がいい歯並びTOP5"
                 className="field-input w-full text-sm"
               />
             </div>
-          </div>
-        </details>
+
+            <div className="panel flex flex-col gap-2 p-4">
+              <label htmlFor="auto-edit-length" className="text-sm font-bold">
+                完成動画の長さ
+              </label>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                使う範囲は合計{totalSeconds(keepRanges).toFixed(0)}秒です。短くしたい時は、要点を残して前置きや繰り返しから削ります。
+              </span>
+              <select
+                id="auto-edit-length"
+                value={project.targetDurationSeconds ?? ""}
+                disabled={isProcessing}
+                onChange={(e) => changeTargetDuration(e.target.value ? Number(e.target.value) : null)}
+                className="field-input w-full text-sm"
+              >
+                {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
+                  <option key={seconds ?? "auto"} value={seconds ?? ""}>
+                    {seconds === null ? "AIにまかせる(間を詰めるだけ)" : `${seconds}秒くらい`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(見た目の手本があればそちらが優先) */}
+            <div className="panel flex flex-col gap-2 p-4">
+              <span className="text-sm font-bold">動画の型</span>
+              {/* スマホで縦に長くならないよう、型は名前だけの小さいボタンを2列に並べ、説明は選んだ型の分だけ下に出す */}
+              <div className="grid grid-cols-2 gap-2">
+                {[null, ...EDIT_TEMPLATES].map((template) => {
+                  const id = template?.id ?? null;
+                  const selected = templateId === id;
+                  return (
+                    <button
+                      key={id ?? "none"}
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => selectTemplate(id)}
+                      aria-pressed={selected}
+                      className="rounded-lg px-2 py-2.5 text-center text-sm font-medium"
+                      style={{
+                        border: `2px solid ${selected ? "var(--accent)" : "var(--color-neutral-solid-gray-420)"}`,
+                        background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
+                      }}
+                    >
+                      {template ? template.label : "おまかせ"}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                {findEditTemplate(templateId)?.description ?? "型を決めず、動画の中身に合わせてAIが自由に編集します"}
+                {hasReference ? "(見た目の手本と違う所は手本に合わせます)" : ""}
+              </span>
+            </div>
+
+            <MaterialImagesPanel
+              images={project.materialImages ?? []}
+              onChange={changeMaterialImages}
+              disabled={isProcessing}
+            />
+
+            {/* 普段は触らなくてよい設定は畳んでおく(動画編集に詳しくない人が、どこを触ればいいか迷わないように) */}
+            <details className="panel p-4">
+              <summary className="cursor-pointer text-sm font-bold">詳しい設定(画像の作り方・AIへの要望)</summary>
+              <div className="mt-3 flex flex-col gap-4">
+                <GenerateImagesField
+                  generateMissing={project.generateMissingImages ?? true}
+                  maxGenerated={project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES}
+                  onChange={changeGenerate}
+                  disabled={isProcessing}
+                />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="auto-edit-request" className="text-sm font-bold">
+                      AIへの要望
+                    </label>
+                    <span className="badge-pill neutral">なくてもOK</span>
+                  </div>
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>
+                    こうしてほしい所があれば書いてください。手本より優先します。
+                  </span>
+                  <textarea
+                    id="auto-edit-request"
+                    value={project.autoEditRequest ?? ""}
+                    onChange={(e) => changeAutoEditRequest(e.target.value)}
+                    maxLength={MAX_USER_TEXT_LENGTH}
+                    rows={3}
+                    disabled={isProcessing}
+                    placeholder={"例: 保証の話は日本の方に〇を付ける\n例: 強調の文字は黄色を多めに\n例: 最後に「保存してね」を出す"}
+                    className="field-input w-full text-sm"
+                  />
+                </div>
+              </div>
+            </details>
+          </>
+        )}
 
         {result ? (
-          <div className="panel flex flex-col gap-3 p-4">
+          <div ref={resultRef} className="panel flex scroll-mt-4 flex-col gap-3 p-4">
             <p className="text-sm">{result.plan.summary}</p>
             {result.plan.referenceNotes ? (
               <p className="text-xs" style={{ color: "var(--muted)" }}>
