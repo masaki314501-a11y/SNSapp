@@ -63,6 +63,13 @@ const DEFAULT_MODEL = "gemini-pro-latest";
  * 応答まで数分かかる。ジョブ化してポーリングしているので、ここは長めに取ってよい。
  */
 const GEMINI_TIMEOUT_MS = 420_000;
+/**
+ * 答えが届き始めてから、次のかけらがこの時間来なければ止まったとみなす。Geminiが途中で止まると、
+ * 以前は全体の制限(7分)まで待っていて、2案目まで合わせると10分以上かかることがあった。
+ */
+const GEMINI_STALL_MS = 90_000;
+/** 1案目が使える時の2案目の制限。2案目は良くするための作り直しなので、長くは待たせない。 */
+const SECOND_PLAN_TIMEOUT_MS = 240_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 const MIN_CLIP_SECONDS = 0.3;
@@ -1939,7 +1946,8 @@ const requestRawPlan = async (
   model: string,
   contents: Content[],
   lane: GeminiRateLimitLane,
-  label: string
+  label: string,
+  timeoutMs: number = GEMINI_TIMEOUT_MS
 ): Promise<RawAutoEditPlan> => {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -1947,24 +1955,44 @@ const requestRawPlan = async (
       // 少しずつ受け取る形(stream)で頼む。まとめて受け取る形だと、Geminiが考え込んで5分以上何も返さない時に
       // Node.jsの通信が「応答が来ない」として打ち切ってしまい(HeadersTimeoutError)、案が作れないことがあった。
       const response = await runWithGeminiRateLimit(() => {
+        // 時間切れの時は通信も打ち切る(止まった答えを裏で待ち続けないように)
+        const controller = new AbortController();
+        let rejectTimeout: (error: Error) => void = () => {};
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          rejectTimeout = reject;
+        });
+        const fail = (message: string) => {
+          controller.abort();
+          rejectTimeout(new Error(message));
+        };
+        const overallTimer = setTimeout(() => fail("Gemini API timeout"), timeoutMs);
+        let stallTimer: NodeJS.Timeout | undefined;
+        const startedAt = Date.now();
         const generatePromise = (async () => {
           const stream = await ai.models.generateContentStream({
             model,
             contents,
-            config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: autoEditResponseSchema,
+              abortSignal: controller.signal,
+            },
           });
           let text = "";
           let last: GenerateContentResponse | undefined;
           for await (const chunk of stream) {
+            if (!last) console.info(`[autoEditPlan] ${label}: ${Math.round((Date.now() - startedAt) / 1000)}秒で答えが届き始めました`);
+            clearTimeout(stallTimer);
+            stallTimer = setTimeout(() => fail("Gemini API timeout(途中で止まった)"), GEMINI_STALL_MS);
             text += chunk.text ?? "";
             last = chunk;
           }
           return { text, usage: last?.usageMetadata, modelVersion: last?.modelVersion };
         })();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS);
+        return Promise.race([generatePromise, timeoutPromise]).finally(() => {
+          clearTimeout(overallTimer);
+          clearTimeout(stallTimer);
         });
-        return Promise.race([generatePromise, timeoutPromise]);
       }, lane);
 
       // 1回あたりの消費量をサーバーログで追えるようにしておく(残高切れの前に重さに気づけるように)。
@@ -2185,7 +2213,14 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
         );
       }
       try {
-        const candidate = await requestRawPlan(ai, model, contents, "text", `案${index + 1}`);
+        const candidate = await requestRawPlan(
+          ai,
+          model,
+          contents,
+          "text",
+          `案${index + 1}`,
+          scored.length > 0 ? SECOND_PLAN_TIMEOUT_MS : GEMINI_TIMEOUT_MS
+        );
         scored.push({ candidate, score: similarityToExamples(candidate, breakdowns) });
       } catch (error) {
         console.warn(`[autoEditPlan] 案${index + 1}の作成に失敗しました`, error);
