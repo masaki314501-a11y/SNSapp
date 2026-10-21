@@ -7,9 +7,9 @@ import { CoverMaker } from "./CoverMaker";
 import { useWebRender } from "./useWebRender";
 import { RenderPanel } from "./RenderPanel";
 
-/** 書き出したファイルの名前(元の動画名を元にする)。 */
+/** 書き出したファイルの名前の初めの値(左上のタイトルがあればそれ、無ければ元の動画名を元にする)。保存の前に変えられる。 */
 const exportFileName = (project: VideoProject): string =>
-  `${(project.videoFileName ?? "video").replace(/\.[^.]+$/, "")}-edited.mp4`;
+  `${project.autoEditTitle?.trim().replace(/\s+/g, " ") || `${(project.videoFileName ?? "video").replace(/\.[^.]+$/, "")}-edited`}.mp4`;
 
 /**
  * /edit の「動画を書き出す」から遷移してくる、書き出し専用画面。
