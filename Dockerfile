@@ -7,7 +7,7 @@
 # 組み立て用と実行用の2段に分けている。1段だとTypeScript・ESLintなど開発用の道具や
 # ビルドキャッシュまで本番に残り、イメージが約4.8GBになってRenderの無料枠(5GB)を
 # アップロード動画と合わせて使い切り、サービスが止められたため。
-FROM node:22-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN npm run build \
     && rm -rf .next/cache \
     && npm prune --omit=dev
 
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 # 以前はサーバーで書き出すためにChromium(約700MB)・ヘッドレスChrome・Remotionバンドルを
 # 入れていたが、書き出しはブラウザ内に移し(README「6. 書き出し」)画面から使わなくなったので

@@ -53,6 +53,11 @@ const resolveUploadedSrc = (src?: string): string | undefined => {
 };
 
 export async function POST(request: Request) {
+  // 本番は書き出しをブラウザの中で行い、サーバーにはChromiumを入れていない(Dockerfile参照)。
+  // 呼ばれると重い処理が始まってサーバーが落ちかねないので、本番では受け付けない。
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "サーバーでの書き出しは使えません" }, { status: 404 });
+  }
   const json = await request.json().catch(() => null);
 
   if (
