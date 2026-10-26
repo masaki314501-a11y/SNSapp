@@ -131,6 +131,14 @@ export const uploadExampleVideo = async (
  * 元々の話し方と後から足した演出の区別がつかないため。
  * 呼び出し元はリクエスト完了後に`uploadedFileNames`を削除すること。
  */
+/**
+ * 手本の書き起こしの数字を小数点以下1桁に丸める(JSON.stringifyの置き換え関数)。計算の誤差で「40.199999999999996」の
+ * ような長い小数が混ざっていると、AIがそれを真似して「70.000000000000014210854…」と数字を何千桁も書き続け、
+ * 答えが壊れたり時間切れになったりしていたため。
+ */
+const roundNumbers = (_key: string, value: unknown): unknown =>
+  typeof value === "number" && !Number.isInteger(value) ? Math.round(value * 10) / 10 : value;
+
 export const loadEditFewShotContext = async (
   ai: GoogleGenAI,
   examples: EditExample[]
@@ -139,11 +147,15 @@ export const loadEditFewShotContext = async (
   const contents: Content[] = [];
   const uploadedFileNames: string[] = [];
 
+  // 軽い見せ方(EDIT_FEW_SHOT_MODE=lite): 書き起こしがある手本は、学習動画を省き、正解動画も低い解像度で見せる。
+  // 書き起こしに編集の中身(位置・大きさ・タイミング)が書いてあるので、動画は見た目の雰囲気が分かれば足りるか試すため
+  const lite = process.env.EDIT_FEW_SHOT_MODE === "lite";
   for (const example of examples) {
     try {
       const description = example.notes?.trim() || example.label;
       const parts: Part[] = [];
-      if (example.rawMediaFilename && example.rawMimeType) {
+      const liteExample = lite && Boolean(example.rawMediaFilename && example.breakdown);
+      if (example.rawMediaFilename && example.rawMimeType && !liteExample) {
         parts.push({ text: `【編集例「${description}」の学習動画(編集前の元素材)】` });
         parts.push(
           await uploadExampleVideo(
@@ -161,20 +173,20 @@ export const loadEditFewShotContext = async (
           path.join(CORRECT_MEDIA_DIR, example.correctMediaFilename),
           example.correctMimeType,
           uploadedFileNames,
-          "detailed"
+          liteExample ? "low" : "detailed"
         )
       );
       if (example.rawMediaFilename && example.breakdown) {
         // 「この素材ならこう答える」という答えの実例。今回の依頼と同じJSONの形なので、文字の位置・色・大きさ、
         // 寄りの倍率、効果音の位置といった数値の付け方まで、そのまま真似できる。
         parts.push({
-          text: `この正解動画を、上の学習動画(素材)に対する今回と同じ形のJSONに書き起こすと次のとおりです(秒数は学習動画上の秒数)。
+          text: `この正解動画を、${liteExample ? "編集前の素材(ここでは省略)" : "上の学習動画(素材)"}に対する今回と同じ形のJSONに書き起こすと次のとおりです(秒数は素材上の秒数)。
 今回の依頼でも、この書き起こしと同じくらいの細かさ・量・見た目の値で答えてください。
 ただし書き起こしの文言(テロップ・タイトル・強調テキスト・ナレーション)は「${description}」の動画の内容です。今回の動画には持ち込まないでください。
 書き起こしのimagesは、この編集者が「どんな画像を、いつ・どこに・どの大きさで出したか」です(descriptionが何の画像か)。
 今回は「使える画像」があれば、その中から同じ役割の画像を番号で選んで、同じ出し方をしてください。
 
-${JSON.stringify(example.breakdown)}`,
+${JSON.stringify(example.breakdown, roundNumbers)}`,
         });
       } else {
         parts.push({

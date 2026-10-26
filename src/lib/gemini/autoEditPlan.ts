@@ -35,6 +35,7 @@ import { waitForGeminiFileActive } from "./geminiFiles";
 import { loadEditFewShotContext } from "./editExamplesStore";
 import { selectEditExamples } from "./editExampleSelection";
 import { ensureEditExampleBreakdowns } from "./editExampleBreakdown";
+import { removeCaptionLikeOverlays } from "./captionOverlays";
 import {
   autoEditResponseSchema,
   rawAutoEditPlanSchema,
@@ -68,6 +69,8 @@ const GEMINI_TIMEOUT_MS = 420_000;
  * 以前は全体の制限(7分)まで待っていて、2案目まで合わせると10分以上かかることがあった。
  */
 const GEMINI_STALL_MS = 90_000;
+/** 編集案の答えの長さの上限(トークン)。Geminiは考える分(思考、多い時1.3万)もこれに含めるので、余裕を持たせる。 */
+const MAX_PLAN_OUTPUT_TOKENS = 32_000;
 /** 1案目が使える時の2案目の制限。2案目は良くするための作り直しなので、長くは待たせない。 */
 const SECOND_PLAN_TIMEOUT_MS = 240_000;
 const MAX_ATTEMPTS = 3;
@@ -124,6 +127,11 @@ export type AutoEditPlanInput = {
   snapCut?: (seconds: number) => number;
   /** 本人がAIへの要望として書いた文(「保証は日本の方に〇」等)。手本より優先する。 */
   userRequest?: string;
+  /**
+   * 手本から外す学習データのid。質の測定(scripts/eval)で、手本の学習動画そのものを編集させる時に、
+   * その手本の答えを見せないために使う。
+   */
+  excludeExampleIds?: string[];
   /**
    * 手直し。前回の案(Geminiの生の答え)と「ここを直して」の指示を渡すと、全部作り直さずに言われた所だけ変える。
    * 作り直すと良かった所まで毎回変わってしまうため。手本はすでに前回の案に反映されているので、手本選び・編集例は省く。
@@ -320,6 +328,7 @@ ${keepRangesList}${lengthLine}
 
 ## 編集の手順(必ずこの順に、前の手順の結果を土台にして進める)
 値はすべて自由。候補が書いてあるものだけは候補から選ぶ。
+数字はすべて小数点以下1桁まで(「70」「12.5」)で書く。「70.00000001」のような長い小数は書かない。
 
 ### 手順① カットと、参考スクショの「物」の読み込み
 1. referenceNotes: まず参考スクショ/動画を見て、画面のどこに何が置いてあるか(左上のロゴ・右上の数字・
@@ -372,8 +381,10 @@ ${captionAnimationHints}
 ${imageSection}
 
 ### 手順② テロップ
-4-9. showCaptions: 参考・編集例が、本人の話している言葉をそのまま字幕で出しているならtrue(speechがそのまま字幕になる)。
-   字幕を出さず、要点をまとめた強調テキストだけを出しているならfalse。
+4-9. showCaptions: 常にtrue。本人の話している言葉は、speechがそのまま字幕として必ず出る(本人が編集画面で見た目を選ぶ)。
+   字幕と同じ文言(話している言葉をそのまま・少し縮めた物)をoverlaysに書かない。書くと同じ文字が二重に出る
+   (サーバー側でも外す)。ただしoverlays自体は減らさない: 項目名・数字(「40%」「20/20点」)・工程名・人や物の名前・
+   見出し・注釈は、手本と同じ量・同じ場面で必ず入れる(下の「入れ方の癖」の量に合わせる)。
 5. speech: そのクリップで本人が話している言葉をそのまま書き起こす(テロップになる)。字幕として読みやすい長さ
    (1〜2行、全角25文字くらいまで)に収まるよう、長く話す所はクリップを分ける。
    字幕を2行にする時は、speechの中の意味の切れ目に「\\n」を1つだけ入れてよい(例:「日本の方が\\n通いやすい」)。
@@ -1404,11 +1415,14 @@ export const avoidTextOverlaps = (
  * 学習データの書き起こしも同じ形なので、手本がどう描かれるかの確認にも使える。
  */
 export const finalizeAutoEditPlan = async (
-  data: RawAutoEditPlan,
+  answer: RawAutoEditPlan,
   input: Pick<AutoEditPlanInput, "keepRanges" | "materialImages" | "generateMissingImages"> &
     Partial<Pick<AutoEditPlanInput, "maxGeneratedImages" | "title" | "template" | "onProgress" | "snapCut">>,
   options: { resolveImage?: ImageSourceResolver } = {}
 ): Promise<AutoEditPlan> => {
+  // 字幕は話に合わせて必ず出すので、字幕と同じ文言の強調テキストは外す(同じ文字が二重に出るため)
+  const { plan: data, removed: removedCaptionLike } = removeCaptionLikeOverlays(answer);
+  if (removedCaptionLike > 0) console.info(`[autoEditPlan] 字幕と同じ文言の強調テキスト${removedCaptionLike}個を外しました`);
   const generatedImageSources = input.generateMissingImages
     ? await generateMissingImages(data, { ...input, maxGeneratedImages: input.maxGeneratedImages ?? MAX_GENERATED_IMAGES })
     : new Map<string, GeneratedImageSource>();
@@ -1950,6 +1964,7 @@ const requestRawPlan = async (
   timeoutMs: number = GEMINI_TIMEOUT_MS
 ): Promise<RawAutoEditPlan> => {
   let lastError: unknown;
+  let lastText = "";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       // 少しずつ受け取る形(stream)で頼む。まとめて受け取る形だと、Geminiが考え込んで5分以上何も返さない時に
@@ -1976,6 +1991,9 @@ const requestRawPlan = async (
               responseMimeType: "application/json",
               responseSchema: autoEditResponseSchema,
               abortSignal: controller.signal,
+              // 普通の答えは3千〜1万トークン。同じ物を書き続ける暴走(5万トークン超)で10分以上かかり時間切れになっていたので、
+              // 上限で止めて(形が崩れた扱いになり)1回だけ頼み直す
+              maxOutputTokens: MAX_PLAN_OUTPUT_TOKENS,
             },
           });
           let text = "";
@@ -2003,6 +2021,7 @@ const requestRawPlan = async (
       );
 
       const text = response.text;
+      lastText = text;
       if (!text) {
         throw new Error("Gemini APIから空の応答が返されました");
       }
@@ -2013,6 +2032,16 @@ const requestRawPlan = async (
       return parsed.data;
     } catch (error) {
       lastError = error;
+      // 答えの形が崩れた(JSONが途中で切れた等)時は、1回だけ頼み直す(たまに起き、頼み直せばほぼ直るため)
+      const malformed = error instanceof SyntaxError || (error instanceof Error && error.message.includes("スキーマ検証に失敗"));
+      if (malformed && lastText && process.env.AUTO_EDIT_DEBUG_DIR) {
+        // 調整用: 形が崩れた答えを残す(どの項目で崩れたかを確かめるため)
+        await writeFile(path.join(process.env.AUTO_EDIT_DEBUG_DIR, `malformed-${Date.now()}.txt`), lastText).catch(() => {});
+      }
+      if (malformed && attempt === 1) {
+        console.warn(`[autoEditPlan] ${label}: 答えの形が崩れていたため、もう一度頼みます`, error);
+        continue;
+      }
       if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
         const delayMs = RETRY_BASE_DELAY_MS * attempt;
         console.warn(`[autoEditPlan] ${label}: Geminiが混雑しているため${delayMs}ms後に再試行します(試行${attempt}/${MAX_ATTEMPTS})`);
@@ -2023,6 +2052,71 @@ const requestRawPlan = async (
     }
   }
   throw lastError;
+};
+
+/**
+ * 手本の書き起こしから、この編集者の「入れ方の癖」(1分あたりの量と、何を同時に入れているか)を数えて、
+ * 具体的な目安の文章にする。書き起こしのJSONを見せるだけでは、AIが量やリズムを真似せず、
+ * 「全部の文に強調と効果音を付ける」「順位の発表で寄らない」など、正解から大きく外れていたため。
+ */
+export const describeExampleRhythm = (label: string, plan: RawAutoEditPlan): string => {
+  const minutes = Math.max(0.25, plan.clips.reduce((sum, clip) => sum + Math.max(0, clip.sourceEndSeconds - clip.sourceStartSeconds), 0) / 60);
+  const times = { overlay: [] as number[], sfx: [] as number[], zoom: [] as number[], image: [] as number[] };
+  const overlaySizes: number[] = [];
+  const overlayYs: number[] = [];
+  const zoomScales: number[] = [];
+  for (const clip of plan.clips) {
+    const start = clip.sourceStartSeconds;
+    for (const overlay of clip.overlays ?? []) {
+      times.overlay.push(start + (overlay.startOffsetSeconds ?? 0));
+      if (overlay.fontSizePx) overlaySizes.push(overlay.fontSizePx);
+      if (overlay.yPercent !== null && overlay.yPercent !== undefined) overlayYs.push(overlay.yPercent);
+    }
+    for (const effect of clip.sfx ?? []) times.sfx.push(start + (effect.offsetSeconds ?? 0));
+    for (const image of clip.images ?? []) times.image.push(start + (image.startOffsetSeconds ?? 0));
+    if (clip.zoom && clip.zoom.scale > 1.001) {
+      times.zoom.push(start);
+      zoomScales.push(clip.zoom.scale);
+    }
+  }
+  const median = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
+  };
+  const rate = (count: number) => (count / minutes).toFixed(1);
+  const near = (from: number[], to: number[], tolerance = 0.6) =>
+    from.length ? Math.round((from.filter((t) => to.some((u) => Math.abs(t - u) <= tolerance)).length / from.length) * 100) : 0;
+  const lines = [
+    `- 手本「${label}」(約${Math.round(minutes * 60)}秒・${plan.clips.length}クリップ):`,
+    `  強調テキスト${times.overlay.length}個(1分あたり${rate(times.overlay.length)}個` +
+      (overlaySizes.length ? `、大きさは${median(overlaySizes)}px前後、縦の位置は${median(overlayYs)}%前後` : "") +
+      `)・効果音${times.sfx.length}個(1分あたり${rate(times.sfx.length)}個)・寄り${times.zoom.length}回(1分あたり${rate(times.zoom.length)}回` +
+      (zoomScales.length ? `、${median(zoomScales)}倍前後` : "") +
+      `)・画像${times.image.length}枚・ずっと出す文字${plan.globalOverlays?.length ?? 0}個・枠の図形${plan.globalShapes?.length ?? 0}個。` +
+      `字幕の位置は${{ top: "上部", middle: "中央", bottom: "下部" }[plan.theme?.captionPosition ?? ""] ?? "(不明)"}` +
+      `・大きさは${plan.theme?.captionFontSize ?? "(不明)"}(themeをこれに合わせる)。`,
+  ];
+  if (times.zoom.length > 0) {
+    lines.push(`  寄りのうち${near(times.zoom, times.sfx)}%は同じ瞬間に効果音、${near(times.zoom, times.overlay)}%は同じ瞬間に強調テキスト${times.image.length ? `、${near(times.zoom, times.image)}%は画像` : ""}が出る。`);
+  }
+  if (times.sfx.length > 0) {
+    lines.push(`  効果音のうち${near(times.sfx, times.overlay)}%は強調テキストが出る瞬間、${near(times.sfx, times.zoom)}%は寄る瞬間${times.image.length ? `、${near(times.sfx, times.image)}%は画像が出る瞬間` : ""}に鳴らしている(それ以外の所では鳴らしていない)。`);
+  }
+  return lines.join("\n");
+};
+
+/** 手本の癖の目安の節。近い手本ほど後ろに置く(最後が一番近い)。 */
+const buildRhythmSection = (examples: { label: string; breakdown?: RawAutoEditPlan }[]): string => {
+  const described = examples.flatMap((example) => (example.breakdown ? [describeExampleRhythm(example.label, example.breakdown)] : []));
+  if (described.length === 0) return "";
+  return `
+
+## 手本の編集者の「入れ方の癖」(書き起こしから数えた実際の量。必ずこれに合わせる)
+上の「必要な所だけ」の決まりより、この実際の量とリズムを優先する。量は、今回の動画の長さに合わせて1分あたりの数で合わせる
+(一番最後に書いた手本が今回の動画に一番近いので、それを基準にする。±3割以内に収める)。
+どの瞬間に入れるかも真似する。例えば手本が「話題の切り替わりで、寄り・効果音・項目の文字を同時に入れ、それ以外では入れない」なら、
+今回も話題の切り替わりにだけ、3つを同時に入れる。手本の効果音が少ないなら、今回も少なくする(全部の文に付けない)。
+${described.join("\n")}`;
 };
 
 const countImages = (plan: RawAutoEditPlan): number =>
@@ -2183,14 +2277,14 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
     // 書き起こし(正解動画を答えの形に起こしたもの)がまだ無い学習データは、ここで一度だけ作る(editExampleBreakdown.ts)。
     // 選んだ結果は近い順なので、逆にして一番近い手本を本人の動画の直前に置く(直前に見た物に一番引っ張られるため)。
     input.onProgress?.({ stage: "examples" });
-    const examples = await ensureEditExampleBreakdowns(await selectEditExamples(ai, videoPart));
+    const examples = await ensureEditExampleBreakdowns(await selectEditExamples(ai, videoPart, input.excludeExampleIds));
     const fewShot = await loadEditFewShotContext(ai, [...examples].reverse());
     uploadedFileNames.push(...fewShot.uploadedFileNames);
     contents.push(...fewShot.contents);
 
     // 3. 使える画像(あれば)+本人の動画+依頼文。
     const materialImageParts = await buildMaterialImageParts(input.materialImages);
-    const prompt = buildPrompt(input, fewShot.contents.length > 0);
+    const prompt = buildPrompt(input, fewShot.contents.length > 0) + buildRhythmSection([...examples].reverse());
     contents.push({
       role: "user",
       parts: [...materialImageParts, { text: "【今回編集する本人の動画】" }, videoPart, { text: prompt }],

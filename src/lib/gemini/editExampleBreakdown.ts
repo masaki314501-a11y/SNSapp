@@ -6,6 +6,8 @@ import {
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
+import { separateCaptionsInBreakdown } from "./captionOverlays";
+import { mergeBreakdowns } from "./breakdownMerge";
 import { autoEditResponseSchema, rawAutoEditPlanSchema, type RawAutoEditPlan } from "./autoEditTypes";
 import {
   editExampleMediaPath,
@@ -26,6 +28,8 @@ import {
 const DEFAULT_MODEL = "gemini-pro-latest";
 const GEMINI_TIMEOUT_MS = 420_000;
 const MAX_ATTEMPTS = 3;
+/** 1件の正解動画を何回書き起こして多数決にするか。 */
+const BREAKDOWN_PASSES = 3;
 const RETRY_BASE_DELAY_MS = 8_000;
 
 const hints = (options: { value: string; label: string }[]): string =>
@@ -55,7 +59,9 @@ ${hints(CAPTION_STYLE_OPTIONS)}
 ${hints(CAPTION_ANIMATION_OPTIONS)}
   - speechを2行で出しているなら、画面と同じ所に「\n」を入れる。
   使われていない場合(テロップが無い等)の候補も、正解動画に一番近いものを選ぶ。
-- overlays: テロップとは別に、そのクリップの間だけ画面に出ている文字(強調・ツッコミ・見出し・数字・ラベル)。
+- overlays: 字幕(showCaptionsの所を参照)とは別に、そのクリップの間だけ画面に出ている文字(強調・ツッコミ・見出し・数字・ラベル・注釈)。
+  話している言葉をそのまま出している字幕は、ここに書かない(書くと、字幕と同じ文字が二重に出る動画を真似してしまう)。
+  上部などにずっと出ているタイトルも、ここではなくtitleに書く。
   文言は画面の通りに書き、改行も画面の通り「\\n」で書く。xPercent/yPercentは文字の中心の位置(0〜100)、
   fontSizePxは横1080pxの画面での文字の高さ、color/strokeColor(縁取り)/backgroundColor(帯)は#RRGGBB、
   rotationDegは傾き、startOffsetSeconds/durationInSecondsはクリップ先頭からの表示タイミング。animationは候補から選ぶ。
@@ -73,7 +79,10 @@ ${hints(CAPTION_ANIMATION_OPTIONS)}
 - framing: 正解動画の映像が素材より寄っていて、人物が片側に寄せられているなら、全体の寄せ方。scaleは素材に対する倍率、
   focusXPercent/focusYPercentは拡大の中心(その点は動かず、ほかは点から離れる方向へ広がる)。素材の背景の物(額・ハンガー等)が
   正解動画のどこに映っているかから計算する。寄せていなければnull。
-- showCaptions: 本人の話している言葉をそのまま字幕で出していればtrue、要点だけの文字ならfalse。
+- showCaptions: 画面に出ている文字のうち、本人が話している言葉と同じか、それを少し縮めた・言い換えた文言を、話に合わせて
+  次々に出している物は「字幕」。字幕があればtrue(字幕の文言はspeechに画面どおりに書き、overlaysには書かない)。
+  字幕の位置・帯・大きさ・色はtheme(captionPosition・captionStyle・captionFontSize・primaryColor)に書く。
+  字幕の一部の語だけ色を変えていても、それは字幕(overlaysに分けない)。話している言葉と関係の無い要点だけを出していればfalse。
 - shapes(クリップ): 途中で出る図形(結論の所で重ねる〇印など)は、出始めたクリップに書く。kindは丸ならcircle(widthPercentが直径)。
 - globalShapes: ずっと出ている図形(ランキングの空の枠・箱・帯など)。位置は中心、widthPercent/heightPercentは画面に対する幅・高さ、
   borderColor/borderWidthPx(横1080pxの画面での線の太さ)/fillColor/fillOpacity/cornerRadiusPxを測って書く。
@@ -117,35 +126,47 @@ export const breakdownEditExample = async (example: EditExample): Promise<EditEx
       { text: buildPrompt(example) },
     ];
 
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const response = await runWithGeminiRateLimit(() =>
-          Promise.race([
-            ai.models.generateContent({
-              model,
-              contents: [{ role: "user", parts }],
-              config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
-            }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS)
-            ),
-          ])
-        );
-        const parsed = rawAutoEditPlanSchema.safeParse(JSON.parse(response.text ?? "{}"));
-        if (!parsed.success) throw new Error(`書き起こしのスキーマ検証に失敗: ${parsed.error.message}`);
-        if (parsed.data.clips.length === 0) throw new Error("書き起こしにクリップがありませんでした");
-        return updateEditExampleBreakdown(example.id, parsed.data satisfies RawAutoEditPlan);
-      } catch (error) {
-        lastError = error;
-        if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * attempt));
-          continue;
+    const requestOnce = async (): Promise<RawAutoEditPlan> => {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const response = await runWithGeminiRateLimit(() =>
+            Promise.race([
+              ai.models.generateContent({
+                model,
+                contents: [{ role: "user", parts }],
+                config: { responseMimeType: "application/json", responseSchema: autoEditResponseSchema },
+              }),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("Gemini API timeout")), GEMINI_TIMEOUT_MS)
+              ),
+            ])
+          );
+          const parsed = rawAutoEditPlanSchema.safeParse(JSON.parse(response.text ?? "{}"));
+          if (!parsed.success) throw new Error(`書き起こしのスキーマ検証に失敗: ${parsed.error.message}`);
+          if (parsed.data.clips.length === 0) throw new Error("書き起こしにクリップがありませんでした");
+          // 字幕を強調テキストとして書いてしまうことがあるので、字幕と同じ文言の物は字幕に分ける(captionOverlays.ts)
+          return separateCaptionsInBreakdown(parsed.data satisfies RawAutoEditPlan);
+        } catch (error) {
+          lastError = error;
+          if (isRetryableApiError(error) && attempt < MAX_ATTEMPTS) {
+            await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * attempt));
+            continue;
+          }
+          throw error;
         }
-        throw toFriendlyGeminiError(error);
       }
+      throw lastError;
+    };
+
+    // 同じ動画を何回か書き起こして多数決でまとめる(1回だけだと、読むたびに取りこぼす物が変わるため。breakdownMerge.ts)。
+    // 書き起こしは学習データ1件につき1回だけ作る物なので、自動編集1回ごとの料金は増えない
+    const results = await Promise.allSettled(Array.from({ length: BREAKDOWN_PASSES }, () => requestOnce()));
+    const plans = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+    if (plans.length === 0) {
+      throw toFriendlyGeminiError(results.find((result) => result.status === "rejected")?.reason);
     }
-    throw toFriendlyGeminiError(lastError);
+    return updateEditExampleBreakdown(example.id, mergeBreakdowns(plans));
   } finally {
     for (const name of uploadedFileNames) {
       await ai.files.delete({ name }).catch(() => {});

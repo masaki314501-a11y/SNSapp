@@ -39,8 +39,12 @@ const pickResponseSchema = z.object({
  * 選ぶのに失敗しても自動編集自体は止めず、以前と同じ「新しい順」に戻す。
  * userVideoPartは自動編集本体に渡すのと同じアップロード済みの動画(二重にアップロードしない)。
  */
-export const selectEditExamples = async (ai: GoogleGenAI, userVideoPart: Part): Promise<EditExample[]> => {
-  const all = await listEditExamples();
+export const selectEditExamples = async (
+  ai: GoogleGenAI,
+  userVideoPart: Part,
+  excludeIds: string[] = []
+): Promise<EditExample[]> => {
+  const all = (await listEditExamples()).filter((example) => !excludeIds.includes(example.id));
   const newest = all.slice(-MAX_EDIT_FEW_SHOT_EXAMPLES).reverse();
   if (all.length === 0) return [];
 
@@ -100,7 +104,8 @@ ${candidates}`,
       if (example && !picked.includes(example)) picked.push(example);
       if (picked.length >= MAX_EDIT_FEW_SHOT_EXAMPLES) break;
     }
-    // 選ばれなかった手本で数を埋めない(型の違う手本を見せると、その動画の文言まで持ち込まれるため)
+    // 選ばれなかった手本で数を埋めない(手本と関係の無い動画を編集することもあるので、似ている物だけを見せる。
+    // 型の違う手本を見せると、その動画の文言や演出まで持ち込まれるため)
     console.info(
       `[editExampleSelection] 手本を選択: ${picked.length > 0 ? picked.map((example) => example.label).join(" / ") : "なし"}` +
         (parsed.data.reason ? ` (理由: ${parsed.data.reason})` : "")
