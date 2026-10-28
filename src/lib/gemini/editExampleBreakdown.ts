@@ -101,10 +101,21 @@ ${hints(SFX_PRESETS.map((p) => ({ value: p.id, label: p.label })))}
 JSON以外の文字列は出力しないでください。
 `.trim();
 
-/** 学習データ1件の正解動画を書き起こし、保存して返す。学習動画(素材)が無い学習データは対象外(null)。 */
+/**
+ * 学習動画(素材)が無く、完成動画だけの手本の時に、書き起こしの頼み方の前に付ける断り書き。
+ * 素材と見比べられないので、秒数は完成動画上で書かせる(何を・どこに・どの大きさで・どのくらいの頻度で出すかは分かる)。
+ */
+const CORRECT_ONLY_NOTE = `※今回は編集前の素材(学習動画)がありません。添付したのは、プロが編集した完成版(正解動画)1本だけです。
+下の説明で「素材(1本目)上の秒数」とある所は、すべて正解動画上の秒数として書いてください(クリップは正解動画の場面の
+切り替わりごとに区切り、sourceStartSeconds/sourceEndSecondsは正解動画上の秒数)。素材と比べられないので、framingはnull、
+zoomは画面が途中ではっきり寄った所だけ書いてください。
+
+`;
+
+/** 学習データ1件の正解動画を書き起こし、保存して返す。学習動画(素材)が無い手本は、完成動画だけから書き起こす。 */
 export const breakdownEditExample = async (example: EditExample): Promise<EditExample | null> => {
   const rawPath = editExampleMediaPath(example, "raw");
-  if (!rawPath || !example.rawMimeType) return null;
+  const hasRaw = Boolean(rawPath && example.rawMimeType);
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEYが未設定です");
 
@@ -113,8 +124,12 @@ export const breakdownEditExample = async (example: EditExample): Promise<EditEx
   const uploadedFileNames: string[] = [];
   try {
     const parts: Part[] = [
-      { text: "【学習動画(編集前の素材)】" },
-      await uploadExampleVideo(ai, rawPath, example.rawMimeType, uploadedFileNames),
+      ...(hasRaw
+        ? [
+            { text: "【学習動画(編集前の素材)】" },
+            await uploadExampleVideo(ai, rawPath!, example.rawMimeType!, uploadedFileNames),
+          ]
+        : []),
       { text: "【正解動画(プロが編集した完成版)】" },
       await uploadExampleVideo(
         ai,
@@ -123,7 +138,7 @@ export const breakdownEditExample = async (example: EditExample): Promise<EditEx
         uploadedFileNames,
         "detailed"
       ),
-      { text: buildPrompt(example) },
+      { text: (hasRaw ? "" : CORRECT_ONLY_NOTE) + buildPrompt(example) },
     ];
 
     const requestOnce = async (): Promise<RawAutoEditPlan> => {
@@ -182,7 +197,7 @@ export const breakdownEditExample = async (example: EditExample): Promise<EditEx
 export const ensureEditExampleBreakdowns = async (examples: EditExample[]): Promise<EditExample[]> => {
   const result: EditExample[] = [];
   for (const example of examples) {
-    if (example.breakdown || !example.rawMediaFilename) {
+    if (example.breakdown) {
       result.push(example);
       continue;
     }

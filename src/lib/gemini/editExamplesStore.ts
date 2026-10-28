@@ -176,7 +176,16 @@ export const loadEditFewShotContext = async (
           liteExample ? "low" : "detailed"
         )
       );
-      if (example.rawMediaFilename && example.breakdown) {
+      if (example.breakdown && !example.rawMediaFilename) {
+        // 完成動画だけの手本: 秒数は完成動画上。素材に対する切り方は分からないが、何を・どこに・どの大きさ・頻度で出すかは真似できる
+        parts.push({
+          text: `この正解動画(完成版)で画面に出している物を、今回と同じ形のJSONに書き起こすと次のとおりです(秒数は完成動画上の秒数。
+編集前の素材は無いので、切り方の参考にはしないでください)。文字・画像・枠の位置・色・大きさ・量・出す頻度を、今回の答えでも真似してください。
+ただし書き起こしの文言は「${description}」の動画の内容です。今回の動画には持ち込まないでください。
+
+${JSON.stringify(example.breakdown, roundNumbers)}`,
+        });
+      } else if (example.rawMediaFilename && example.breakdown) {
         // 「この素材ならこう答える」という答えの実例。今回の依頼と同じJSONの形なので、文字の位置・色・大きさ、
         // 寄りの倍率、効果音の位置といった数値の付け方まで、そのまま真似できる。
         parts.push({
