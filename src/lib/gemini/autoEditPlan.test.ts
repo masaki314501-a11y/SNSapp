@@ -557,6 +557,24 @@ describe("顔を避ける", () => {
     expect(plan.clips[0].overlays ?? []).toHaveLength(0);
   });
 
+  it("字幕は、ずっと出す枠・カードにも重ならない位置にする", async () => {
+    // 下にカード(図形)をずっと出す比較の動画。字幕は下(カードに重なる)から、顔にも重ならない位置へ動くはず
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [{ sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "価格は韓国の方が安い", face: { xPercent: 50, yPercent: 25, widthPercent: 30, heightPercent: 16 } }],
+        {
+          theme: { captionPosition: "bottom" },
+          globalShapes: [
+            { kind: "rect", xPercent: 27, yPercent: 85, widthPercent: 40, heightPercent: 18 },
+            { kind: "rect", xPercent: 73, yPercent: 85, widthPercent: 40, heightPercent: 18 },
+          ],
+        }
+      ),
+      input
+    );
+    expect(["top", "middle"]).toContain(plan.clips[0].clipCaptionPosition);
+  });
+
   it("寄ったクリップでは、寄った後の顔の位置で確かめる", () => {
     const box = faceOnScreen(face, null, { scale: 1.3, style: "punch", focusXPercent: 50, focusYPercent: 20 });
     // 中心(縦20%)から離れる方向へ1.3倍に広がる

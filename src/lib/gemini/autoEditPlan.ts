@@ -345,9 +345,10 @@ ${input.template.instructions}
 
 ## 絶対の決まり(どんな演出・手本よりも優先し、例外なく守る)
 - 文字どうし(タイトル・ラベル・見出し・強調テキスト・ずっと出す文字・字幕)を重ねない。
-- 字幕(テロップ)を顔に重ねない。字幕は必ず出るので、顔の位置(5-2)を見て、顔に重ならない帯(captionPosition)を選ぶ。
-- 文字を置く時は、その時間に画面にある物(字幕・顔・ずっと出ている文字)を全部避ける。置ける場所が無い文字は入れない
-  (サーバー側でも重なりを確かめ、どうしても重なる文字は出さない)。
+- 字幕(テロップ)を顔に重ねない。字幕を、枠・カード・画像・図形にも重ねない。字幕は必ず出るので、顔の位置(5-2)と、
+  ずっと出す枠・カード・画像の位置を見て、どれにも重ならない帯(captionPosition)を選ぶ。枠やカードを字幕の帯に置かない。
+- 文字・画像を置く時は、その時間に画面にある物(字幕・顔・ずっと出ている文字・枠)を全部避ける。置ける場所が無い物は入れない
+  (サーバー側でも最後に重なりを確かめ、字幕・顔に重なる文字や画像は出さない)。
 
 ## 医療広告の決まり(この動画は歯科医院の広告として扱われる。演出・手本・テンプレートより必ず優先する)
 あなたが作る文字(title・hook・hookAlternatives・overlays・globalOverlays・cta)には、次の言葉・表現を使わない。
@@ -1292,7 +1293,7 @@ const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle
 };
 
 /**
- * クリップごとに、テロップ(字幕)の位置を決める。字幕が顔に重ならないこと・ほかの文字に重ならないことは、
+ * クリップごとに、テロップ(字幕)の位置を決める。字幕が顔に重ならないこと・ほかの文字や物(枠・カード・画像)に重ならないことは、
  * どんな時も守る決まり。全体で決めた位置(theme)で重ならなければそのまま、重なるなら下→上→中央の順に、
  * 顔にも文字にも重ならない位置を探す。そういう位置が無ければ、顔に重ならない位置のうち文字との重なりが一番小さい所、
  * それも無ければ顔との重なりが一番小さい所にする(顔を隠すより、文字の方を後から動かす・消す方がまし)。
@@ -1302,7 +1303,8 @@ const chooseCaptionPositions = (
   clips: AutoEditClipPlan[],
   framing: VideoFraming | null,
   theme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize },
-  texts: TimedBox[]
+  texts: TimedBox[],
+  objects: TimedBox[] = []
 ): { clips: AutoEditClipPlan[]; captionBoxes: TimedBox[] } => {
   let clipStart = 0;
   const captionBoxes: TimedBox[] = [];
@@ -1324,12 +1326,16 @@ const chooseCaptionPositions = (
         );
     const faceArea = (position: CaptionPosition) => (face ? overlapArea(boxAt(position), [face]) : 0);
     const textArea = (position: CaptionPosition) => overlapArea(boxAt(position), texts);
+    const objectArea = (position: CaptionPosition) => overlapArea(boxAt(position), objects);
     const candidates = [theme.position, ...(["bottom", "top", "middle"] as const).filter((p) => p !== theme.position)];
     const clear = (position: CaptionPosition) =>
-      !(face && boxesOverlap(boxAt(position), face)) && !texts.some((text) => boxesOverlap(boxAt(position), text));
+      !(face && boxesOverlap(boxAt(position), face)) &&
+      !texts.some((text) => boxesOverlap(boxAt(position), text)) &&
+      !objects.some((object) => boxesOverlap(boxAt(position), object));
+    // 全部を避けられない時は、顔→文字→物の順に重なりの小さい位置。残った重なりは、最後に字幕以外の方を消して必ずなくす
     const chosen =
       candidates.find(clear) ??
-      [...candidates].sort((a, b) => faceArea(a) - faceArea(b) || textArea(a) - textArea(b))[0];
+      [...candidates].sort((a, b) => faceArea(a) - faceArea(b) || textArea(a) - textArea(b) || objectArea(a) - objectArea(b))[0];
     if (chosen !== theme.position && face && faceArea(chosen) > 0) {
       console.info(`[autoEditPlan] 字幕が顔に重ならない位置が無かったため、重なりが一番小さい位置にしました(${start.toFixed(1)}秒〜)`);
     }
@@ -1423,10 +1429,23 @@ export const avoidTextOverlaps = (
   }
 
   // 字幕の位置は、ずっと出る文字を置いた後に、顔とその文字を避けて決める。残りの文字は字幕も避けて置く
+  // 字幕が避ける物: 図形(枠・カード・〇印)と画像。字幕と重なると、どちらも見えなくなっていた
+  const objects: TimedBox[] = [
+    ...globalShapes.map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
+    ...globalImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
+    ...clips.flatMap((clip, clipIndex) =>
+      (clip.images ?? []).map((image) => {
+        const start = clipTimes[clipIndex] + image.startOffsetSeconds;
+        return imageBox(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds));
+      })
+    ),
+  ];
   const captions = captionTheme
-    ? chooseCaptionPositions(clips, framing, captionTheme, placedPersistent)
+    ? chooseCaptionPositions(clips, framing, captionTheme, placedPersistent, objects)
     : { clips, captionBoxes: [] as TimedBox[] };
   clips = captions.clips;
+  // 話の間だけ出す画像は、顔と字幕の両方を避けて動かす
+  const facesAndCaptions = [...faces, ...captions.captionBoxes];
 
   // ずっと出す画像(ランキングの枠に入れた写真など)は、ずっと出る文字を隠さないよう切り詰める。
   // 話の間だけ出す画像は、顔に重なるなら顔の無い所へずらす。
@@ -1434,7 +1453,7 @@ export const avoidTextOverlaps = (
     const end = endOf(image, totalSeconds);
     return isPersistent(image)
       ? trimImageAwayFromText(image, { start: image.startOffsetSeconds, end }, placedPersistent)
-      : placeImageAwayFromFaces(image, image.startOffsetSeconds, end, faces);
+      : placeImageAwayFromFaces(image, image.startOffsetSeconds, end, facesAndCaptions);
   });
   const clipsWithImagesPlaced = clips.map((clip, clipIndex) =>
     clip.images
@@ -1442,7 +1461,7 @@ export const avoidTextOverlaps = (
           ...clip,
           images: clip.images.map((image) => {
             const start = clipTimes[clipIndex] + image.startOffsetSeconds;
-            return placeImageAwayFromFaces(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds), faces);
+            return placeImageAwayFromFaces(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds), facesAndCaptions);
           }),
         }
       : clip
@@ -1483,11 +1502,42 @@ export const avoidTextOverlaps = (
     });
     return { ...clip, overlays };
   });
-  return {
-    globalOverlays: resultGlobal.filter((overlay): overlay is TextOverlay => overlay !== null),
-    clips: resultClips,
-    globalImages: arrangedImages,
+  // 最後の確認(必ず守る決まり): 字幕に重なる文字・画像、顔に重なる画像が残っていたら、字幕・顔ではなくそちらを出さない。
+  // ずっと出す枠の写真(ランキングの枠など)は動かせないので、字幕の位置の方で避けている
+  const captionBoxes = captions.captionBoxes;
+  const hitsCaption = (box: TimedBox) => captionBoxes.some((caption) => boxesOverlap(box, caption));
+  const hitsFace = (box: TimedBox) => faces.some((face) => boxesOverlap(box, face));
+  const dropped: string[] = [];
+  const keepText = (overlay: TextOverlay, start: number, end: number) => {
+    const ok = !hitsCaption(textBox(overlay, start, end));
+    if (!ok) dropped.push(`文字「${overlay.text.replace(/\n/g, "")}」`);
+    return ok;
   };
+  const keepImage = (image: ImageOverlay, start: number, end: number, persistent: boolean) => {
+    const box = imageBox(image, start, end);
+    const ok = persistent || (!hitsCaption(box) && !hitsFace(box));
+    if (!ok) dropped.push(`画像「${image.src.split("/").pop()}」`);
+    return ok;
+  };
+  const finalGlobal = resultGlobal.filter(
+    (overlay): overlay is TextOverlay => overlay !== null && keepText(overlay, overlay.startOffsetSeconds, endOf(overlay, totalSeconds))
+  );
+  const finalImages = arrangedImages.filter((image) =>
+    keepImage(image, image.startOffsetSeconds, endOf(image, totalSeconds), isPersistent(image))
+  );
+  const finalClips = resultClips.map((clip, clipIndex) => ({
+    ...clip,
+    overlays: clip.overlays?.filter((overlay) => {
+      const start = clipTimes[clipIndex] + overlay.startOffsetSeconds;
+      return keepText(overlay, start, start + (overlay.durationInSeconds ?? clip.durationInSeconds - overlay.startOffsetSeconds));
+    }),
+    images: clip.images?.filter((image) => {
+      const start = clipTimes[clipIndex] + image.startOffsetSeconds;
+      return keepImage(image, start, start + (image.durationInSeconds ?? clip.durationInSeconds - image.startOffsetSeconds), false);
+    }),
+  }));
+  if (dropped.length > 0) console.info(`[autoEditPlan] 字幕・顔に重なるため出さない物: ${dropped.join(" / ")}`);
+  return { globalOverlays: finalGlobal, clips: finalClips, globalImages: finalImages };
 };
 
 /**
