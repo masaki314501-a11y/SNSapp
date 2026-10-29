@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { open, stat } from "node:fs/promises";
 import path from "node:path";
 import { resolveLibraryImageFile } from "@/lib/imageLibrary";
+import { markVideoUsed } from "@/lib/uploadedVideo";
 
 export const runtime = "nodejs";
 
@@ -115,7 +116,10 @@ export async function GET(
 
   let size: number;
   try {
-    size = (await stat(filePath)).size;
+    const fileStat = await stat(filePath);
+    size = fileStat.size;
+    // 編集画面で開いている動画は「使っている」ので、古い動画の片付け(uploadedVideo.ts)で消さない。
+    if (dir === "videos") await markVideoUsed(filePath, fileStat.mtimeMs);
   } catch {
     return NextResponse.json({ error: "ファイルが見つかりません" }, { status: 404 });
   }

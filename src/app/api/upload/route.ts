@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { NextResponse } from "next/server";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
+import { createHashingStream, removeOldVideos, storeByHash, videosDir } from "@/lib/uploadedVideo";
 
 export const runtime = "nodejs";
 
@@ -42,11 +43,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "file が必要です" }, { status: 400 });
   }
 
-  const id = randomUUID();
-  const dir = path.join(process.cwd(), "public", "videos");
+  const dir = videosDir();
   await mkdir(dir, { recursive: true });
-  const filename = `${id}.${ext}`;
-  const outputPath = path.join(dir, filename);
+  // 古い動画の片付けは、アップロードを待たせないよう裏で行う。
+  void removeOldVideos(dir).catch(() => {});
+  // 中身のハッシュが分かるまでは仮の名前で書き、書き終えてから名前を付ける(同じ動画は使い回す)。
+  const outputPath = path.join(dir, `.${randomUUID()}.part`);
+  const hashing = createHashingStream();
 
   let written = 0;
   const enforceLimit = async function* (source: AsyncIterable<Uint8Array>) {
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
     await pipeline(
       Readable.fromWeb(request.body as import("node:stream/web").ReadableStream<Uint8Array>),
       enforceLimit,
+      hashing.transform,
       createWriteStream(outputPath)
     );
   } catch (error) {
@@ -70,6 +74,17 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: toFriendlyErrorMessage(error, "アップロードに失敗しました") },
       { status: 400 }
+    );
+  }
+
+  let filename: string;
+  try {
+    filename = await storeByHash(outputPath, hashing.digest(), ext, dir);
+  } catch (error) {
+    await unlink(outputPath).catch(() => {});
+    return NextResponse.json(
+      { error: toFriendlyErrorMessage(error, "アップロードに失敗しました") },
+      { status: 500 }
     );
   }
 
