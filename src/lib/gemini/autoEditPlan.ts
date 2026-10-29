@@ -329,16 +329,25 @@ ${input.template.instructions}
 編集者です。今回は編集の判断をすべてあなたに任せます。目指すのは、見ている人が編集を意識せずに
 最後まで見てしまう「違和感が無いのにバズる」編集です。派手さより自然さを優先し、必要な所にだけしっかり手を入れてください。
 
-## 一番大事な決まり: 「どこに入れるか」は本人の動画の中身で、「どれくらい・どう入れるか」は手本で決める
-- 入れる場所は、本人の話の中の「項目が出る瞬間(項目名・順位・数字・判定を言った瞬間)」「答え合わせ」「一番のオチ・本音」。
+## 一番大事な決まり: 本人の動画の中身に合わせて編集する
+- まず本人の動画を最後まで見て、何の話か・どんな型か(ランキング・比較・採点・手順・割合・Q&Aなど)・どこに
+  項目(項目名・順位・数字・判定)・答え合わせ・本音・オチがあるかをつかむ。演出はすべて、この中身から決める。
+- どう見せるか(見た目・音・画面の組み立て・雰囲気・テンポ)は、末尾の「編集のクセ帳」の編集者になりきって決める。
+  「この編集者なら、この場面をどう見せるか」を考えて編集する。ただし本人の動画に無い場面の演出は入れない
+  (手本にあるからという理由だけで入れない)。
+- 量(何個入れるか)は目標にしない。本人の動画の中身(項目の数・山場)に合わせて編集した結果として決まる。
   項目と項目の間の説明の部分は、何も足さないのが普通。理由の言えない演出は入れない。
-- 量と見た目(1分あたりの数・大きさ・位置・色・音の種類)は、末尾の「手本の入れ方の癖」と書き起こしに合わせる
-  (手本が無い時だけ、上の場所の数で自然に決める)。
 - 演出は2種類に分けて考える。
   (a) 情報を見せる演出(ずっと出す枠・一覧・項目名のラベル・順位・点数・数字・手順の番号)は、歯科の動画では一番の
       離脱防止なので、本人の話に項目があれば最初から最後まで省かずに入れる。
   (b) 気持ちを動かす演出(寄り・ツッコミの文字・傾き)は、感情の山にだけ絞る。リスク・副作用・注意を話している所には、
       笑いの効果音やツッコミを入れない。
+
+## 絶対の決まり(どんな演出・手本よりも優先し、例外なく守る)
+- 文字どうし(タイトル・ラベル・見出し・強調テキスト・ずっと出す文字・字幕)を重ねない。
+- 字幕(テロップ)を顔に重ねない。字幕は必ず出るので、顔の位置(5-2)を見て、顔に重ならない帯(captionPosition)を選ぶ。
+- 文字を置く時は、その時間に画面にある物(字幕・顔・ずっと出ている文字)を全部避ける。置ける場所が無い文字は入れない
+  (サーバー側でも重なりを確かめ、どうしても重なる文字は出さない)。
 
 ## 医療広告の決まり(この動画は歯科医院の広告として扱われる。演出・手本・テンプレートより必ず優先する)
 あなたが作る文字(title・hook・hookAlternatives・overlays・globalOverlays・cta)には、次の言葉・表現を使わない。
@@ -433,7 +442,7 @@ ${imageSection}
 4-9. showCaptions: 常にtrue。本人の話している言葉は、speechがそのまま字幕として必ず出る(本人が編集画面で見た目を選ぶ)。
    字幕と同じ文言(話している言葉をそのまま・少し縮めた物)をoverlaysに書かない。書くと同じ文字が二重に出る
    (サーバー側でも外す)。ただしoverlays自体は減らさない: 項目名・数字(「40%」「20/20点」)・工程名・人や物の名前・
-   見出し・注釈は、手本と同じ量・同じ場面で必ず入れる(下の「入れ方の癖」の量に合わせる)。
+   見出し・注釈は、本人の話に出てくる場面で必ず入れる。
 5. speech: そのクリップで本人が話している言葉をそのまま書き起こす(テロップになる)。字幕として読みやすい長さ
    (1〜2行、全角25文字くらいまで)に収まるよう、長く話す所はクリップを分ける。
    字幕を2行にする時は、speechの中の意味の切れ目に「\\n」を1つだけ入れてよい(例:「日本の方が\\n通いやすい」)。
@@ -451,14 +460,14 @@ ${captionStyleHints}
 ### 手順③ 強調テキスト
 テロップの中の強調(色を変える語・書体・光)は、本人が後で選ぶので付けない。テロップの書体・色は動画全体で1つにそろえる。
 9. overlays(強調): 項目ラベル(8)以外に足す文字は、本人の本音・ツッコミ・注釈(「※個人の感想です」など)だけで、
-   手本の量を上限にする(手本の書き起こしが無ければ動画全体で0〜3個)。字幕の言い換えや煽り文句は入れない。
+   本人の動画に本音・ツッコミ・注釈の場面がある所にだけ入れる。字幕の言い換えや煽り文句は入れない。
    項目は4と同じ。顔や手順①の物・テロップを隠さない位置に置く。
 
 ### 手順④ カメラアングル(寄りは感情の山にだけ。迷ったら寄らない)
 10. zoom: 寄りは「感情の山」にだけ使う(本音・ツッコミ・オチ・答え合わせの後のリアクション)。順位や数字を発表する瞬間は、
     ラベルと効果音で見せ、寄らない。globalShapesやglobalOverlays(枠・一覧・比較カード)をずっと出している動画では、
-    寄ると人物と枠の位置関係が崩れるので、寄りは動画全体で0〜1回にする。寄りの回数は末尾の「入れ方の癖」の回数を超えない
-    (手本が0回なら0〜1回)。テンプレートによっては、寄り方はサーバー側のカメラワークのルールで決め直す。
+    寄ると人物と枠の位置関係が崩れるので、寄りは動画全体で0〜1回にする。テンプレートによっては、寄り方はサーバー側の
+    カメラワークのルールで決め直す。
     - 寄るならpunchで1.2〜1.3倍、効果音(impactなど)と同時にする。1.35を超えない
     - focusXPercent/focusYPercentは本人の顔(目のあたり)。1秒未満の短いクリップには入れない
 
@@ -509,8 +518,8 @@ ${sfxPresetHints}
   (良い例:「知らないと\\n損する話」 悪い例:「知らないと損す\\nる話」「最\\n強」)
 
 ## 量について
-- 量は末尾の「手本の入れ方の癖」に合わせる(一番大事な決まりのとおり)。手本が無い時は、項目の数で自然に決まる
-- 寄りは手本の回数を上限にする(手本が無ければ0〜2回)
+- 量は目標にしない。本人の動画の中身(項目の数・山場)に合わせて編集した結果として決まる(一番大事な決まりのとおり)
+- 寄りは感情の山にだけ。枠や一覧をずっと出す動画では0〜1回
 - 寄り・文字・効果音を同じ瞬間に全部重ねるのは、一番の山場だけにする
 
 ## 設計の考え方
@@ -1209,7 +1218,7 @@ const shapeBox = (shape: ShapeOverlay, start: number, end: number): TimedBox => 
  * 文字を、ほかの物と重ならない一番近い位置・大きさへ直す。元の位置で重ならなければそのまま。
  * 少し小さくする・上下左右にずらす、の組み合わせから、元の見た目から一番変わらない物を選ぶ。どうしても空きが無ければそのまま。
  */
-const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, obstacles: TimedBox[]): TextOverlay => {
+const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, obstacles: TimedBox[]): TextOverlay | null => {
   const fits = (candidate: TextOverlay) => {
     const box = textBox(candidate, start, end);
     return (
@@ -1251,8 +1260,9 @@ const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, o
     }
   }
   if (!best) {
-    console.info(`[autoEditPlan] 文字「${overlay.text}」の重ならない置き場所が見つからなかったため、そのままにします`);
-    return overlay;
+    // 文字どうし・文字と顔・字幕が重ならないことは絶対に守る決まりなので、置き場所が無い文字は出さない
+    console.info(`[autoEditPlan] 文字「${overlay.text}」の重ならない置き場所が見つからなかったため、出しません`);
+    return null;
   }
   if (process.env.AUTO_EDIT_DEBUG_DIR) {
     console.info(
@@ -1282,48 +1292,51 @@ const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle
 };
 
 /**
- * テロップが顔に重なるクリップだけ、テロップの位置を変える。顔に重ならない位置のうち、ずっと出ている物
- * (タイトル・ランキングの枠など)と重なる面積が一番小さい所(同じなら下→上→中央の順)。
+ * クリップごとに、テロップ(字幕)の位置を決める。字幕が顔に重ならないこと・ほかの文字に重ならないことは、
+ * どんな時も守る決まり。全体で決めた位置(theme)で重ならなければそのまま、重なるなら下→上→中央の順に、
+ * 顔にも文字にも重ならない位置を探す。そういう位置が無ければ、顔に重ならない位置のうち文字との重なりが一番小さい所、
+ * それも無ければ顔との重なりが一番小さい所にする(顔を隠すより、文字の方を後から動かす・消す方がまし)。
  * テロップの位置は全体で1つだが、寄ったクリップや顔が下の方に映るクリップでは、決まった位置だと顔を隠していた。
  */
 const chooseCaptionPositions = (
   clips: AutoEditClipPlan[],
   framing: VideoFraming | null,
   theme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize },
-  shownItems: (TimedBox & { weight: number })[]
-): AutoEditClipPlan[] => {
+  texts: TimedBox[]
+): { clips: AutoEditClipPlan[]; captionBoxes: TimedBox[] } => {
   let clipStart = 0;
-  return clips.map((clip) => {
+  const captionBoxes: TimedBox[] = [];
+  const result = clips.map((clip) => {
     const start = clipStart;
     clipStart += clip.durationInSeconds;
-    if (!clip.faceBox) return clip;
     const timed = (box: BoxPercent): TimedBox => ({ ...box, start, end: start + clip.durationInSeconds });
-    const face = timed(faceOnScreen(clip.faceBox, framing, clip.zoom));
+    const face = clip.faceBox ? timed(faceOnScreen(clip.faceBox, framing, clip.zoom)) : null;
     const boxAt = (position: CaptionPosition) => timed(captionBox(clip.speechText, position, theme.style, theme.fontSize));
-    if (!boxesOverlap(boxAt(theme.position), face)) return clip;
-    const alternatives = (["bottom", "top", "middle"] as const).filter((position) => position !== theme.position);
-    const awayFromFace = alternatives.filter((position) => !boxesOverlap(boxAt(position), face));
-    // ほかの物と重なる面積が一番小さい位置(どれとも重ならない位置があればそこ)。文字どうしが重なると両方読めなくなるので、
-    // 文字との重なりは画像・枠との重なりより重く数える。
-    const overlapArea = (position: CaptionPosition) => {
-      const box = boxAt(position);
-      return shownItems
+    const overlapArea = (box: TimedBox, others: TimedBox[]) =>
+      others
         .filter((item) => item.start < box.end && box.start < item.end)
         .reduce(
           (sum, item) =>
             sum +
-            item.weight *
-              Math.max(0, Math.min(box.right, item.right) - Math.max(box.left, item.left)) *
+            Math.max(0, Math.min(box.right, item.right) - Math.max(box.left, item.left)) *
               Math.max(0, Math.min(box.bottom, item.bottom) - Math.max(box.top, item.top)),
           0
         );
-    };
-    const chosen = awayFromFace.reduce<CaptionPosition | undefined>(
-      (best, position) => (best === undefined || overlapArea(position) < overlapArea(best) ? position : best),
-      undefined
-    );
-    return chosen ? { ...clip, clipCaptionPosition: chosen } : clip;
+    const faceArea = (position: CaptionPosition) => (face ? overlapArea(boxAt(position), [face]) : 0);
+    const textArea = (position: CaptionPosition) => overlapArea(boxAt(position), texts);
+    const candidates = [theme.position, ...(["bottom", "top", "middle"] as const).filter((p) => p !== theme.position)];
+    const clear = (position: CaptionPosition) =>
+      !(face && boxesOverlap(boxAt(position), face)) && !texts.some((text) => boxesOverlap(boxAt(position), text));
+    const chosen =
+      candidates.find(clear) ??
+      [...candidates].sort((a, b) => faceArea(a) - faceArea(b) || textArea(a) - textArea(b))[0];
+    if (chosen !== theme.position && face && faceArea(chosen) > 0) {
+      console.info(`[autoEditPlan] 字幕が顔に重ならない位置が無かったため、重なりが一番小さい位置にしました(${start.toFixed(1)}秒〜)`);
+    }
+    if (clip.speechText.trim()) captionBoxes.push(boxAt(chosen));
+    return chosen === theme.position ? clip : { ...clip, clipCaptionPosition: chosen };
   });
+  return { clips: result, captionBoxes };
 };
 
 /**
@@ -1375,7 +1388,8 @@ export const avoidTextOverlaps = (
   globalShapes: ShapeOverlay[],
   globalImages: ImageOverlay[],
   totalSeconds: number,
-  framing: VideoFraming | null = null
+  framing: VideoFraming | null = null,
+  captionTheme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize } | null = null
 ): { globalOverlays: TextOverlay[]; clips: AutoEditClipPlan[]; globalImages: ImageOverlay[] } => {
   const endOf = (item: { startOffsetSeconds: number; durationInSeconds?: number }, fallbackEnd: number) =>
     item.durationInSeconds !== undefined ? item.startOffsetSeconds + item.durationInSeconds : fallbackEnd;
@@ -1397,7 +1411,7 @@ export const avoidTextOverlaps = (
   );
 
   const placedPersistent: TimedBox[] = [];
-  const resultGlobal: TextOverlay[] = globalOverlays.map((overlay) => overlay);
+  const resultGlobal: (TextOverlay | null)[] = globalOverlays.map((overlay) => overlay);
   for (const [index, overlay] of globalOverlays.entries()) {
     if (!isPersistent(overlay)) continue;
     const end = endOf(overlay, totalSeconds);
@@ -1405,8 +1419,14 @@ export const avoidTextOverlaps = (
     const obstacles = rankOfLabel(overlay.text) === null ? [...placedPersistent, ...faces] : placedPersistent;
     const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles);
     resultGlobal[index] = placed;
-    placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
+    if (placed) placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
+
+  // 字幕の位置は、ずっと出る文字を置いた後に、顔とその文字を避けて決める。残りの文字は字幕も避けて置く
+  const captions = captionTheme
+    ? chooseCaptionPositions(clips, framing, captionTheme, placedPersistent)
+    : { clips, captionBoxes: [] as TimedBox[] };
+  clips = captions.clips;
 
   // ずっと出す画像(ランキングの枠に入れた写真など)は、ずっと出る文字を隠さないよう切り詰める。
   // 話の間だけ出す画像は、顔に重なるなら顔の無い所へずらす。
@@ -1431,6 +1451,7 @@ export const avoidTextOverlaps = (
   const obstacles: TimedBox[] = [
     ...placedPersistent,
     ...faces,
+    ...captions.captionBoxes,
     ...globalShapes
       .filter((shape) => shape.kind !== "circle")
       .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
@@ -1448,20 +1469,25 @@ export const avoidTextOverlaps = (
     const end = endOf(overlay, totalSeconds);
     const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles);
     resultGlobal[index] = placed;
-    obstacles.push(textBox(placed, overlay.startOffsetSeconds, end));
+    if (placed) obstacles.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
   const resultClips = clipsWithImagesPlaced.map((clip, clipIndex) => {
     if (!clip.overlays) return clip;
-    const overlays = clip.overlays.map((overlay) => {
+    const overlays = clip.overlays.flatMap((overlay) => {
       const start = clipTimes[clipIndex] + overlay.startOffsetSeconds;
       const end = start + (overlay.durationInSeconds ?? clip.durationInSeconds - overlay.startOffsetSeconds);
       const placed = placeWithoutOverlap(overlay, start, end, obstacles);
+      if (!placed) return [];
       obstacles.push(textBox(placed, start, end));
-      return placed;
+      return [placed];
     });
     return { ...clip, overlays };
   });
-  return { globalOverlays: resultGlobal, clips: resultClips, globalImages: arrangedImages };
+  return {
+    globalOverlays: resultGlobal.filter((overlay): overlay is TextOverlay => overlay !== null),
+    clips: resultClips,
+    globalImages: arrangedImages,
+  };
 };
 
 /**
@@ -1687,34 +1713,14 @@ export const finalizeAutoEditPlan = async (
     ...normalizeShapes(liftedShapes, outputStartSeconds),
   ]).slice(0, MAX_GLOBAL_SHAPES);
   const framing = normalizeFraming(data.framing);
-  const arranged = avoidTextOverlaps(globalOverlays, clips, globalShapes, globalImages, outputStartSeconds, framing);
-
   const theme = data.theme ?? {};
-  const arrangedClips = chooseCaptionPositions(
-    arranged.clips,
-    framing,
-    {
-      position: (theme.captionPosition ?? "bottom") as CaptionPosition,
-      style: (theme.captionStyle ?? "pill") as CaptionStyle,
-      fontSize: (theme.captionFontSize ?? "medium") as CaptionFontSize,
-    },
-    [
-      ...arranged.globalOverlays.map((overlay) => ({
-        ...textBox(overlay, overlay.startOffsetSeconds, overlay.startOffsetSeconds + (overlay.durationInSeconds ?? outputStartSeconds)),
-        weight: 3,
-      })),
-      ...arranged.globalImages.map((image) => ({
-        ...imageBox(image, image.startOffsetSeconds, image.startOffsetSeconds + (image.durationInSeconds ?? outputStartSeconds)),
-        weight: 1,
-      })),
-      ...globalShapes
-        .filter((shape) => shape.kind !== "circle")
-        .map((shape) => ({
-          ...shapeBox(shape, shape.startOffsetSeconds, shape.startOffsetSeconds + (shape.durationInSeconds ?? outputStartSeconds)),
-          weight: 1,
-        })),
-    ]
-  );
+  // 文字どうし・字幕と顔・字幕と文字が重ならないように、ずっと出る文字→字幕→残りの文字の順に置く(必ず守る決まり)
+  const arranged = avoidTextOverlaps(globalOverlays, clips, globalShapes, globalImages, outputStartSeconds, framing, {
+    position: (theme.captionPosition ?? "bottom") as CaptionPosition,
+    style: (theme.captionStyle ?? "pill") as CaptionStyle,
+    fontSize: (theme.captionFontSize ?? "medium") as CaptionFontSize,
+  });
+  const arrangedClips = arranged.clips;
   return {
     summary: data.summary,
     referenceNotes: data.referenceNotes?.trim() || null,
@@ -2162,17 +2168,35 @@ export const describeExampleRhythm = (label: string, plan: RawAutoEditPlan): str
   return lines.join("\n");
 };
 
+/**
+ * 手本の編集者の「編集のクセ帳」(scripts/eval/build-style-guide.ts で、手本の完成動画と書き起こしから作った文章)。
+ * 量を合わせるより、この編集者が場面をどう見せるかというクセと雰囲気を真似させるため、毎回見せる。無ければ空。
+ */
+const STYLE_GUIDE_PATH = path.join(process.cwd(), "data", "edit-examples", "style-guide.md");
+const loadStyleGuide = (): Promise<string> => readFile(STYLE_GUIDE_PATH, "utf8").then((text) => text.trim(), () => "");
+
+const buildStyleGuideSection = (guide: string): string =>
+  guide
+    ? `
+
+## 編集のクセ帳(この編集者になりきって、どう見せるかを決める)
+次は、この投稿者の動画を編集している編集者のクセと雰囲気をまとめた物です。本人の動画の中身に合わせて、
+「この編集者なら、この場面をこう見せる」という判断に使ってください。本人の動画に無い場面の見せ方は使わない。
+例として出てくる文言(項目名・国名など)は別の動画の物なので、持ち込まない。
+上の「絶対の決まり」と「医療広告の決まり」とぶつかる所は、そちらを優先する。
+
+${guide}`
+    : "";
+
 /** 手本の癖の目安の節。近い手本ほど後ろに置く(最後が一番近い)。 */
 const buildRhythmSection = (examples: { label: string; breakdown?: RawAutoEditPlan }[]): string => {
   const described = examples.flatMap((example) => (example.breakdown ? [describeExampleRhythm(example.label, example.breakdown)] : []));
   if (described.length === 0) return "";
   return `
 
-## 手本の編集者の「入れ方の癖」(書き起こしから数えた実際の量。量と組み合わせはこれに合わせる)
-量は、まず本人の動画に出る項目の数を数え、手本の「項目1つあたりの入れ方」に合わせる。項目の無い動画は1分あたりの数で合わせる
-(一番最後に書いた手本が今回の動画に一番近いので、それを基準にする。±3割以内に収める)。
-どの瞬間に入れるかも真似する。例えば手本が「項目が出る瞬間に、ラベルと効果音を同時に入れ、項目の間の説明には何も入れない」なら、
-今回も項目が出る瞬間にだけ入れる。手本の効果音が少ないなら、今回も少なくする(全部の文に付けない)。
+## 近い手本の入れ方(書き起こしから数えた実際の様子。数の目標ではなく、雰囲気をつかむための参考)
+この編集者が、どういう瞬間に何を組み合わせているかの参考にする(一番最後に書いた手本が今回の動画に一番近い)。
+数を合わせるのではなく、本人の動画の中身に合わせて、同じような瞬間に同じような組み合わせで入れる。
 ${described.join("\n")}`;
 };
 
@@ -2341,7 +2365,8 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
 
     // 3. 使える画像(あれば)+本人の動画+依頼文。
     const materialImageParts = await buildMaterialImageParts(input.materialImages);
-    const prompt = buildPrompt(input, fewShot.contents.length > 0) + buildRhythmSection([...examples].reverse());
+    const styleGuide = await loadStyleGuide();
+    const prompt = buildPrompt(input, fewShot.contents.length > 0) + buildStyleGuideSection(styleGuide) + buildRhythmSection([...examples].reverse());
     contents.push({
       role: "user",
       parts: [...materialImageParts, { text: "【今回編集する本人の動画】" }, videoPart, { text: prompt }],

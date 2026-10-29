@@ -526,6 +526,37 @@ describe("顔を避ける", () => {
     expect(plan.clips[1].clipCaptionPosition).toBeUndefined();
   });
 
+  it("字幕は、顔にもずっと出る文字にも重ならない位置にする", async () => {
+    // 下の字幕の位置に、ずっと出る文字を置く。顔は真ん中なので、字幕は上へ行くはず
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [{ sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "こんにちは", face }],
+        {
+          theme: { captionPosition: "bottom" },
+          globalOverlays: [{ text: "ずっと出る文字", xPercent: 50, yPercent: 88, fontSizePx: 90 }],
+        }
+      ),
+      input
+    );
+    expect(plan.clips[0].clipCaptionPosition).toBe("top");
+  });
+
+  it("どこに置いても重なる文字は出さない(重なったまま残さない)", async () => {
+    // 画面いっぱいの大きさの文字を、ほかの文字と同じ時間に出す
+    const plan = await finalizeAutoEditPlan(
+      basePlan([
+        {
+          sourceStartSeconds: 0,
+          sourceEndSeconds: 2,
+          face: { xPercent: 50, yPercent: 50, widthPercent: 90, heightPercent: 90 },
+          overlays: [{ text: "とても長い強調の文字をたくさん", xPercent: 50, yPercent: 50, fontSizePx: 220 }],
+        },
+      ]),
+      input
+    );
+    expect(plan.clips[0].overlays ?? []).toHaveLength(0);
+  });
+
   it("寄ったクリップでは、寄った後の顔の位置で確かめる", () => {
     const box = faceOnScreen(face, null, { scale: 1.3, style: "punch", focusXPercent: 50, focusYPercent: 20 });
     // 中心(縦20%)から離れる方向へ1.3倍に広がる
