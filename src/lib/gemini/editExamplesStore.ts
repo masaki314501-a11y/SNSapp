@@ -136,7 +136,7 @@ export const uploadExampleVideo = async (
  * ような長い小数が混ざっていると、AIがそれを真似して「70.000000000000014210854…」と数字を何千桁も書き続け、
  * 答えが壊れたり時間切れになったりしていたため。
  */
-const roundNumbers = (_key: string, value: unknown): unknown =>
+export const roundNumbers = (_key: string, value: unknown): unknown =>
   typeof value === "number" && !Number.isInteger(value) ? Math.round(value * 10) / 10 : value;
 
 export const loadEditFewShotContext = async (
@@ -191,6 +191,9 @@ ${JSON.stringify(example.breakdown, roundNumbers)}`,
         parts.push({
           text: `この正解動画を、${liteExample ? "編集前の素材(ここでは省略)" : "上の学習動画(素材)"}に対する今回と同じ形のJSONに書き起こすと次のとおりです(秒数は素材上の秒数)。
 今回の依頼でも、この書き起こしと同じくらいの細かさ・量・見た目の値で答えてください。
+overlays・sfx・imagesが入っているクリップのspeechを見てください。ほとんどが項目名・順位・数字・判定を言っているクリップで、
+それ以外のクリップには何も入っていません。今回も、本人が同じ種類の言葉を言うクリップを探して、そこにだけ同じ入れ方をしてください。
+見出し・締めの言い回しのうち、医療広告の決まりに当たる物(「圧倒的」「〇分で終わる」のような言い切り、Before/After・有名人の写真)は真似しないでください。
 ただし書き起こしの文言(テロップ・タイトル・強調テキスト・ナレーション)は「${description}」の動画の内容です。今回の動画には持ち込まないでください。
 書き起こしのimagesは、この編集者が「どんな画像を、いつ・どこに・どの大きさで出したか」です(descriptionが何の画像か)。
 今回は「使える画像」があれば、その中から同じ役割の画像を番号で選んで、同じ出し方をしてください。

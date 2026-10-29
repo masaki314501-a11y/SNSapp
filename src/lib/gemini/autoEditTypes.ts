@@ -189,24 +189,31 @@ export type RawAutoEditClip = z.infer<typeof rawClipSchema>;
 export type RawAutoEditImage = z.infer<typeof rawImageSchema>;
 export type RawAutoEditShape = z.infer<typeof rawShapeSchema>;
 
-const nullableString = { type: Type.STRING, nullable: true } as const;
+/**
+ * 答えの長さの歯止め。上限が無いと、Geminiが同じ要素を何百個も並べ続けたり、色の欄に関係ない文字を何万字も
+ * 書き続けたりして、答えが壊れる・時間切れになることがあった。文字はmaxLengthで止める。
+ * 配列の数の上限(maxItems)は、この大きさの形に付けるとGeminiが「不正な依頼」(400)として受け付けなかったので付けない
+ * (同じ要素の繰り返しは、受け取りながら見張って止める。autoEditPlan.tsのrequestRawPlan)。
+ */
+const text = (maxLength: number, nullable = false) => ({ type: Type.STRING, maxLength: String(maxLength), ...(nullable ? { nullable: true } : {}) }) as const;
+const colorString = { type: Type.STRING, nullable: true, maxLength: "9" } as const;
 const nullableNumber = { type: Type.NUMBER, nullable: true } as const;
 
 const overlayItemSchema = {
   type: Type.OBJECT,
   properties: {
-    text: { type: Type.STRING },
+    text: text(40),
     startOffsetSeconds: nullableNumber,
     durationInSeconds: nullableNumber,
     xPercent: nullableNumber,
     yPercent: nullableNumber,
     fontSizePx: nullableNumber,
-    color: nullableString,
-    strokeColor: nullableString,
-    backgroundColor: nullableString,
+    color: colorString,
+    strokeColor: colorString,
+    backgroundColor: colorString,
     rotationDeg: nullableNumber,
     animation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
-    glowColor: nullableString,
+    glowColor: colorString,
     italic: { type: Type.BOOLEAN, nullable: true },
     strokeWidthPx: nullableNumber,
     slotRank: { type: Type.INTEGER, nullable: true },
@@ -219,8 +226,8 @@ const imageItemSchema = {
   type: Type.OBJECT,
   properties: {
     imageNumber: { type: Type.INTEGER, nullable: true },
-    description: { type: Type.STRING },
-    name: nullableString,
+    description: text(120),
+    name: text(40, true),
     startOffsetSeconds: nullableNumber,
     durationInSeconds: nullableNumber,
     xPercent: nullableNumber,
@@ -246,9 +253,9 @@ const shapeItemSchema = {
     yPercent: nullableNumber,
     widthPercent: nullableNumber,
     heightPercent: nullableNumber,
-    borderColor: nullableString,
+    borderColor: colorString,
     borderWidthPx: nullableNumber,
-    fillColor: nullableString,
+    fillColor: colorString,
     fillOpacity: nullableNumber,
     cornerRadiusPx: nullableNumber,
   },
@@ -262,13 +269,13 @@ const shapeItemSchema = {
 export const autoEditResponseSchema = {
   type: Type.OBJECT,
   properties: {
-    referenceNotes: nullableString,
-    summary: { type: Type.STRING },
+    referenceNotes: text(400, true),
+    summary: text(600),
     theme: {
       type: Type.OBJECT,
       nullable: true,
       properties: {
-        primaryColor: { type: Type.STRING, description: "#RRGGBB形式" },
+        primaryColor: { type: Type.STRING, description: "#RRGGBB形式", maxLength: "9" },
         captionPosition: { type: Type.STRING, format: "enum", enum: CAPTION_POSITION_VALUES },
         captionStyle: { type: Type.STRING, format: "enum", enum: CAPTION_STYLE_VALUES },
         captionFontSize: { type: Type.STRING, format: "enum", enum: CAPTION_FONT_SIZE_VALUES },
@@ -277,14 +284,14 @@ export const autoEditResponseSchema = {
     hook: {
       type: Type.OBJECT,
       nullable: true,
-      properties: { headline: { type: Type.STRING }, subline: nullableString },
+      properties: { headline: text(40), subline: text(60, true) },
       required: ["headline"],
     },
-    hookAlternatives: { type: Type.ARRAY, nullable: true, items: { type: Type.STRING } },
+    hookAlternatives: { type: Type.ARRAY, nullable: true, items: text(40) },
     cta: {
       type: Type.OBJECT,
       nullable: true,
-      properties: { text: { type: Type.STRING } },
+      properties: { text: text(40) },
       required: ["text"],
     },
     framing: {
@@ -294,18 +301,19 @@ export const autoEditResponseSchema = {
       required: ["scale"],
     },
     globalShapes: { type: Type.ARRAY, nullable: true, items: shapeItemSchema },
-    title: nullableString,
+    title: text(40, true),
     globalOverlays: { type: Type.ARRAY, nullable: true, items: overlayItemSchema },
     showCaptions: { type: Type.BOOLEAN, nullable: true },
     generatedImageStyle: { type: Type.STRING, format: "enum", enum: ["illustration", "photo"], nullable: true },
     clips: {
       type: Type.ARRAY,
+     
       items: {
         type: Type.OBJECT,
         properties: {
           sourceStartSeconds: { type: Type.NUMBER },
           sourceEndSeconds: { type: Type.NUMBER },
-          speech: nullableString,
+          speech: text(80, true),
           captionAnimation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
           face: {
             type: Type.OBJECT,
@@ -335,6 +343,7 @@ export const autoEditResponseSchema = {
           sfx: {
             type: Type.ARRAY,
             nullable: true,
+           
             items: {
               type: Type.OBJECT,
               properties: {
@@ -344,7 +353,7 @@ export const autoEditResponseSchema = {
               required: ["presetId"],
             },
           },
-          narration: nullableString,
+          narration: text(100, true),
         },
         // Geminiは書いた順に考えるので、クリップの中もプロンプトの手順(①カット・物→②テロップ・顔の位置→
         // ④寄り→仕上げ)の順に出力させる。指定しないとアルファベット順になってしまう。
