@@ -782,5 +782,101 @@
     "style": "icon",
     "file": "free-flag-italy.png",
     "createdAt": "2026-10-20T11:29:37.000Z"
+  },
+  {
+    "id": "1b3492d8ecf76037df03dc1a88db02c8",
+    "name": "高熱",
+    "description": "体温計をくわえて高熱で苦しんでいる人のイラスト",
+    "style": "illustration",
+    "file": "1b3492d8ecf76037df03dc1a88db02c8.jpg",
+    "createdAt": "2026-10-26T08:57:07.640Z"
+  },
+  {
+    "id": "5e88d02f50017200b4c3a711a5cd427b",
+    "name": "意識障害",
+    "description": "意識が朦朧として倒れそうな人のイラスト",
+    "style": "illustration",
+    "file": "5e88d02f50017200b4c3a711a5cd427b.jpg",
+    "createdAt": "2026-10-26T08:57:17.276Z"
+  },
+  {
+    "id": "fa74412edfe6a8ce010644bb2399166d",
+    "name": "救急車",
+    "description": "救急車のイラスト",
+    "style": "illustration",
+    "file": "fa74412edfe6a8ce010644bb2399166d.jpg",
+    "createdAt": "2026-10-26T08:57:26.487Z"
+  },
+  {
+    "id": "93162177c0b19fe6f92ec0aacaaab237",
+    "name": "頭痛",
+    "description": "頭を抱えて強い頭痛に苦しんでいる人のイラスト",
+    "style": "illustration",
+    "file": "93162177c0b19fe6f92ec0aacaaab237.jpg",
+    "createdAt": "2026-10-26T08:57:37.583Z"
+  },
+  {
+    "id": "39da88eac6462384d160f1bf3438bb74",
+    "name": "高熱で寝込む人",
+    "description": "ベッドで高熱を出して苦しんでいる人のイラスト",
+    "style": "illustration",
+    "file": "39da88eac6462384d160f1bf3438bb74.jpg",
+    "createdAt": "2026-10-26T09:12:06.819Z"
+  },
+  {
+    "id": "3684ff74317554b71be26d2955816dce",
+    "name": "6色に色分けされた円グラフ",
+    "description": "6色に色分けされた円グラフ",
+    "style": "illustration",
+    "file": "3684ff74317554b71be26d2955816dce.jpg",
+    "createdAt": "2026-10-26T14:02:14.115Z"
+  },
+  {
+    "id": "35835c704d0ac8786547e47c6bf0ce02",
+    "name": "出っ歯と正常な歯並びの比較",
+    "description": "左が上の前歯が前に出た出っ歯、右が整った歯並びの口元を並べたイラスト",
+    "style": "illustration",
+    "file": "35835c704d0ac8786547e47c6bf0ce02.jpg",
+    "createdAt": "2026-10-29T00:00:00.000Z"
+  },
+  {
+    "id": "98126349397f8b7e15a8aba81b4c19d8",
+    "name": "出っ歯と正常な噛み合わせの比較(横から)",
+    "description": "横から見た、上の前歯が前に出た出っ歯と、正常な噛み合わせを並べたイラスト",
+    "style": "illustration",
+    "file": "98126349397f8b7e15a8aba81b4c19d8.jpg",
+    "createdAt": "2026-10-29T00:00:00.000Z"
+  },
+  {
+    "id": "9ec50648e6ef4633a48afa67afc22cb6",
+    "name": "黄ばんだ歯と白い歯の比較",
+    "description": "左半分が黄ばんだ歯、右半分が白い歯の歯並びのイラスト(ホワイトニングの前後)",
+    "style": "illustration",
+    "file": "9ec50648e6ef4633a48afa67afc22cb6.jpg",
+    "createdAt": "2026-10-29T00:00:00.000Z"
+  },
+  {
+    "id": "c16c68b21fbdd0bbaed04217e6720ab9",
+    "name": "上の歯が無い口元",
+    "description": "上の歯が全く無く、下の前歯だけが残っている開いた口元のイラスト",
+    "style": "illustration",
+    "file": "c16c68b21fbdd0bbaed04217e6720ab9.jpg",
+    "createdAt": "2026-10-29T00:00:00.000Z"
+  },
+  {
+    "id": "e02de813068b01565e0e0e526e2cb463",
+    "name": "前歯のアイコン",
+    "description": "赤い丸の中に上の前歯2本を描いたアイコン風のイラスト",
+    "style": "illustration",
+    "file": "e02de813068b01565e0e0e526e2cb463.jpg",
+    "createdAt": "2026-10-29T00:00:00.000Z"
+  },
+  {
+    "id": "fda447a914ad47b1409f43dff7c4e7a2",
+    "name": "欠けて変色した前歯と白い前歯の比較",
+    "description": "左が欠けて茶色く変色した前歯2本、右が白く整った前歯2本のイラスト(治療の前後)",
+    "style": "illustration",
+    "file": "fda447a914ad47b1409f43dff7c4e7a2.jpg",
+    "createdAt": "2026-10-29T00:00:00.000Z"
   }
 ]
