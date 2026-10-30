@@ -575,6 +575,35 @@ describe("顔を避ける", () => {
     expect(["top", "middle"]).toContain(plan.clips[0].clipCaptionPosition);
   });
 
+  it("枠の番号が「1」「2」だけでも、項目名は枠の中に入れ、顔を避けて枠の外へ押し出さない", async () => {
+    const ys = [28, 43, 57, 70, 84];
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          { sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "危険な症状5選", face: { xPercent: 45, yPercent: 30, widthPercent: 40, heightPercent: 30 } },
+          {
+            sourceStartSeconds: 2,
+            sourceEndSeconds: 5,
+            speech: "高熱が続く",
+            face: { xPercent: 45, yPercent: 30, widthPercent: 40, heightPercent: 30 },
+            overlays: [{ text: "高熱", startOffsetSeconds: 0, slotRank: 1, keepUntilEnd: true }],
+          },
+        ],
+        {
+          globalShapes: ys.map((y) => ({ kind: "rect" as const, xPercent: 22, yPercent: y, widthPercent: 30, heightPercent: 11 })),
+          globalOverlays: ys.map((y, i) => ({ text: String(i + 1), xPercent: 4, yPercent: y, fontSizePx: 50 })),
+        }
+      ),
+      input
+    );
+    const label = plan.globalOverlays.find((overlay) => overlay.text === "高熱")!;
+    expect(label).toBeDefined();
+    expect(label.xPercent).toBeGreaterThan(7);
+    expect(label.xPercent).toBeLessThan(37);
+    expect(label.yPercent).toBeGreaterThan(28 - 5.5);
+    expect(label.yPercent).toBeLessThan(28 + 5.5);
+  });
+
   it("顔が画面いっぱいでも、ずっと出すタイトルは消さない", async () => {
     const plan = await finalizeAutoEditPlan(
       basePlan(

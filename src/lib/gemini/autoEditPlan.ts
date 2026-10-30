@@ -1073,10 +1073,15 @@ const linkTextMoves = (overlays: TextOverlay[]): TextOverlay[] =>
 /** ランキングの枠1つの位置と大きさ(%)。 */
 type RankSlot = { xPercent: number; yPercent: number; widthPercent?: number; heightPercent?: number };
 
-/** 「1位」「第3位」「３位」のような順位の文字なら、その数。 */
+/**
+ * 「1位」「第3位」「３位」のような順位の文字、または「1」「2.」「No.3」のような枠の番号なら、その数。
+ * (「5選」の動画では枠に「1」〜「5」とだけ書くことが多く、それを枠の番号と見なせず、枠に入る文字が枠の外へ押し出されていた)
+ */
 const rankOfLabel = (text: string): number | null => {
-  const normalized = text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0)).replace(/\s/g, "");
-  const match = /^第?(\d{1,2})位$/.exec(normalized);
+  const normalized = text
+    .replace(/[０-９．]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s/g, "");
+  const match = /^(?:第|No\.?)?(\d{1,2})(?:位|\.)?$/i.exec(normalized);
   return match ? Number(match[1]) : null;
 };
 
@@ -1427,13 +1432,20 @@ export const avoidTextOverlaps = (
       : []
   );
 
+  // 枠(四角の図形)の中に置いた文字か。枠と組なので、顔を理由には動かさない(枠ごと人物を避けて置いてある)
+  const inFrame = (overlay: TextOverlay) =>
+    globalShapes.some((shape) => {
+      if (shape.kind === "circle") return false;
+      const box = shapeBox(shape, 0, 0);
+      return overlay.xPercent >= box.left && overlay.xPercent <= box.right && overlay.yPercent >= box.top && overlay.yPercent <= box.bottom;
+    });
   const placedPersistent: TimedBox[] = [];
   const resultGlobal: (TextOverlay | null)[] = globalOverlays.map((overlay) => overlay);
   for (const [index, overlay] of globalOverlays.entries()) {
     if (!isPersistent(overlay)) continue;
     const end = endOf(overlay, totalSeconds);
     // 「1位」などの順位の文字は枠と組なので、顔を理由には動かさない(枠ごと人物を避けて置いてある)
-    const obstacles = rankOfLabel(overlay.text) === null ? [...placedPersistent, ...faces] : placedPersistent;
+    const obstacles = rankOfLabel(overlay.text) === null && !inFrame(overlay) ? [...placedPersistent, ...faces] : placedPersistent;
     // タイトルなどのずっと出す文字は、動画の中身そのものなので消さない。顔を避ける場所が無ければもっと小さくして探し、
     // それでも無ければ文字どうしだけ避けて置く(以前は、寄りのカットで顔が上まで来るとタイトルごと消えていた)
     const placed =
@@ -1483,13 +1495,28 @@ export const avoidTextOverlaps = (
       : clip
   );
 
+  const frameBoxes = globalShapes
+    .filter((shape) => shape.kind !== "circle")
+    .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds)));
+  // 枠の中に置いた文字(枠を埋める項目名など)は、その枠と顔は避けない。枠ごと置き場所が決まっているので、
+  // 避けさせると枠の外へ押し出され、どの枠の文字か分からなくなっていた。文字どうし・字幕は避ける
+  const obstaclesFor = (overlay: TextOverlay, start: number, end: number, all: TimedBox[]) => {
+    const frame = frameBoxes.find(
+      (box) =>
+        box.start < end &&
+        start < box.end &&
+        overlay.xPercent >= box.left &&
+        overlay.xPercent <= box.right &&
+        overlay.yPercent >= box.top &&
+        overlay.yPercent <= box.bottom
+    );
+    return frame ? all.filter((box) => box !== frame && !faces.includes(box)) : all;
+  };
   const obstacles: TimedBox[] = [
     ...placedPersistent,
     ...faces,
     ...captions.captionBoxes,
-    ...globalShapes
-      .filter((shape) => shape.kind !== "circle")
-      .map((shape) => shapeBox(shape, shape.startOffsetSeconds, endOf(shape, totalSeconds))),
+    ...frameBoxes,
     ...arrangedImages.map((image) => imageBox(image, image.startOffsetSeconds, endOf(image, totalSeconds))),
   ];
   clipsWithImagesPlaced.forEach((clip, clipIndex) => {
@@ -1502,7 +1529,7 @@ export const avoidTextOverlaps = (
   for (const [index, overlay] of globalOverlays.entries()) {
     if (isPersistent(overlay)) continue;
     const end = endOf(overlay, totalSeconds);
-    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles);
+    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstaclesFor(overlay, overlay.startOffsetSeconds, end, obstacles));
     resultGlobal[index] = placed;
     if (placed) obstacles.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
@@ -1511,7 +1538,7 @@ export const avoidTextOverlaps = (
     const overlays = clip.overlays.flatMap((overlay) => {
       const start = clipTimes[clipIndex] + overlay.startOffsetSeconds;
       const end = start + (overlay.durationInSeconds ?? clip.durationInSeconds - overlay.startOffsetSeconds);
-      const placed = placeWithoutOverlap(overlay, start, end, obstacles);
+      const placed = placeWithoutOverlap(overlay, start, end, obstaclesFor(overlay, start, end, obstacles));
       if (!placed) return [];
       obstacles.push(textBox(placed, start, end));
       return [placed];
