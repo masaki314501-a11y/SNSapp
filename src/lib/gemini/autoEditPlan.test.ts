@@ -598,10 +598,47 @@ describe("顔を避ける", () => {
     );
     const label = plan.globalOverlays.find((overlay) => overlay.text === "高熱")!;
     expect(label).toBeDefined();
-    expect(label.xPercent).toBeGreaterThan(7);
-    expect(label.xPercent).toBeLessThan(37);
-    expect(label.yPercent).toBeGreaterThan(28 - 5.5);
-    expect(label.yPercent).toBeLessThan(28 + 5.5);
+    // 枠の並びは字幕の帯を空けるため上へ詰まるので、詰めた後の1番の枠の中にあるかを見る
+    const frame = plan.globalShapes.reduce((top, shape) => (shape.yPercent < top.yPercent ? shape : top));
+    expect(label.xPercent).toBeGreaterThan(frame.xPercent - frame.widthPercent / 2);
+    expect(label.xPercent).toBeLessThan(frame.xPercent + frame.widthPercent / 2);
+    expect(label.yPercent).toBeGreaterThan(frame.yPercent - frame.heightPercent / 2);
+    expect(label.yPercent).toBeLessThan(frame.yPercent + frame.heightPercent / 2);
+  });
+
+  it("枠が画面の下まで並んでいたら、枠の並びを上へ詰めて字幕の帯を空け、文字を全部出す", async () => {
+    const ys = [28, 43, 57, 71, 85];
+    const speech = "手足のしびれや吐き気などある場合は\nすぐに受診してください";
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        // 使う範囲(input)は9秒なので、項目は3つまで
+        ys.slice(0, 3).map((_, i) => ({
+          sourceStartSeconds: i * 3,
+          sourceEndSeconds: i * 3 + 3,
+          speech,
+          face: { xPercent: 55, yPercent: 30, widthPercent: 30, heightPercent: 20 },
+          overlays: [{ text: `症状${i + 1}`, startOffsetSeconds: 0, slotRank: i + 1, keepUntilEnd: true }],
+        })),
+        {
+          theme: { captionPosition: "bottom" },
+          globalOverlays: [
+            { text: "病院に行くべき\n危険な症状5選", startOffsetSeconds: 0, xPercent: 30, yPercent: 8, fontSizePx: 60 },
+            ...ys.map((y, i) => ({ text: String(i + 1), xPercent: 4, yPercent: y, fontSizePx: 50 })),
+          ],
+          globalShapes: ys.map((y) => ({ kind: "rect" as const, xPercent: 22, yPercent: y, widthPercent: 30, heightPercent: 12 })),
+        }
+      ),
+      input
+    );
+    const lowestFrame = Math.max(...plan.globalShapes.map((shape) => shape.yPercent + shape.heightPercent / 2));
+    // 元は91%まで並んでいた。字幕(下から約8%の余白+2行分)の上で止まる
+    expect(lowestFrame).toBeLessThan(84);
+    expect(plan.clips.every((clip) => (clip.clipCaptionPosition ?? plan.theme.captionPosition ?? "bottom") === "bottom")).toBe(true);
+    // 項目名は3つとも出ている
+    const names = [...plan.globalOverlays, ...plan.clips.flatMap((clip) => clip.overlays ?? [])]
+      .map((overlay) => overlay.text)
+      .filter((text) => text.startsWith("症状"));
+    expect(names).toHaveLength(3);
   });
 
   it("顔が画面いっぱいでも、ずっと出すタイトルは消さない", async () => {

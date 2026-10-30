@@ -350,6 +350,8 @@ ${input.template.instructions}
 - 文字どうし(タイトル・ラベル・見出し・強調テキスト・ずっと出す文字・字幕)を重ねない。
 - 字幕(テロップ)を顔に重ねない。字幕を、枠・カード・画像・図形にも重ねない。字幕は必ず出るので、顔の位置(5-2)と、
   ずっと出す枠・カード・画像の位置を見て、どれにも重ならない帯(captionPosition)を選ぶ。枠やカードを字幕の帯に置かない。
+  枠を縦に並べる一覧(ランキング・〇選)は、タイトルの下から画面の高さの80%までに収め、下の帯を字幕のために空ける
+  (はみ出した時はサーバー側で枠の並びを上へ詰める)。
 - 文字・画像を置く時は、その時間に画面にある物(字幕・顔・ずっと出ている文字・枠)を全部避ける。置ける場所が無い物は入れない
   (サーバー側でも最後に重なりを確かめ、字幕・顔に重なる文字や画像は出さない)。
 
@@ -1398,6 +1400,111 @@ const placeImageAwayFromFaces = (image: ImageOverlay, start: number, end: number
 };
 
 /**
+ * 枠を縦に並べた画面(ランキング・〇選の一覧)で、枠の並びが字幕の帯(画面の下)まで来ているなら、
+ * 枠と、枠の中・横の文字・画像をまとめて上へ詰めて(足りなければ縦に縮めて)、字幕の帯を空ける。
+ * 枠が上から下まであると、字幕をどこに置いても枠や枠の中の文字に重なり、どちらかが読めなくなっていた。
+ * 字幕の位置は下に決める(返り値のcaptionPosition)。
+ */
+const fitFrameStackAboveCaptions = (
+  globalOverlays: TextOverlay[],
+  clips: AutoEditClipPlan[],
+  globalShapes: ShapeOverlay[],
+  globalImages: ImageOverlay[],
+  totalSeconds: number,
+  captionTheme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize }
+): {
+  globalOverlays: TextOverlay[];
+  clips: AutoEditClipPlan[];
+  globalShapes: ShapeOverlay[];
+  globalImages: ImageOverlay[];
+  captionPosition: CaptionPosition;
+} => {
+  const unchanged = { globalOverlays, clips, globalShapes, globalImages, captionPosition: captionTheme.position };
+  const frames = globalShapes.filter(
+    (shape) =>
+      shape.kind !== "circle" && (shape.durationInSeconds === undefined || shape.durationInSeconds >= totalSeconds / 2)
+  );
+  if (frames.length < 2) return unchanged;
+  const frameBoxes = frames.map((shape) => shapeBox(shape, 0, 0));
+  const group = {
+    left: Math.min(...frameBoxes.map((box) => box.left)) - 12,
+    right: Math.max(...frameBoxes.map((box) => box.right)) + 12,
+    top: Math.min(...frameBoxes.map((box) => box.top)),
+    bottom: Math.max(...frameBoxes.map((box) => box.bottom)),
+  };
+  // 枠の並びが画面の高さの3割も無ければ、一覧ではない(並んだカード等)ので触らない
+  if (group.bottom - group.top < 30) return unchanged;
+  const captionTop = Math.min(
+    ...clips.map((clip) => captionBox(clip.speechText, "bottom", captionTheme.style, captionTheme.fontSize).top)
+  );
+  const limitBottom = captionTop - 1.5;
+  const themeBand = (position: CaptionPosition) =>
+    clips.some((clip) => {
+      const box = captionBox(clip.speechText, position, captionTheme.style, captionTheme.fontSize);
+      return box.top < group.bottom && group.top < box.bottom && box.left < group.right && group.left < box.right;
+    });
+  if (group.bottom <= limitBottom && !themeBand(captionTheme.position)) return unchanged;
+
+  const isMember = (x: number, y: number) => x >= group.left && x <= group.right && y >= group.top - 2 && y <= group.bottom + 2;
+  // 上に詰められるのは、一覧の上にあるずっと出す文字(タイトルなど)の下まで
+  const aboveTexts = globalOverlays.filter((overlay) => !isMember(overlay.xPercent, overlay.yPercent) && overlay.yPercent < group.top);
+  const minTop = Math.max(10, ...aboveTexts.map((overlay) => textBox(overlay, 0, 0).bottom + 1.5));
+  const height = group.bottom - group.top;
+  let newTop: number;
+  let factor: number;
+  if (group.bottom <= limitBottom) {
+    newTop = group.top;
+    factor = 1;
+  } else if (height <= limitBottom - minTop) {
+    newTop = Math.max(minTop, group.top - (group.bottom - limitBottom));
+    factor = 1;
+  } else {
+    newTop = minTop;
+    factor = (limitBottom - minTop) / height;
+  }
+  if (factor < 0.5) {
+    console.info("[autoEditPlan] 枠の並びが長すぎて、字幕の帯を空けられませんでした");
+    return unchanged;
+  }
+  const moveY = (y: number) => newTop + (y - group.top) * factor;
+  const fontScale = Math.max(0.75, factor);
+  const moveText = <T extends TextOverlay>(overlay: T): T =>
+    isMember(overlay.xPercent, overlay.yPercent)
+      ? { ...overlay, yPercent: moveY(overlay.yPercent), fontSizePx: Math.round(overlay.fontSizePx * fontScale) }
+      : overlay;
+  const moveImage = <T extends ImageOverlay>(image: T): T =>
+    isMember(image.xPercent, image.yPercent)
+      ? {
+          ...image,
+          yPercent: moveY(image.yPercent),
+          ...(image.heightPercent !== undefined
+            ? { heightPercent: image.heightPercent * factor }
+            : { widthPercent: image.widthPercent * factor }),
+        }
+      : image;
+  if (group.bottom > limitBottom) {
+    console.info(`[autoEditPlan] 字幕の帯を空けるため、枠の並びを上へ詰めました(縮めた割合${factor.toFixed(2)})`);
+  }
+  return {
+    globalOverlays: globalOverlays.map(moveText),
+    globalShapes: globalShapes.map((shape) =>
+      shape.kind !== "circle" && isMember(shape.xPercent, shape.yPercent)
+        ? { ...shape, yPercent: moveY(shape.yPercent), heightPercent: shape.heightPercent * factor }
+        : isMember(shape.xPercent, shape.yPercent)
+          ? { ...shape, yPercent: moveY(shape.yPercent) }
+          : shape
+    ),
+    globalImages: globalImages.map(moveImage),
+    clips: clips.map((clip) => ({
+      ...clip,
+      ...(clip.overlays ? { overlays: clip.overlays.map(moveText) } : {}),
+      ...(clip.images ? { images: clip.images.map(moveImage) } : {}),
+    })),
+    captionPosition: "bottom",
+  };
+};
+
+/**
  * ずっと出る文字(タイトル・順位の文字など)に、ほかの文字が重ならないようにする(ルール)。
  * 1. ずっと出る文字どうし: 先に置いた方を優先し、後の方をずらす
  * 2. それ以外の文字(話題の見出し・強調テキストなど): ずっと出る文字・枠・画像・先に置いた文字と重ならない所へずらす
@@ -1412,7 +1519,18 @@ export const avoidTextOverlaps = (
   totalSeconds: number,
   framing: VideoFraming | null = null,
   captionTheme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize } | null = null
-): { globalOverlays: TextOverlay[]; clips: AutoEditClipPlan[]; globalImages: ImageOverlay[] } => {
+): {
+  globalOverlays: TextOverlay[];
+  clips: AutoEditClipPlan[];
+  globalImages: ImageOverlay[];
+  globalShapes: ShapeOverlay[];
+  captionPosition: CaptionPosition | null;
+} => {
+  if (captionTheme) {
+    const fitted = fitFrameStackAboveCaptions(globalOverlays, clips, globalShapes, globalImages, totalSeconds, captionTheme);
+    ({ globalOverlays, clips, globalShapes, globalImages } = fitted);
+    captionTheme = { ...captionTheme, position: fitted.captionPosition };
+  }
   const endOf = (item: { startOffsetSeconds: number; durationInSeconds?: number }, fallbackEnd: number) =>
     item.durationInSeconds !== undefined ? item.startOffsetSeconds + item.durationInSeconds : fallbackEnd;
   // 「ずっと出る」は、最後まで出す物か、動画の半分以上出している物
@@ -1526,22 +1644,35 @@ export const avoidTextOverlaps = (
     }
   });
 
+  // 文字は全部出したいので、枠・画像まで避ける場所が無い時は、文字どうし・字幕・顔だけ避けて(小さくしてでも)置く。
+  // それでも場所が無い時だけ出さない(文字どうし・字幕・顔との重なりは必ず無くす)
+  const placedTexts: TimedBox[] = [];
+  const placeText = (overlay: TextOverlay, start: number, end: number): TextOverlay | null => {
+    const placed =
+      placeWithoutOverlap(overlay, start, end, obstaclesFor(overlay, start, end, obstacles), { quiet: true }) ??
+      placeWithoutOverlap(overlay, start, end, obstaclesFor(overlay, start, end, [...placedPersistent, ...faces, ...captions.captionBoxes, ...placedTexts]), {
+        scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5],
+      });
+    if (placed) {
+      const box = textBox(placed, start, end);
+      obstacles.push(box);
+      placedTexts.push(box);
+    }
+    return placed;
+  };
   for (const [index, overlay] of globalOverlays.entries()) {
     if (isPersistent(overlay)) continue;
     const end = endOf(overlay, totalSeconds);
-    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstaclesFor(overlay, overlay.startOffsetSeconds, end, obstacles));
+    const placed = placeText(overlay, overlay.startOffsetSeconds, end);
     resultGlobal[index] = placed;
-    if (placed) obstacles.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
   const resultClips = clipsWithImagesPlaced.map((clip, clipIndex) => {
     if (!clip.overlays) return clip;
     const overlays = clip.overlays.flatMap((overlay) => {
       const start = clipTimes[clipIndex] + overlay.startOffsetSeconds;
       const end = start + (overlay.durationInSeconds ?? clip.durationInSeconds - overlay.startOffsetSeconds);
-      const placed = placeWithoutOverlap(overlay, start, end, obstaclesFor(overlay, start, end, obstacles));
-      if (!placed) return [];
-      obstacles.push(textBox(placed, start, end));
-      return [placed];
+      const placed = placeText(overlay, start, end);
+      return placed ? [placed] : [];
     });
     return { ...clip, overlays };
   });
@@ -1582,7 +1713,13 @@ export const avoidTextOverlaps = (
     }),
   }));
   if (dropped.length > 0) console.info(`[autoEditPlan] 字幕・顔に重なるため出さない物: ${dropped.join(" / ")}`);
-  return { globalOverlays: finalGlobal, clips: finalClips, globalImages: finalImages };
+  return {
+    globalOverlays: finalGlobal,
+    clips: finalClips,
+    globalImages: finalImages,
+    globalShapes,
+    captionPosition: captionTheme?.position ?? null,
+  };
 };
 
 /**
@@ -1823,7 +1960,10 @@ export const finalizeAutoEditPlan = async (
       primaryColor: hexOrUndefined(theme.primaryColor),
       // 字幕の書体は本人が決めた物を動画全体で使う(AIには選ばせない)
       fontFamily: undefined,
-      captionPosition: (theme.captionPosition ?? undefined) as CaptionPosition | undefined,
+      // 枠の並びを詰めて字幕を下に決めた時は、その位置にする(avoidTextOverlaps)
+      captionPosition: (arranged.captionPosition !== (theme.captionPosition ?? "bottom")
+        ? arranged.captionPosition
+        : (theme.captionPosition ?? undefined)) as CaptionPosition | undefined,
       captionStyle: (theme.captionStyle ?? undefined) as CaptionStyle | undefined,
       captionFontSize: (theme.captionFontSize ?? undefined) as CaptionFontSize | undefined,
     },
@@ -1832,7 +1972,7 @@ export const finalizeAutoEditPlan = async (
     cta,
     globalOverlays: arranged.globalOverlays,
     globalImages: arranged.globalImages,
-    globalShapes,
+    globalShapes: arranged.globalShapes,
     showCaptions: Boolean(data.showCaptions),
     framing,
     generatedImageCount: usedGeneratedPaths.size,
