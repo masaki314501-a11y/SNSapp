@@ -35,7 +35,7 @@ type Props = {
   ) => void;
   /** 選んでいるクリップの字幕の文字スタイル(クリップを選んでいない時は全体の既定)と、全クリップ共通の重大ワード。 */
   captionTextStyleId: string | undefined;
-  /** 文字スタイルを変える範囲。clip=選んだクリップ、clips=選んだ複数のクリップ、all=全クリップの既定。 */
+  /** 文字スタイル・詳しい設定を変える範囲。clip=選んだクリップ、clips=選んだ複数のクリップ、all=全クリップの既定。 */
   textStyleScope: "clip" | "clips" | "all";
   onPickTextStyle: (id: string | undefined) => void;
   onApplyTextStyleToAll: () => void;
@@ -63,7 +63,7 @@ type Props = {
   narrationBulkAction: React.ReactNode;
   /** クリップごとのAIナレーションの欄(NarrationInspectorPanel)。字幕の見た目の次に置く。 */
   narrationSection: React.ReactNode;
-  /** 字幕の見た目のうち、全クリップ共通の設定(プリセット・配色・フォント等。ClipEditor側で組み立てる)。 */
+  /** 字幕の見た目の詳しい設定(配色・見た目・フォント・位置・大きさ。ClipEditor側で組み立て、文字スタイルと同じ範囲に使う)。 */
   lookSettings: React.ReactNode;
 };
 
@@ -262,15 +262,16 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           />
           {textStyleScope !== "all" ? (
             <button type="button" className="editor-toolbar-btn self-start" onClick={onApplyTextStyleToAll}>
-              この文字スタイルを全クリップに使う
+              この字幕の見た目を全クリップに使う
             </button>
           ) : null}
           <Collapsible summary="詳しい設定(配色・フォント・位置・大きさ)">
-            {captionTextStyleId ? (
-              <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-                文字スタイルを選んでいる間は、配色・見た目は文字スタイルのものになります。フォント・位置・大きさは、ここで変えると効きます(フォントは全クリップ共通)
-              </span>
-            ) : null}
+            <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+              {textStyleScope === "all" ? "全クリップの字幕に使います" : "選んだクリップの字幕だけに使います"}
+              {captionTextStyleId
+                ? "。文字スタイルを選んでいる間は、配色・見た目は文字スタイルのものになります(フォント・位置・大きさは効きます)"
+                : ""}
+            </span>
             {lookSettings}
           </Collapsible>
         </SettingsSection>

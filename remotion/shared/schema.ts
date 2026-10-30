@@ -386,6 +386,9 @@ export const mediaItemBaseSchema = z.object({
   clipCaptionPosition: captionPositionSchema.removeDefault().optional(),
   /** このクリップだけ字幕の文字スタイルを変える(textStylePresets.tsのid)。""=スタイル無し、省略時は全体の文字スタイル。 */
   clipTextStyleId: z.string().optional(),
+  /** このクリップだけ字幕の見た目(背景あり/縁取り)・文字サイズを変える。省略時は全体の設定。 */
+  clipCaptionStyle: captionStyleSchema.removeDefault().optional(),
+  clipFontSize: captionFontSizeSchema.removeDefault().optional(),
 });
 
 export const sfxClipSchema = z.object({

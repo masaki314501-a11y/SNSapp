@@ -36,7 +36,6 @@ import {
 } from "@/lib/videoProject";
 import { uploadAudioFile } from "./uploadAudioFile";
 import { requestVoiceover } from "./requestVoiceover";
-import { STYLE_PRESETS, type StylePreset } from "./stylePresets";
 import { findTextStylePreset } from "@video/shared/textStylePresets";
 import { SFX_PRESETS, BGM_PRESETS, type AudioPreset } from "./audioPresets";
 import { VOICE_OPTIONS, DEFAULT_VOICE_NAME, isKnownVoiceName } from "@/lib/gemini/voiceOptions";
@@ -83,7 +82,6 @@ import { EditorMenu } from "./EditorMenu";
 import { EDITOR_TAB_LABELS, EditorTabBar, type EditorTab } from "./EditorTabBar";
 import { PlaybackBar } from "./PlaybackBar";
 import { SettingsPanel, type ClipNav } from "./SettingsPanel";
-import { Collapsible } from "./SettingsSection";
 import { ToolGrid, ToolInline, type ToolItem } from "./ToolButtons";
 import type { EditableState, ReviseEditResult } from "@/lib/gemini/reviseEdit";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
@@ -854,13 +852,60 @@ export const ClipEditor: React.FC = () => {
     }));
   };
 
-  // 字幕の文字スタイルは、選んでいるクリップだけに使う(以前は全クリップ共通で、1つ変えると全部の字幕が変わっていた)。
-  // クリップを選んでいない時は全体の既定を変える。全部そろえたい時は「全クリップに使う」で既定にしてクリップごとの指定を外す。
+  // 字幕の見た目(文字スタイル・配色・見た目・フォント・位置・文字サイズ)は、選んでいるクリップだけに使う
+  // (以前は全クリップ共通で、1つ変えると全部の字幕が変わっていた)。クリップを選んでいない時は全体の既定を変える。
+  // 全部そろえたい時は「全クリップに使う」で、選んだクリップの見た目を既定にしてクリップごとの指定を外す。
   const styleTargetSegments = form.segments.filter((segment) => selectedKeys.has(segment.key));
+  const styleSource = styleTargetSegments[0];
   const textStyleOf = (segment: ProjectSegment) =>
     segment.clipTextStyleId !== undefined ? segment.clipTextStyleId || undefined : project?.captionTextStyleId;
-  const shownCaptionTextStyleId =
-    styleTargetSegments.length > 0 ? textStyleOf(styleTargetSegments[0]) : project?.captionTextStyleId;
+  const shownCaptionTextStyleId = styleSource ? textStyleOf(styleSource) : project?.captionTextStyleId;
+  // 文字スタイルの書体で描いている間は、フォント欄にもその書体を出す(選んでいない書体が出ていて、変えても変わらないように見えていた)
+  const stylePresetFont = findTextStylePreset(shownCaptionTextStyleId)?.fontFamily;
+  const styleFontShown =
+    !project?.captionFontPinned && stylePresetFont && CAPTION_FONT_FAMILY_OPTIONS.some((o) => o.value === stylePresetFont)
+      ? stylePresetFont
+      : fontFamily;
+  const shownLook = {
+    primaryColor: styleSource?.captionAccentColor ?? primaryColor,
+    captionStyle: styleSource?.clipCaptionStyle ?? captionStyle,
+    fontFamily: styleSource?.captionFontFamily ?? styleFontShown,
+    captionPosition: styleSource?.clipCaptionPosition ?? captionPosition,
+    fontSize: styleSource?.clipFontSize ?? fontSize,
+  };
+  const usesTextStyle =
+    Boolean(project?.captionTextStyleId) || form.segments.some((segment) => Boolean(segment.clipTextStyleId));
+  /** 選んだクリップ(無ければ全体)の字幕の見た目を変える。 */
+  const changeCaptionLook = (patch: Partial<typeof shownLook>) => {
+    if (styleTargetSegments.length === 0) {
+      if (patch.primaryColor !== undefined) setPrimaryColor(patch.primaryColor);
+      if (patch.captionStyle !== undefined) setCaptionStyle(patch.captionStyle);
+      if (patch.captionPosition !== undefined) setCaptionPosition(patch.captionPosition);
+      if (patch.fontSize !== undefined) setFontSize(patch.fontSize);
+      if (patch.fontFamily !== undefined) {
+        setFontFamily(patch.fontFamily);
+        // 文字スタイルを使っていても、選んだフォントで描く
+        if (usesTextStyle) updateProjectEffects({ captionFontPinned: true });
+      }
+      return;
+    }
+    pushHistory();
+    setForm((prev) => ({
+      ...prev,
+      segments: prev.segments.map((segment) =>
+        selectedKeys.has(segment.key)
+          ? {
+              ...segment,
+              ...(patch.primaryColor !== undefined ? { captionAccentColor: patch.primaryColor } : {}),
+              ...(patch.captionStyle !== undefined ? { clipCaptionStyle: patch.captionStyle } : {}),
+              ...(patch.fontFamily !== undefined ? { captionFontFamily: patch.fontFamily } : {}),
+              ...(patch.captionPosition !== undefined ? { clipCaptionPosition: patch.captionPosition } : {}),
+              ...(patch.fontSize !== undefined ? { clipFontSize: patch.fontSize } : {}),
+            }
+          : segment
+      ),
+    }));
+  };
   /** 文字スタイルを選ぶ。選び直した時は、そのスタイルの書体で見せる(フォントの選び直しを解く)。 */
   const pickCaptionTextStyle = (id: string | undefined) => {
     pushHistory();
@@ -871,31 +916,34 @@ export const ClipEditor: React.FC = () => {
     setForm((prev) => ({
       ...prev,
       segments: prev.segments.map((segment) =>
-        selectedKeys.has(segment.key) ? { ...segment, clipTextStyleId: id ?? "" } : segment
+        selectedKeys.has(segment.key) ? { ...segment, clipTextStyleId: id ?? "", captionFontFamily: undefined } : segment
       ),
     }));
-    updateProjectEffects({ captionFontPinned: false });
   };
-  const applyCaptionTextStyleToAll = () => {
+  /** 選んだクリップの字幕の見た目を全クリップの既定にし、クリップごとの指定を外す。 */
+  const applyCaptionLookToAll = () => {
     pushHistory();
-    updateProjectEffects({ captionTextStyleId: shownCaptionTextStyleId, captionFontPinned: false });
+    setPrimaryColor(shownLook.primaryColor);
+    setCaptionStyle(shownLook.captionStyle);
+    setFontFamily(shownLook.fontFamily);
+    setCaptionPosition(shownLook.captionPosition);
+    setFontSize(shownLook.fontSize);
+    updateProjectEffects({
+      captionTextStyleId: shownCaptionTextStyleId,
+      captionFontPinned: Boolean(styleSource?.captionFontFamily) || Boolean(project?.captionFontPinned),
+    });
     setForm((prev) => ({
       ...prev,
-      segments: prev.segments.map((segment) => ({ ...segment, clipTextStyleId: undefined })),
+      segments: prev.segments.map((segment) => ({
+        ...segment,
+        clipTextStyleId: undefined,
+        captionAccentColor: undefined,
+        clipCaptionStyle: undefined,
+        captionFontFamily: undefined,
+        clipCaptionPosition: undefined,
+        clipFontSize: undefined,
+      })),
     }));
-  };
-  const usesTextStyle =
-    Boolean(project?.captionTextStyleId) || form.segments.some((segment) => Boolean(segment.clipTextStyleId));
-  // 文字スタイルの書体で描いている間は、フォント欄にもその書体を出す(選んでいない書体が出ていて、変えても変わらないように見えていた)
-  const stylePresetFont = findTextStylePreset(shownCaptionTextStyleId)?.fontFamily;
-  const shownFontFamily =
-    !project?.captionFontPinned && stylePresetFont && CAPTION_FONT_FAMILY_OPTIONS.some((o) => o.value === stylePresetFont)
-      ? stylePresetFont
-      : fontFamily;
-  const chooseFontFamily = (value: CaptionFontFamily) => {
-    setFontFamily(value);
-    // 文字スタイルを使っていても、選んだフォントで描く
-    if (usesTextStyle) updateProjectEffects({ captionFontPinned: true });
   };
 
   /** 指定クリップを再生順で次のクリップと結合する(splitSegmentの逆操作)。 */
@@ -947,19 +995,6 @@ export const ClipEditor: React.FC = () => {
     const { key, offsetSeconds } = activeProgramSegment;
     pushHistory();
     updateSegment(key, { durationInSeconds: offsetSeconds });
-  };
-
-  /** スタイルプリセットを一括適用する。applyAnimation が true なら全クリップの演出も揃える。 */
-  const applyStylePreset = (preset: StylePreset, applyAnimation: boolean) => {
-    setPrimaryColor(preset.primaryColor);
-    setCaptionStyle(preset.captionStyle);
-    setFontFamily(preset.fontFamily);
-    setCaptionPosition(preset.captionPosition);
-    setFontSize(preset.fontSize);
-    setFadeInOut(preset.fadeInOut);
-    if (applyAnimation) {
-      applyAnimationToAll(preset.captionAnimation);
-    }
   };
 
   const openBulkEdit = () => {
@@ -1545,45 +1580,21 @@ export const ClipEditor: React.FC = () => {
   const narrationPanel = <NarrationInspectorPanel {...narrationProps} />;
   const narrationBulkAction = <NarrationBulkGenerate {...narrationProps} />;
 
-  // 字幕の見た目(旧「見た目」タブ)のうち全クリップ共通の設定。普段は畳んでおき、押すと開く。
-  // 字幕タブの「字幕の見た目」欄に、強調する単語と一緒に並べる。全体のフェードは演出タブの「動画全体」に移した。
+  // 字幕の見た目の詳しい設定(配色・見た目・フォント・位置・文字サイズ)。選んでいるクリップ(無ければ全体)に使う。
+  // 字幕タブの「字幕の見た目」欄で、文字スタイルの下に畳んで置く。全体のフェードは演出タブの「動画全体」に移した。
   const captionLookSettings = (
-    <Collapsible summary="プリセットから選ぶ">
-      <div className="flex flex-col gap-2">
-        <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-          プリセットを押すと、配色・フォント・位置・見た目・演出をまとめて適用します
-        </span>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {STYLE_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => applyStylePreset(preset, true)}
-              className="preset-card flex flex-col gap-1 p-3"
-              title={preset.description}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className="h-4 w-4 shrink-0 rounded-full"
-                  style={{ background: preset.primaryColor, border: "1px solid var(--border-strong)" }}
-                />
-                <span className="text-xs font-semibold">{preset.label}</span>
-              </span>
-              <span className="text-[11px]" style={{ color: "var(--muted-2)" }}>
-                {preset.description}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+    <>
       <div className="editor-field-row">
         <label className="editor-field">
           <span>配色</span>
-          <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+          <input type="color" value={shownLook.primaryColor} onChange={(e) => changeCaptionLook({ primaryColor: e.target.value })} />
         </label>
         <label className="editor-field">
           <span>見た目</span>
-          <select value={captionStyle} onChange={(e) => setCaptionStyle(e.target.value as CaptionStyle)}>
+          <select
+            value={shownLook.captionStyle}
+            onChange={(e) => changeCaptionLook({ captionStyle: e.target.value as CaptionStyle })}
+          >
             {CAPTION_STYLE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -1595,7 +1606,10 @@ export const ClipEditor: React.FC = () => {
       <div className="editor-field-row">
         <label className="editor-field">
           <span>フォント</span>
-          <select value={shownFontFamily} onChange={(e) => chooseFontFamily(e.target.value as CaptionFontFamily)}>
+          <select
+            value={shownLook.fontFamily}
+            onChange={(e) => changeCaptionLook({ fontFamily: e.target.value as CaptionFontFamily })}
+          >
             {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -1605,7 +1619,10 @@ export const ClipEditor: React.FC = () => {
         </label>
         <label className="editor-field">
           <span>位置</span>
-          <select value={captionPosition} onChange={(e) => setCaptionPosition(e.target.value as CaptionPosition)}>
+          <select
+            value={shownLook.captionPosition}
+            onChange={(e) => changeCaptionLook({ captionPosition: e.target.value as CaptionPosition })}
+          >
             {CAPTION_POSITION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -1616,7 +1633,7 @@ export const ClipEditor: React.FC = () => {
       </div>
       <label className="editor-field">
         <span>文字サイズ</span>
-        <select value={fontSize} onChange={(e) => setFontSize(e.target.value as CaptionFontSize)}>
+        <select value={shownLook.fontSize} onChange={(e) => changeCaptionLook({ fontSize: e.target.value as CaptionFontSize })}>
           {CAPTION_FONT_SIZE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -1624,7 +1641,7 @@ export const ClipEditor: React.FC = () => {
           ))}
         </select>
       </label>
-    </Collapsible>
+    </>
   );
 
   const tabSettings =
@@ -1649,7 +1666,7 @@ export const ClipEditor: React.FC = () => {
           captionTextStyleId={shownCaptionTextStyleId}
           textStyleScope={styleTargetSegments.length === 0 ? "all" : styleTargetSegments.length === 1 ? "clip" : "clips"}
           onPickTextStyle={pickCaptionTextStyle}
-          onApplyTextStyleToAll={applyCaptionTextStyleToAll}
+          onApplyTextStyleToAll={applyCaptionLookToAll}
           keywordHighlights={project?.keywordHighlights ?? []}
           captionWordSync={resolveWordSync(project?.captionWordSync, project?.speechSpans)}
           captionWordHighlightColor={project?.captionWordHighlightColor}

@@ -68,6 +68,8 @@ export const ClipSequence: React.FC<Props> = ({
   overlays,
   images,
   clipCaptionPosition,
+  clipCaptionStyle,
+  clipFontSize,
   captionEmphasis,
   captionTextStyleId,
   captionFontPinned,
@@ -100,14 +102,15 @@ export const ClipSequence: React.FC<Props> = ({
         accentColor={captionAccentColor ?? accentColor}
         glowColor={captionGlowColor}
         animation={captionAnimation}
-        captionStyle={captionStyle}
+        captionStyle={clipCaptionStyle ?? captionStyle}
         fontFamily={captionFontFamily ?? fontFamily}
         position={clipCaptionPosition ?? captionPosition}
-        fontSize={fontSize}
+        fontSize={clipFontSize ?? fontSize}
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}
         textStyleId={captionTextStyleId}
-        fontPinned={captionFontPinned}
+        // このクリップだけフォントを選んだ時は、文字スタイルの書体よりそちらを使う
+        fontPinned={captionFontPinned || Boolean(captionFontFamily)}
         keywordHighlights={keywordHighlights}
         emphasis={captionEmphasis}
         wordSync={wordSync}

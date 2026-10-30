@@ -69,6 +69,9 @@ export type ProjectSegment = {
   captionEmphasis?: CaptionEmphasis;
   /** このクリップだけ字幕の文字スタイルを変える(textStylePresets.tsのid)。""=スタイル無し、未指定=全体の文字スタイル。 */
   clipTextStyleId?: string;
+  /** このクリップだけ字幕の見た目(背景あり/縁取り)・文字サイズを変える。未指定は全体の設定。 */
+  clipCaptionStyle?: CaptionStyle;
+  clipFontSize?: CaptionFontSize;
   /** 字幕を強調した時に、クリップの頭で鳴らす効果音(audioPresets.tsのid)。 */
   emphasisSfxPresetId?: string;
   /** 話の山場(順位の発表・結論など)。カメラワークのルール(cameraRules.ts)で寄る所を決めるのに使う。 */
@@ -382,6 +385,8 @@ export const buildStandardVideoProps = (params: {
       clipCaptionPosition: segment.clipCaptionPosition,
       captionEmphasis: segment.captionEmphasis,
       clipTextStyleId: segment.clipTextStyleId,
+      clipCaptionStyle: segment.clipCaptionStyle,
+      clipFontSize: segment.clipFontSize,
     })),
     theme: {
       primaryColor: params.primaryColor,

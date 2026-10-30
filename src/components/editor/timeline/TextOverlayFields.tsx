@@ -1,6 +1,13 @@
 "use client";
 
-import { CAPTION_ANIMATION_OPTIONS, type CaptionAnimation, type TextOverlay } from "@video/shared/schema";
+import {
+  CAPTION_ANIMATION_OPTIONS,
+  CAPTION_FONT_FAMILY_OPTIONS,
+  type CaptionAnimation,
+  type CaptionFontFamily,
+  type TextOverlay,
+} from "@video/shared/schema";
+import { findTextStylePreset } from "@video/shared/textStylePresets";
 import { TextIcon, TrashIcon } from "@/components/icons";
 import { Collapsible } from "../SettingsSection";
 import { TimeRangeField } from "./TimeRangeField";
@@ -83,7 +90,24 @@ export const TextOverlayFields: React.FC<Props> = ({
         />
       </label>
     </div>
-    <TextStylePicker value={overlay.textStyleId} onChange={(textStyleId) => onChange({ textStyleId })} />
+    <TextStylePicker value={overlay.textStyleId} onChange={(textStyleId) => onChange({ textStyleId, fontFamily: undefined })} />
+    {/* この文字だけのフォント。選ばなければ、文字スタイルの書体(無ければ字幕のフォント)になる */}
+    <label className="editor-field">
+      <span>フォント</span>
+      <select
+        value={overlay.fontFamily ?? ""}
+        onChange={(e) => onChange({ fontFamily: (e.target.value || undefined) as CaptionFontFamily | undefined })}
+      >
+        <option value="">
+          {findTextStylePreset(overlay.textStyleId) ? "文字スタイルの書体" : "字幕と同じ"}
+        </option>
+        {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
     {/* スタイルを選んでいる間は、色・縁取り・帯はスタイルが決めるので出さない */}
     {/* 縁取り・帯は、チェックした時だけ色を選べる(チェックボックスは文言のすぐ横) */}
     {overlay.textStyleId ? null : (

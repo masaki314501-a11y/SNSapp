@@ -76,7 +76,14 @@ const OverlayText: React.FC<{ overlay: TextOverlay; fontFamilyStack: string }> =
       <div style={{ transform, opacity, filter }}>
         {preset ? (
           <span style={{ display: "inline-block", clipPath }}>
-            <StyledText preset={preset} fontSizePx={fontSizePx} lines={lines} italic={overlay.italic} />
+            <StyledText
+              preset={preset}
+              fontSizePx={fontSizePx}
+              lines={lines}
+              italic={overlay.italic}
+              // この文字だけフォントを選んだ時は、文字スタイルの書体よりそちらを使う
+              fontFamily={overlay.fontFamily ?? preset.fontFamily}
+            />
           </span>
         ) : (
           <span
