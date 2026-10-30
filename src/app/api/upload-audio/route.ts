@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { basicAuthDenied } from "@/lib/basicAuth";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,9 @@ const MAX_SIZE_BYTES = 20 * 1024 * 1024;
  * 保存先(public/audio/)と許可する拡張子が異なる。
  */
 export async function POST(request: Request) {
+  // このAPIはproxyを通さない(src/proxy.ts の matcher)ので、ここでID・パスワードを確かめる
+  const denied = basicAuthDenied(request);
+  if (denied) return denied;
   const formData = await request.formData();
   const file = formData.get("file");
 

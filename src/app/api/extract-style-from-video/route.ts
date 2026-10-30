@@ -4,6 +4,7 @@ import { extractStyle } from "@/lib/gemini/extractStyle";
 import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extractStyleJobs";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
+import { basicAuthDenied } from "@/lib/basicAuth";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,9 @@ const requestSchema = z.object({
  * を共有する。
  */
 export async function POST(request: Request) {
+  // このAPIはproxyを通さない(src/proxy.ts の matcher)ので、ここでID・パスワードを確かめる
+  const denied = basicAuthDenied(request);
+  if (denied) return denied;
   const json = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(json);
   if (!parsed.success) {

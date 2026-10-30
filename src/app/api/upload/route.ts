@@ -7,6 +7,7 @@ import { pipeline } from "node:stream/promises";
 import { NextResponse } from "next/server";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { createHashingStream, removeOldVideos, storeByHash, videosDir } from "@/lib/uploadedVideo";
+import { basicAuthDenied } from "@/lib/basicAuth";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,9 @@ const MAX_SIZE_BYTES = 200 * 1024 * 1024;
  * リクエストボディをストリームのまま書き込むことで、ファイル全体をメモリに保持しないようにする。
  */
 export async function POST(request: Request) {
+  // このAPIはproxyを通さない(src/proxy.ts の matcher)ので、ここでID・パスワードを確かめる
+  const denied = basicAuthDenied(request);
+  if (denied) return denied;
   const fileNameHeader = request.headers.get("x-file-name");
   const fileName = fileNameHeader ? decodeURIComponent(fileNameHeader) : "";
   const ext = (fileName.split(".").pop() ?? "").toLowerCase();

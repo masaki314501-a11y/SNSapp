@@ -5,6 +5,7 @@ import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extra
 import { REFERENCE_IMAGE_PATH_PATTERN, resolveStyleReference, saveReferenceImage } from "@/lib/styleReference";
 import { MAX_STYLE_REFERENCES } from "@/lib/styleReferenceLimits";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
+import { basicAuthDenied } from "@/lib/basicAuth";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,9 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function POST(request: Request) {
+  // このAPIはproxyを通さない(src/proxy.ts の matcher)ので、ここでID・パスワードを確かめる
+  const denied = basicAuthDenied(request);
+  if (denied) return denied;
   const formData = await request.formData().catch(() => null);
   if (!formData) {
     return NextResponse.json({ error: "リクエストの形式が不正です" }, { status: 400 });
