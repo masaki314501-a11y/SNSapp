@@ -575,6 +575,17 @@ describe("顔を避ける", () => {
     expect(["top", "middle"]).toContain(plan.clips[0].clipCaptionPosition);
   });
 
+  it("顔が画面いっぱいでも、ずっと出すタイトルは消さない", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [{ sourceStartSeconds: 0, sourceEndSeconds: 4, speech: "看護師ならわかる言葉", face: { xPercent: 50, yPercent: 50, widthPercent: 100, heightPercent: 100 } }],
+        { globalOverlays: [{ text: "看護師ならわかる\n医療用語5選", startOffsetSeconds: 0, xPercent: 50, yPercent: 12, fontSizePx: 80 }] }
+      ),
+      input
+    );
+    expect(plan.globalOverlays.map((overlay) => overlay.text.replace(/\n/g, ""))).toContain("看護師ならわかる医療用語5選");
+  });
+
   it("寄ったクリップでは、寄った後の顔の位置で確かめる", () => {
     const box = faceOnScreen(face, null, { scale: 1.3, style: "punch", focusXPercent: 50, focusYPercent: 20 });
     // 中心(縦20%)から離れる方向へ1.3倍に広がる

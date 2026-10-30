@@ -44,7 +44,11 @@ export const selectEditExamples = async (
   userVideoPart: Part,
   excludeIds: string[] = []
 ): Promise<EditExample[]> => {
-  const all = (await listEditExamples()).filter((example) => !excludeIds.includes(example.id));
+  // 真似させる手本は「編集前の素材+完成動画」の組だけ。完成動画だけの手本は、素材のどこをどう編集したかが分からず、
+  // 書き起こしの秒数も素材と合わないため、選ぶと編集が薄くなった(それらはクセ帳 style-guide.md を作る材料にだけ使う)。
+  const all = (await listEditExamples()).filter(
+    (example) => !excludeIds.includes(example.id) && Boolean(example.rawMediaFilename && example.rawMimeType)
+  );
   const newest = all.slice(-MAX_EDIT_FEW_SHOT_EXAMPLES).reverse();
   if (all.length === 0) return [];
 

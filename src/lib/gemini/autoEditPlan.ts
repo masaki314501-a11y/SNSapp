@@ -335,8 +335,9 @@ ${input.template.instructions}
 - どう見せるか(見た目・音・画面の組み立て・雰囲気・テンポ)は、末尾の「編集のクセ帳」の編集者になりきって決める。
   「この編集者なら、この場面をどう見せるか」を考えて編集する。ただし本人の動画に無い場面の演出は入れない
   (手本にあるからという理由だけで入れない)。
-- 量(何個入れるか)は目標にしない。本人の動画の中身(項目の数・山場)に合わせて編集した結果として決まる。
-  項目と項目の間の説明の部分は、何も足さないのが普通。理由の言えない演出は入れない。
+- 量は数で決めず、中身で決める。ただし控えめにしすぎない。見ている人が「今何の話か」「大事な言葉は何か」を画面だけで
+  分かるように、項目名・キーワード・数字・答えが出るたびに文字で添えるのが自然な編集。説明の部分も、要点の言葉があれば
+  短いラベルで添える。字幕だけの画面が長く続く(10秒以上)のは、この編集者らしくない。理由の言えない演出は入れない。
 - 演出は2種類に分けて考える。
   (a) 情報を見せる演出(ずっと出す枠・一覧・項目名のラベル・順位・点数・数字・手順の番号)は、歯科の動画では一番の
       離脱防止なので、本人の話に項目があれば最初から最後まで省かずに入れる。
@@ -519,7 +520,8 @@ ${sfxPresetHints}
   (良い例:「知らないと\\n損する話」 悪い例:「知らないと損す\\nる話」「最\\n強」)
 
 ## 量について
-- 量は目標にしない。本人の動画の中身(項目の数・山場)に合わせて編集した結果として決まる(一番大事な決まりのとおり)
+- 量は数で決めず、中身で決める(一番大事な決まりのとおり)。目安は「近い手本の入れ方」の密度。それより大きく少ないのも、
+  多すぎるのも不自然
 - 寄りは感情の山にだけ。枠や一覧をずっと出す動画では0〜1回
 - 寄り・文字・効果音を同じ瞬間に全部重ねるのは、一番の山場だけにする
 
@@ -1219,7 +1221,13 @@ const shapeBox = (shape: ShapeOverlay, start: number, end: number): TimedBox => 
  * 文字を、ほかの物と重ならない一番近い位置・大きさへ直す。元の位置で重ならなければそのまま。
  * 少し小さくする・上下左右にずらす、の組み合わせから、元の見た目から一番変わらない物を選ぶ。どうしても空きが無ければそのまま。
  */
-const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, obstacles: TimedBox[]): TextOverlay | null => {
+const placeWithoutOverlap = (
+  overlay: TextOverlay,
+  start: number,
+  end: number,
+  obstacles: TimedBox[],
+  { scales = [1, 0.9, 0.8, 0.7], quiet = false }: { scales?: number[]; quiet?: boolean } = {}
+): TextOverlay | null => {
   const fits = (candidate: TextOverlay) => {
     const box = textBox(candidate, start, end);
     return (
@@ -1241,7 +1249,7 @@ const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, o
 
   let best: { overlay: TextOverlay; cost: number } | null = null;
   for (const wrap of wrapVariants) {
-    for (const scale of [1, 0.9, 0.8, 0.7]) {
+    for (const scale of scales) {
       for (let dy = 0; dy <= 45; dy += 0.5) {
         for (const signY of dy === 0 ? [1] : [1, -1]) {
           for (const dx of [0, 3, -3, 6, -6, 10, -10, 15, -15, 20, -20, 25, -25]) {
@@ -1261,6 +1269,7 @@ const placeWithoutOverlap = (overlay: TextOverlay, start: number, end: number, o
     }
   }
   if (!best) {
+    if (quiet) return null;
     // 文字どうし・文字と顔・字幕が重ならないことは絶対に守る決まりなので、置き場所が無い文字は出さない
     console.info(`[autoEditPlan] 文字「${overlay.text}」の重ならない置き場所が見つからなかったため、出しません`);
     return null;
@@ -1423,9 +1432,14 @@ export const avoidTextOverlaps = (
     const end = endOf(overlay, totalSeconds);
     // 「1位」などの順位の文字は枠と組なので、顔を理由には動かさない(枠ごと人物を避けて置いてある)
     const obstacles = rankOfLabel(overlay.text) === null ? [...placedPersistent, ...faces] : placedPersistent;
-    const placed = placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles);
+    // タイトルなどのずっと出す文字は、動画の中身そのものなので消さない。顔を避ける場所が無ければもっと小さくして探し、
+    // それでも無ければ文字どうしだけ避けて置く(以前は、寄りのカットで顔が上まで来るとタイトルごと消えていた)
+    const placed =
+      placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, obstacles, { scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5], quiet: true }) ??
+      placeWithoutOverlap(overlay, overlay.startOffsetSeconds, end, placedPersistent, { scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5], quiet: true }) ??
+      overlay;
     resultGlobal[index] = placed;
-    if (placed) placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
+    placedPersistent.push(textBox(placed, overlay.startOffsetSeconds, end));
   }
 
   // 字幕の位置は、ずっと出る文字を置いた後に、顔とその文字を避けて決める。残りの文字は字幕も避けて置く
@@ -1519,8 +1533,10 @@ export const avoidTextOverlaps = (
     if (!ok) dropped.push(`画像「${image.src.split("/").pop()}」`);
     return ok;
   };
+  // ずっと出す文字は消さない(字幕の位置の方が、ずっと出す文字を避けて選んでいる)
   const finalGlobal = resultGlobal.filter(
-    (overlay): overlay is TextOverlay => overlay !== null && keepText(overlay, overlay.startOffsetSeconds, endOf(overlay, totalSeconds))
+    (overlay): overlay is TextOverlay =>
+      overlay !== null && (isPersistent(overlay) || keepText(overlay, overlay.startOffsetSeconds, endOf(overlay, totalSeconds)))
   );
   const finalImages = arrangedImages.filter((image) =>
     keepImage(image, image.startOffsetSeconds, endOf(image, totalSeconds), isPersistent(image))
@@ -2244,7 +2260,7 @@ const buildRhythmSection = (examples: { label: string; breakdown?: RawAutoEditPl
   if (described.length === 0) return "";
   return `
 
-## 近い手本の入れ方(書き起こしから数えた実際の様子。数の目標ではなく、雰囲気をつかむための参考)
+## 近い手本の入れ方(書き起こしから数えた実際の様子。数をそろえる必要は無いが、密度・リズムの目安にする)
 この編集者が、どういう瞬間に何を組み合わせているかの参考にする(一番最後に書いた手本が今回の動画に一番近い)。
 数を合わせるのではなく、本人の動画の中身に合わせて、同じような瞬間に同じような組み合わせで入れる。
 ${described.join("\n")}`;
