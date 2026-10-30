@@ -89,6 +89,8 @@ const MAX_PLAN_OUTPUT_TOKENS = 32_000;
 /** 1案目が使える時の2案目の制限。2案目は良くするための作り直しなので、長くは待たせない。 */
 const SECOND_PLAN_TIMEOUT_MS = 240_000;
 const MAX_ATTEMPTS = 3;
+/** 案が、使う範囲のこの割合も編集していなければ、途中でやめた答えとして頼み直す(間を詰めても普通は7割以上残る)。 */
+const MIN_COVERED_RATIO = 0.5;
 const RETRY_BASE_DELAY_MS = 8_000;
 const MIN_CLIP_SECONDS = 0.3;
 const MAX_CLIP_SECONDS = 30;
@@ -2087,7 +2089,8 @@ const requestRawPlan = async (
   contents: Content[],
   lane: GeminiRateLimitLane,
   label: string,
-  timeoutMs: number = GEMINI_TIMEOUT_MS
+  timeoutMs: number = GEMINI_TIMEOUT_MS,
+  minCoveredSeconds = 0
 ): Promise<RawAutoEditPlan> => {
   let lastError: unknown;
   let lastText = "";
@@ -2156,13 +2159,21 @@ const requestRawPlan = async (
       if (!parsed.success) {
         throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
       }
+      // たまに、動画の最初の数秒だけで答えを終えてしまう(21秒の動画が3秒の編集になった)。使う範囲の半分も無ければ1回だけ頼み直す
+      const covered = parsed.data.clips.reduce((sum, clip) => sum + Math.max(0, clip.sourceEndSeconds - clip.sourceStartSeconds), 0);
+      if (covered < minCoveredSeconds) {
+        if (attempt === 1) throw new Error(`動画の一部しか編集していない答え(${covered.toFixed(1)}秒)`);
+        console.warn(`[autoEditPlan] ${label}: 頼み直しても動画の一部(${covered.toFixed(1)}秒)しか編集していない答えでした`);
+      }
       return parsed.data;
     } catch (error) {
       lastError = error;
       // 答えの形が崩れた(JSONが途中で切れた等)時は、1回だけ頼み直す(たまに起き、頼み直せばほぼ直るため)
       const malformed =
         error instanceof SyntaxError ||
-        (error instanceof Error && (error.message.includes("スキーマ検証に失敗") || error.message.includes("同じ物の繰り返し")));
+        (error instanceof Error && (error.message.includes("スキーマ検証に失敗") ||
+            error.message.includes("同じ物の繰り返し") ||
+            error.message.includes("動画の一部しか編集していない")));
       if (malformed && lastText && process.env.AUTO_EDIT_DEBUG_DIR) {
         // 調整用: 形が崩れた答えを残す(どの項目で崩れたかを確かめるため)
         await writeFile(path.join(process.env.AUTO_EDIT_DEBUG_DIR, `malformed-${Date.now()}.txt`), lastText).catch(() => {});
@@ -2461,7 +2472,8 @@ export const generateAutoEditPlan = async (input: AutoEditPlanInput): Promise<Au
           contents,
           "text",
           `案${index + 1}`,
-          scored.length > 0 ? SECOND_PLAN_TIMEOUT_MS : GEMINI_TIMEOUT_MS
+          scored.length > 0 ? SECOND_PLAN_TIMEOUT_MS : GEMINI_TIMEOUT_MS,
+          input.keepRanges.reduce((sum, range) => sum + range.durationInSeconds, 0) * MIN_COVERED_RATIO
         );
         scored.push({ candidate, score: similarityToExamples(candidate, breakdowns) });
       } catch (error) {
