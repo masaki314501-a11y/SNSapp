@@ -23,6 +23,8 @@ SNSapp(画面上の名前: Clipcraft)の全体像をまとめたページです�
 - 対象: `origin/main` のコミット `7170a48`(2026-09-25 時点)
 - 未マージのブランチ(例: `feature/gemini-additional-token-savings` の Groq への移行)の内容は含みません
 
+今の状態を1枚の図にまとめ、番号つきの改善案を並べたページは [status-and-ideas.md](status-and-ideas.md) にあります(2026-10-29 時点)。
+
 ## 元にした資料
 
 - 調査計画: [system-overview/plan.md](system-overview/plan.md)
