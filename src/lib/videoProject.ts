@@ -67,6 +67,8 @@ export type ProjectSegment = {
   clipCaptionPosition?: CaptionPosition;
   /** このクリップの字幕の強調(帯・書体・色。本人が選ぶ)。 */
   captionEmphasis?: CaptionEmphasis;
+  /** このクリップだけ字幕の文字スタイルを変える(textStylePresets.tsのid)。""=スタイル無し、未指定=全体の文字スタイル。 */
+  clipTextStyleId?: string;
   /** 字幕を強調した時に、クリップの頭で鳴らす効果音(audioPresets.tsのid)。 */
   emphasisSfxPresetId?: string;
   /** 話の山場(順位の発表・結論など)。カメラワークのルール(cameraRules.ts)で寄る所を決めるのに使う。 */
@@ -152,8 +154,10 @@ export type VideoProject = {
   autoEditTitle?: string;
   /** 自動編集で、完成動画をこの秒数くらいに収める。未指定なら長さはAIにまかせる。 */
   targetDurationSeconds?: number | null;
-  /** 字幕の文字スタイル(全クリップ共通。textStylePresets.tsのid)。 */
+  /** 字幕の文字スタイル(全クリップの既定。クリップごとに変えた物はsegment.clipTextStyleId。textStylePresets.tsのid)。 */
   captionTextStyleId?: string;
+  /** 文字スタイルを選んだ後にフォントを選び直したか。trueならスタイルの書体より、選んだフォントを使う。 */
+  captionFontPinned?: boolean;
   /** 重大ワード(全クリップの字幕で色を変える言葉と、その色)。 */
   keywordHighlights?: { word: string; color: string }[];
   /** カメラワークのルール(cameraRules.tsのid)。 */
@@ -335,6 +339,7 @@ export const buildStandardVideoProps = (params: {
   framing?: VideoProject["framing"];
   muteOriginalUnderNarration?: boolean;
   captionTextStyleId?: string;
+  captionFontPinned?: boolean;
   keywordHighlights?: VideoProject["keywordHighlights"];
   speechSpans?: VideoProject["speechSpans"];
   captionWordSync?: WordSyncMode;
@@ -376,6 +381,7 @@ export const buildStandardVideoProps = (params: {
       faceBox: segment.faceBox,
       clipCaptionPosition: segment.clipCaptionPosition,
       captionEmphasis: segment.captionEmphasis,
+      clipTextStyleId: segment.clipTextStyleId,
     })),
     theme: {
       primaryColor: params.primaryColor,
@@ -385,6 +391,7 @@ export const buildStandardVideoProps = (params: {
       fontSize: params.fontSize,
       fadeInOut: params.fadeInOut,
       captionTextStyleId: params.captionTextStyleId,
+      captionFontPinned: params.captionFontPinned,
       keywordHighlights: params.keywordHighlights?.filter((highlight) => highlight.word.trim().length > 0),
       captionWordSync: resolveWordSync(params.captionWordSync, params.speechSpans),
       captionWordHighlightColor: params.captionWordHighlightColor,

@@ -33,8 +33,12 @@ type Props = {
       >
     >
   ) => void;
-  /** 全クリップ共通の字幕の文字スタイルと重大ワード。 */
+  /** 選んでいるクリップの字幕の文字スタイル(クリップを選んでいない時は全体の既定)と、全クリップ共通の重大ワード。 */
   captionTextStyleId: string | undefined;
+  /** 文字スタイルを変える範囲。clip=選んだクリップ、clips=選んだ複数のクリップ、all=全クリップの既定。 */
+  textStyleScope: "clip" | "clips" | "all";
+  onPickTextStyle: (id: string | undefined) => void;
+  onApplyTextStyleToAll: () => void;
   keywordHighlights: { word: string; color: string }[];
   /** 字幕を話に合わせて見せるか(未指定の時に実際に使われる値を渡す)と、光らせる色。 */
   captionWordSync: WordSyncMode;
@@ -75,6 +79,9 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   onUpdateSegment,
   onUpdateEmphasis,
   captionTextStyleId,
+  textStyleScope,
+  onPickTextStyle,
+  onApplyTextStyleToAll,
   keywordHighlights,
   captionWordSync,
   captionWordHighlightColor,
@@ -214,7 +221,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
         </SettingsSection>
 
         {/* 字幕の見た目はここ1か所。まず文字スタイルのおすすめから選び、配色・フォント・位置などは「詳しい設定」に畳む */}
-        <SettingsSection title="字幕の見た目(全クリップ共通)" icon={<PaletteIcon size={16} />}>
+        <SettingsSection title="字幕の見た目" icon={<PaletteIcon size={16} />}>
           <div className="editor-field-row">
             <label className="editor-field">
               <span>話に合わせて</span>
@@ -241,16 +248,27 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
             ) : null}
           </div>
           <TextStylePicker
-            label="文字スタイル"
+            label={
+              textStyleScope === "clip"
+                ? "文字スタイル(選んだクリップ)"
+                : textStyleScope === "clips"
+                  ? "文字スタイル(選んだクリップすべて)"
+                  : "文字スタイル(全クリップ)"
+            }
             value={captionTextStyleId}
-            onChange={(id) => onUpdateCaptionLook({ captionTextStyleId: id })}
+            onChange={onPickTextStyle}
             recommendedIds={RECOMMENDED_CAPTION_STYLE_IDS}
             emptyLabel="ふつう(下の詳しい設定の見た目)"
           />
+          {textStyleScope !== "all" ? (
+            <button type="button" className="editor-toolbar-btn self-start" onClick={onApplyTextStyleToAll}>
+              この文字スタイルを全クリップに使う
+            </button>
+          ) : null}
           <Collapsible summary="詳しい設定(配色・フォント・位置・大きさ)">
             {captionTextStyleId ? (
               <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-                文字スタイルを選んでいる間は、配色・見た目・フォントは文字スタイルのものになります(位置・大きさは効きます)
+                文字スタイルを選んでいる間は、配色・見た目は文字スタイルのものになります。フォント・位置・大きさは、ここで変えると効きます(フォントは全クリップ共通)
               </span>
             ) : null}
             {lookSettings}

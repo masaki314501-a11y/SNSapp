@@ -53,6 +53,7 @@ export const ExportScreen: React.FC = () => {
         framing: current.framing,
         muteOriginalUnderNarration: current.muteOriginalUnderNarration,
         captionTextStyleId: current.captionTextStyleId,
+        captionFontPinned: current.captionFontPinned,
         keywordHighlights: current.keywordHighlights,
         speechSpans: current.speechSpans,
         captionWordSync: current.captionWordSync,

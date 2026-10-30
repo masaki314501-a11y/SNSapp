@@ -30,8 +30,10 @@ type Props = {
   emphasisColor?: string;
   /** 文字の周りの光(にじみ)の色。省略時は黒い影。 */
   glowColor?: string;
-  /** 動画全体の字幕の文字スタイル(textStylePresets.tsのid)。指定時はcaptionStyle・配色の代わりにこれで描く。 */
+  /** このクリップの字幕の文字スタイル(textStylePresets.tsのid)。指定時はcaptionStyle・配色の代わりにこれで描く。 */
   textStyleId?: string;
+  /** 文字スタイルを選んでいても、書体はスタイルの物ではなくfontFamilyを使う(本人がフォントを選び直した時)。 */
+  fontPinned?: boolean;
   /** 重大ワード(全クリップ共通)。言葉ごとに色を決めて、大きく見せる。 */
   keywordHighlights?: { word: string; color: string }[];
   /** このクリップの字幕の強調(帯・書体・色。本人が選ぶ)。 */
@@ -97,6 +99,7 @@ export const AnimatedCaption: React.FC<Props> = ({
   emphasisColor = "#FFE600",
   glowColor,
   textStyleId,
+  fontPinned = false,
   keywordHighlights,
   emphasis,
   wordSync = "none",
@@ -108,7 +111,8 @@ export const AnimatedCaption: React.FC<Props> = ({
   const { transform, opacity, clipPath, filter } = getCaptionAnimationStyle(animation, frame, fps);
   // 強調で文字スタイルを選んだ時はそれを、無ければ全体の字幕の文字スタイルを使う。帯を敷く時は帯の見た目が優先。
   const preset = emphasis?.band ? undefined : findTextStylePreset(emphasis?.textStyleId ?? textStyleId);
-  const fontFamily = emphasis?.fontFamily ?? preset?.fontFamily ?? baseFontFamily;
+  // 書体: 強調で選んだ書体 → (フォントを選び直していれば)選んだフォント → 文字スタイルの書体 → 全体のフォント
+  const fontFamily = emphasis?.fontFamily ?? (fontPinned ? baseFontFamily : (preset?.fontFamily ?? baseFontFamily));
   // 選択されているフォントだけを遅延読み込みする(全書体を毎回読み込むのは無駄が大きいため)。
   void ensureCaptionFontLoaded(fontFamily);
 

@@ -126,6 +126,11 @@ export const themeSchema = z.object({
    * 配色の代わりにこのスタイルで字幕を描く(書体もスタイルの書体)。
    */
   captionTextStyleId: z.string().optional(),
+  /**
+   * 文字スタイルを選んだ後に、フォントを選び直したか。trueならスタイルの書体ではなく、選んだフォント(fontFamily)で描く。
+   * (以前は文字スタイルを選んでいるとフォントを変えても何も変わらなかった)
+   */
+  captionFontPinned: z.boolean().optional(),
   /** 字幕を話している言葉に合わせて見せるか(wordSync.ts)。省略時は合わせない。 */
   captionWordSync: z.enum(["none", "highlight", "reveal"]).optional(),
   /** 今話している言葉を光らせる時の色。 */
@@ -379,6 +384,8 @@ export const mediaItemBaseSchema = z.object({
   faceBox: faceBoxSchema.optional(),
   /** このクリップだけテロップの位置を変える(全体の位置だと顔に重なる時など)。省略時は全体の位置。 */
   clipCaptionPosition: captionPositionSchema.removeDefault().optional(),
+  /** このクリップだけ字幕の文字スタイルを変える(textStylePresets.tsのid)。""=スタイル無し、省略時は全体の文字スタイル。 */
+  clipTextStyleId: z.string().optional(),
 });
 
 export const sfxClipSchema = z.object({

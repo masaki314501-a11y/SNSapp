@@ -37,6 +37,7 @@ import {
 import { uploadAudioFile } from "./uploadAudioFile";
 import { requestVoiceover } from "./requestVoiceover";
 import { STYLE_PRESETS, type StylePreset } from "./stylePresets";
+import { findTextStylePreset } from "@video/shared/textStylePresets";
 import { SFX_PRESETS, BGM_PRESETS, type AudioPreset } from "./audioPresets";
 import { VOICE_OPTIONS, DEFAULT_VOICE_NAME, isKnownVoiceName } from "@/lib/gemini/voiceOptions";
 import {
@@ -346,6 +347,7 @@ export const ClipEditor: React.FC = () => {
         framing: project?.framing,
         muteOriginalUnderNarration,
         captionTextStyleId: project?.captionTextStyleId,
+        captionFontPinned: project?.captionFontPinned,
         keywordHighlights: project?.keywordHighlights,
         speechSpans: project?.speechSpans,
         captionWordSync: project?.captionWordSync,
@@ -362,6 +364,7 @@ export const ClipEditor: React.FC = () => {
       project?.globalShapes,
       project?.framing,
       project?.captionTextStyleId,
+      project?.captionFontPinned,
       project?.keywordHighlights,
       project?.speechSpans,
       project?.captionWordSync,
@@ -849,6 +852,50 @@ export const ClipEditor: React.FC = () => {
       ...prev,
       segments: prev.segments.map((segment) => ({ ...segment, captionAnimation: animation })),
     }));
+  };
+
+  // 字幕の文字スタイルは、選んでいるクリップだけに使う(以前は全クリップ共通で、1つ変えると全部の字幕が変わっていた)。
+  // クリップを選んでいない時は全体の既定を変える。全部そろえたい時は「全クリップに使う」で既定にしてクリップごとの指定を外す。
+  const styleTargetSegments = form.segments.filter((segment) => selectedKeys.has(segment.key));
+  const textStyleOf = (segment: ProjectSegment) =>
+    segment.clipTextStyleId !== undefined ? segment.clipTextStyleId || undefined : project?.captionTextStyleId;
+  const shownCaptionTextStyleId =
+    styleTargetSegments.length > 0 ? textStyleOf(styleTargetSegments[0]) : project?.captionTextStyleId;
+  /** 文字スタイルを選ぶ。選び直した時は、そのスタイルの書体で見せる(フォントの選び直しを解く)。 */
+  const pickCaptionTextStyle = (id: string | undefined) => {
+    pushHistory();
+    if (styleTargetSegments.length === 0) {
+      updateProjectEffects({ captionTextStyleId: id, captionFontPinned: false });
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      segments: prev.segments.map((segment) =>
+        selectedKeys.has(segment.key) ? { ...segment, clipTextStyleId: id ?? "" } : segment
+      ),
+    }));
+    updateProjectEffects({ captionFontPinned: false });
+  };
+  const applyCaptionTextStyleToAll = () => {
+    pushHistory();
+    updateProjectEffects({ captionTextStyleId: shownCaptionTextStyleId, captionFontPinned: false });
+    setForm((prev) => ({
+      ...prev,
+      segments: prev.segments.map((segment) => ({ ...segment, clipTextStyleId: undefined })),
+    }));
+  };
+  const usesTextStyle =
+    Boolean(project?.captionTextStyleId) || form.segments.some((segment) => Boolean(segment.clipTextStyleId));
+  // 文字スタイルの書体で描いている間は、フォント欄にもその書体を出す(選んでいない書体が出ていて、変えても変わらないように見えていた)
+  const stylePresetFont = findTextStylePreset(shownCaptionTextStyleId)?.fontFamily;
+  const shownFontFamily =
+    !project?.captionFontPinned && stylePresetFont && CAPTION_FONT_FAMILY_OPTIONS.some((o) => o.value === stylePresetFont)
+      ? stylePresetFont
+      : fontFamily;
+  const chooseFontFamily = (value: CaptionFontFamily) => {
+    setFontFamily(value);
+    // 文字スタイルを使っていても、選んだフォントで描く
+    if (usesTextStyle) updateProjectEffects({ captionFontPinned: true });
   };
 
   /** 指定クリップを再生順で次のクリップと結合する(splitSegmentの逆操作)。 */
@@ -1548,7 +1595,7 @@ export const ClipEditor: React.FC = () => {
       <div className="editor-field-row">
         <label className="editor-field">
           <span>フォント</span>
-          <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value as CaptionFontFamily)}>
+          <select value={shownFontFamily} onChange={(e) => chooseFontFamily(e.target.value as CaptionFontFamily)}>
             {CAPTION_FONT_FAMILY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -1599,7 +1646,10 @@ export const ClipEditor: React.FC = () => {
           selectedCount={selectedKeys.size}
           onUpdateSegment={updateSegment}
           onUpdateEmphasis={updateSegmentEffects}
-          captionTextStyleId={project?.captionTextStyleId}
+          captionTextStyleId={shownCaptionTextStyleId}
+          textStyleScope={styleTargetSegments.length === 0 ? "all" : styleTargetSegments.length === 1 ? "clip" : "clips"}
+          onPickTextStyle={pickCaptionTextStyle}
+          onApplyTextStyleToAll={applyCaptionTextStyleToAll}
           keywordHighlights={project?.keywordHighlights ?? []}
           captionWordSync={resolveWordSync(project?.captionWordSync, project?.speechSpans)}
           captionWordHighlightColor={project?.captionWordHighlightColor}
