@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+/** 使い方マニュアル(Claude Docs)。変更した時は .env の NEXT_PUBLIC_MANUAL_URL で差し替えられる。 */
+const MANUAL_URL = process.env.NEXT_PUBLIC_MANUAL_URL || "https://claude.ai/artifact/JCJdkxuFbogkZwxVqJVfvJ";
+
 const STEPS = [
   {
     label: "動画をアップロード",
@@ -62,6 +65,14 @@ export default function Home() {
           >
             動画を作成する →
           </Link>
+          <a
+            href={MANUAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-outline flex h-11 w-full max-w-xs items-center justify-center px-7 text-sm"
+          >
+            使い方マニュアルを見る
+          </a>
         </div>
 
         <ol className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
