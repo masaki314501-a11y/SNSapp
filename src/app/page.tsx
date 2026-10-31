@@ -5,29 +5,39 @@ const MANUAL_URL = process.env.NEXT_PUBLIC_MANUAL_URL || "https://claude.ai/arti
 
 const STEPS = [
   {
-    label: "動画をアップロード",
-    detail: "動画を1本アップロード(長さは自動検出)",
+    label: "動画を選ぶ",
+    detail: "縦長で撮った動画を1本選ぶ",
     color: "var(--accent-soft)",
   },
   {
-    label: "使う範囲をカット",
-    detail: "不要な部分を分割・削除して、使う範囲だけに絞り込む",
+    label: "使う範囲を選ぶ",
+    detail: "前置きや撮り直しなど、使わない所を切る(全部使うなら何もしない)",
     color: "var(--accent-2-soft)",
   },
   {
-    label: "見た目をきめる(任意)",
-    detail: "参考画像/動画から配色・フォント・テロップ位置・演出をまとめて抽出",
+    label: "見た目の手本を選ぶ(なくてもよい)",
+    detail: "まねしたい投稿のスクショや動画を渡すと、その雰囲気に寄せる",
     color: "var(--accent-3-soft)",
   },
   {
-    label: "字幕を自動生成",
-    detail: "発話の区切りごとに漏れなくテロップ化、待つだけでOK",
+    label: "AIで自動編集",
+    detail: "切り方・タイトル・文字・画像・寄り・効果音まで、2〜4分でまとめて編集",
     color: "var(--accent-4-soft)",
   },
   {
-    label: "編集して書き出し",
-    detail: "いらない部分のカット・並べ替え・効果音/BGM/AIナレーションの追加をして書き出し",
+    label: "強調する字幕を選ぶ(なくてもよい)",
+    detail: "目立たせたい字幕をタップすると、帯・色・効果音が付く",
     color: "var(--accent-soft)",
+  },
+  {
+    label: "編集画面で手直し(なくてもよい)",
+    detail: "気になる所だけ直す。文章で「AIに頼む」こともできる",
+    color: "var(--accent-2-soft)",
+  },
+  {
+    label: "書き出して保存",
+    detail: "動画ファイルにして保存。表紙(サムネイル)も作れる",
+    color: "var(--accent-3-soft)",
   },
 ];
 
@@ -53,8 +63,8 @@ export default function Home() {
             </span>
           </h1>
           <p className="mx-auto max-w-md text-sm leading-6" style={{ color: "var(--muted)" }}>
-            動画をアップロードするだけでAIが字幕を自動生成。あとはタイムラインで
-            トリム・並べ替え・見た目調整をして、そのまま書き出せます。
+            動画を選ぶだけで、AIが字幕・文字・効果音・寄りまで入れて編集します。
+            気になる所だけ直して、そのまま書き出せます。
           </p>
         </div>
 
