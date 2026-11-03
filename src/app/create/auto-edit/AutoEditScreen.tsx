@@ -137,12 +137,25 @@ export const AutoEditScreen: React.FC = () => {
       editTemplateId: templateId,
       // 次に自動編集をやり直すときも、カット画面で残した元の範囲から切り直せるようにする。
       cutKeepRanges: keepRanges,
-      segments,
+      // AIが強調テロップにした字幕は、前に強調する字幕の画面で決めた見た目・効果音があればそれにそろえる
+      segments: project.emphasisPreset
+        ? segments.map((segment) =>
+            segment.captionEmphasis
+              ? {
+                  ...segment,
+                  captionEmphasis: project.emphasisPreset!.emphasis,
+                  emphasisSfxPresetId: project.emphasisPreset!.sfxPresetId ?? segment.emphasisSfxPresetId,
+                }
+              : segment
+          )
+        : segments,
       primaryColor: plan.theme.primaryColor ?? project.primaryColor,
       fontFamily: plan.theme.fontFamily ?? project.fontFamily,
       captionPosition: plan.theme.captionPosition ?? project.captionPosition,
       captionStyle: plan.theme.captionStyle ?? project.captionStyle,
       fontSize: plan.theme.captionFontSize ?? project.fontSize,
+      // 字幕は顎のすぐ下に固定する(置けなかった時は上・中央・下の決まった位置)
+      captionYPercent: plan.theme.captionYPercent,
       // 選んだ見出しを使う。補足(subline)はAIのおすすめの見出しに付けた物なので、それを選んだ時だけ付ける
       hook: selectedHook
         ? { headline: selectedHook, subline: selectedHook === plan.hook?.headline ? plan.hook.subline : undefined }
@@ -159,7 +172,7 @@ export const AutoEditScreen: React.FC = () => {
       // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
       sfx: generatedClips,
     });
-    // 次は、強調する字幕を選ぶ画面(自動編集の字幕は強調なしなので、強調は本人がここで選ぶ)
+    // 次は、強調する字幕を選ぶ画面(AIが強調テロップにした字幕を、本人がここで選び直せる)
     router.push("/create/emphasis");
   };
 
@@ -218,7 +231,7 @@ export const AutoEditScreen: React.FC = () => {
           <div className="panel flex flex-col gap-1 p-4">
             <span className="text-sm font-bold">AIが切り方・タイトル・画像・寄り・効果音までまとめて編集します</span>
             <span className="text-xs" style={{ color: "var(--muted)" }}>
-              数分かかることがあります。字幕の強調は、次の画面で自分で選べます。
+              数分かかることがあります。AIが強調した字幕は、次の画面で選び直せます。
             </span>
           </div>
         )}

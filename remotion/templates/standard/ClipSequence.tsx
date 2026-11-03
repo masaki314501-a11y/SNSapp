@@ -22,6 +22,8 @@ type Props = ClipProps & {
   captionTextStyleId?: string;
   /** 文字スタイルの書体より、選んだフォントを使うか。 */
   captionFontPinned?: boolean;
+  /** 字幕の上端の高さ(%)。動画全体で固定する時だけ。 */
+  captionYPercent?: number;
   keywordHighlights?: { word: string; color: string }[];
   /** 字幕を話に合わせて見せるか、元の動画で話している区間(元の動画の秒数)、光らせる色。 */
   wordSync?: WordSyncMode;
@@ -73,6 +75,7 @@ export const ClipSequence: React.FC<Props> = ({
   captionEmphasis,
   captionTextStyleId,
   captionFontPinned,
+  captionYPercent,
   keywordHighlights,
   wordSync,
   speechSpans,
@@ -105,6 +108,8 @@ export const ClipSequence: React.FC<Props> = ({
         captionStyle={clipCaptionStyle ?? captionStyle}
         fontFamily={captionFontFamily ?? fontFamily}
         position={clipCaptionPosition ?? captionPosition}
+        // このクリップだけ位置を変えた時は、その位置(上・中央・下)を使う
+        yPercent={clipCaptionPosition ? undefined : captionYPercent}
         fontSize={clipFontSize ?? fontSize}
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}

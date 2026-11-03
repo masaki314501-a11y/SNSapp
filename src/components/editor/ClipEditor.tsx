@@ -346,6 +346,7 @@ export const ClipEditor: React.FC = () => {
         muteOriginalUnderNarration,
         captionTextStyleId: project?.captionTextStyleId,
         captionFontPinned: project?.captionFontPinned,
+        captionYPercent: project?.captionYPercent,
         keywordHighlights: project?.keywordHighlights,
         speechSpans: project?.speechSpans,
         captionWordSync: project?.captionWordSync,
@@ -363,6 +364,7 @@ export const ClipEditor: React.FC = () => {
       project?.framing,
       project?.captionTextStyleId,
       project?.captionFontPinned,
+      project?.captionYPercent,
       project?.keywordHighlights,
       project?.speechSpans,
       project?.captionWordSync,
@@ -906,6 +908,26 @@ export const ClipEditor: React.FC = () => {
       ),
     }));
   };
+  // 自動編集が字幕を顎のすぐ下に固定した時は、位置の欄に「顎の下(固定)」を出す。上・中央・下を選ぶとそちらに変わる
+  const CHIN_POSITION = "chin";
+  const chinFixed = project?.captionYPercent !== undefined;
+  const shownPositionValue = styleSource?.clipCaptionPosition ?? (chinFixed ? CHIN_POSITION : captionPosition);
+  const changeCaptionPosition = (value: string) => {
+    if (value === CHIN_POSITION) {
+      // 選んだクリップの位置の指定を外して、動画全体の位置(顎の下)に戻す
+      if (styleTargetSegments.length === 0) return;
+      pushHistory();
+      setForm((prev) => ({
+        ...prev,
+        segments: prev.segments.map((segment) =>
+          selectedKeys.has(segment.key) ? { ...segment, clipCaptionPosition: undefined } : segment
+        ),
+      }));
+      return;
+    }
+    if (styleTargetSegments.length === 0) updateProjectEffects({ captionYPercent: undefined });
+    changeCaptionLook({ captionPosition: value as CaptionPosition });
+  };
   /** 文字スタイルを選ぶ。選び直した時は、そのスタイルの書体で見せる(フォントの選び直しを解く)。 */
   const pickCaptionTextStyle = (id: string | undefined) => {
     pushHistory();
@@ -929,6 +951,7 @@ export const ClipEditor: React.FC = () => {
     setCaptionPosition(shownLook.captionPosition);
     setFontSize(shownLook.fontSize);
     updateProjectEffects({
+      ...(styleSource?.clipCaptionPosition ? { captionYPercent: undefined } : {}),
       captionTextStyleId: shownCaptionTextStyleId,
       captionFontPinned: Boolean(styleSource?.captionFontFamily) || Boolean(project?.captionFontPinned),
     });
@@ -1619,10 +1642,8 @@ export const ClipEditor: React.FC = () => {
         </label>
         <label className="editor-field">
           <span>位置</span>
-          <select
-            value={shownLook.captionPosition}
-            onChange={(e) => changeCaptionLook({ captionPosition: e.target.value as CaptionPosition })}
-          >
+          <select value={shownPositionValue} onChange={(e) => changeCaptionPosition(e.target.value)}>
+            {chinFixed ? <option value={CHIN_POSITION}>顎の下(固定)</option> : null}
             {CAPTION_POSITION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

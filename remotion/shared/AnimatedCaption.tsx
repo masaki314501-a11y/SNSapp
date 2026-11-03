@@ -15,6 +15,7 @@ import { LINE_STYLE, breakIntoLines, phraseEnds } from "./textWrap";
 import { StyledText, type StyledTextPart } from "./StyledText";
 import { currentPhraseRange, type WordSyncMode } from "./wordSync";
 import { findTextStylePreset } from "./textStylePresets";
+import { VIDEO_HEIGHT } from "./constants";
 
 type Props = {
   text: string;
@@ -24,6 +25,8 @@ type Props = {
   captionStyle?: CaptionStyle;
   fontFamily?: CaptionFontFamily;
   position?: CaptionPosition;
+  /** 字幕の上端を、画面の上からこの%の高さに固定する(指定時はpositionより優先)。 */
+  yPercent?: number;
   fontSize?: CaptionFontSize;
   /** テロップ中で色を変えて大きく見せる単語。 */
   emphasisWords?: string[];
@@ -94,6 +97,7 @@ export const AnimatedCaption: React.FC<Props> = ({
   captionStyle = "pill",
   fontFamily: baseFontFamily = "Noto Sans JP",
   position = "bottom",
+  yPercent,
   fontSize = "medium",
   emphasisWords,
   emphasisColor = "#FFE600",
@@ -216,7 +220,9 @@ export const AnimatedCaption: React.FC<Props> = ({
   return (
     <AbsoluteFill
       style={{
-        ...POSITION_STYLE[position],
+        ...(yPercent !== undefined
+          ? { justifyContent: "flex-start", paddingTop: (yPercent / 100) * VIDEO_HEIGHT, paddingBottom: 0 }
+          : POSITION_STYLE[position]),
         alignItems: "center",
         paddingLeft: CAPTION_SIDE_PADDING,
         paddingRight: CAPTION_SIDE_PADDING,

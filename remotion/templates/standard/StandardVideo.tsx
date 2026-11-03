@@ -95,6 +95,7 @@ export const StandardVideo: React.FC<StandardVideoProps> = ({
               framing={framing}
               captionTextStyleId={clip.clipTextStyleId ?? theme.captionTextStyleId}
               captionFontPinned={theme.captionFontPinned}
+              captionYPercent={theme.captionYPercent}
               keywordHighlights={theme.keywordHighlights}
               wordSync={theme.captionWordSync}
               speechSpans={speechSpans}

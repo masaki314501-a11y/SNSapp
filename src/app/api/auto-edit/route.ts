@@ -29,6 +29,9 @@ export const runtime = "nodejs";
 // そのためここでは同じ値をそのまま定義する。
 const DEFAULT_CLIP_VOLUME = 1;
 const DEFAULT_CAPTION_ANIMATION = CAPTION_ANIMATION_OPTIONS[0].value;
+// 字幕を強調した時の見た目・効果音の初期値(videoProject.tsのDEFAULT_CAPTION_EMPHASIS等と同じ。上と同じ理由でここに置く)
+const DEFAULT_CAPTION_EMPHASIS = { band: true, bandColor: "#FFFFFF", textColor: "#111111" };
+const DEFAULT_EMPHASIS_SFX_PRESET_ID = "pop";
 
 /** 要望・手直しの指示の長さの上限。画面(AutoEditScreen.tsx)と合わせる。 */
 const MAX_USER_TEXT_LENGTH = 1000;
@@ -134,6 +137,8 @@ export async function POST(request: Request) {
       let cumulativeStart = 0;
       for (const clip of plan.clips) {
         const key = randomUUID();
+        // 強調テロップにしたクリップは、クリップの頭で鳴らす効果音を強調の効果音にする(強調を外せば一緒に消えるように)
+        const emphasisSfx = clip.captionEmphasize ? clip.sfx.find((sfx) => sfx.offsetSeconds <= 0.3) : undefined;
         segments.push({
           key,
           // 話している言葉は、基本の字幕として必ず出す(強調は付けず、書体は全体で1つ)。強調は編集画面で本人が選ぶ。
@@ -149,9 +154,16 @@ export async function POST(request: Request) {
           faceBox: clip.faceBox,
           clipCaptionPosition: clip.clipCaptionPosition,
           cameraHighlight: clip.cameraHighlight,
+          ...(clip.captionEmphasize
+            ? {
+                captionEmphasis: DEFAULT_CAPTION_EMPHASIS,
+                emphasisSfxPresetId: emphasisSfx?.presetId ?? DEFAULT_EMPHASIS_SFX_PRESET_ID,
+              }
+            : {}),
         });
 
         for (const sfx of clip.sfx) {
+          if (sfx === emphasisSfx) continue;
           if (generatedClips.length >= MAX_SFX_CLIPS) break;
           const preset = SFX_PRESETS.find((p) => p.id === sfx.presetId);
           if (!preset) continue;

@@ -1,12 +1,12 @@
 "use client";
 
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionEmphasis, type CaptionFontFamily } from "@video/shared/schema";
-import type { ProjectSegment } from "@/lib/videoProject";
+import { DEFAULT_CAPTION_EMPHASIS, type ProjectSegment } from "@/lib/videoProject";
 import { SFX_PRESETS } from "../audioPresets";
 import { TextStylePicker } from "./TextStylePicker";
 
 /** 強調をONにした時の初期値。白い帯に黒い文字(シェイプテロップ)。 */
-export const DEFAULT_EMPHASIS: CaptionEmphasis = { band: true, bandColor: "#FFFFFF", textColor: "#111111" };
+export const DEFAULT_EMPHASIS: CaptionEmphasis = DEFAULT_CAPTION_EMPHASIS;
 
 type StyleProps = {
   emphasis: CaptionEmphasis;

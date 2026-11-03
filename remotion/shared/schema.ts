@@ -131,6 +131,11 @@ export const themeSchema = z.object({
    * (以前は文字スタイルを選んでいるとフォントを変えても何も変わらなかった)
    */
   captionFontPinned: z.boolean().optional(),
+  /**
+   * 字幕の上端の位置(画面の高さに対する%)。指定した時は、上・中央・下の決まった位置ではなく、動画全体でこの高さに固定する
+   * (自動編集が、話している人の顎のすぐ下に決める)。クリップごとに位置を変えたクリップ(clipCaptionPosition)はそちらが優先。
+   */
+  captionYPercent: z.number().min(0).max(100).optional(),
   /** 字幕を話している言葉に合わせて見せるか(wordSync.ts)。省略時は合わせない。 */
   captionWordSync: z.enum(["none", "highlight", "reveal"]).optional(),
   /** 今話している言葉を光らせる時の色。 */

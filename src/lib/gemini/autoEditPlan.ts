@@ -89,6 +89,8 @@ const MAX_PLAN_OUTPUT_TOKENS = 32_000;
 /** 1案目が使える時の2案目の制限。2案目は良くするための作り直しなので、長くは待たせない。 */
 const SECOND_PLAN_TIMEOUT_MS = 240_000;
 const MAX_ATTEMPTS = 3;
+/** 強調テロップにしたクリップで、人物に寄る倍率(少しだけ)。 */
+const EMPHASIS_ZOOM_SCALE = 1.1;
 /** 案が、使う範囲のこの割合も編集していなければ、途中でやめた答えとして頼み直す(間を詰めても普通は7割以上残る)。 */
 const MIN_COVERED_RATIO = 0.5;
 const RETRY_BASE_DELAY_MS = 8_000;
@@ -176,6 +178,8 @@ export type AutoEditClipPlan = {
   clipCaptionPosition?: CaptionPosition;
   /** 話の山場(順位の発表・結論など)。カメラワークのルールで寄る所。 */
   cameraHighlight?: boolean;
+  /** このクリップの字幕を強調テロップにする(AIが選ぶ。強調する字幕を選ぶ画面で本人が選び直せる)。 */
+  captionEmphasize?: boolean;
   sfx: { presetId: string; offsetSeconds: number }[];
 };
 
@@ -188,6 +192,8 @@ export type AutoEditPlan = {
     captionPosition?: CaptionPosition;
     captionStyle?: CaptionStyle;
     captionFontSize?: CaptionFontSize;
+    /** 字幕を顎のすぐ下に固定する時の、字幕の上端の高さ(%)。無ければcaptionPositionの位置。 */
+    captionYPercent?: number;
   };
   hook: { headline: string; subline?: string } | null;
   /** 冒頭の見出しの候補(AIのおすすめ=hookが先頭。最大3つ)。本人が選ぶ。 */
@@ -343,13 +349,14 @@ ${input.template.instructions}
 - 演出は2種類に分けて考える。
   (a) 情報を見せる演出(ずっと出す枠・一覧・項目名のラベル・順位・点数・数字・手順の番号)は、歯科の動画では一番の
       離脱防止なので、本人の話に項目があれば最初から最後まで省かずに入れる。
-  (b) 気持ちを動かす演出(寄り・ツッコミの文字・傾き)は、感情の山にだけ絞る。リスク・副作用・注意を話している所には、
-      笑いの効果音やツッコミを入れない。
+  (b) 気持ちを動かす演出(寄り・ツッコミの文字・傾き)は、強調テロップ(編集マニュアル10・11)と感情の山にだけ絞る。
+      リスク・副作用・注意を話している所には、笑いの効果音やツッコミを入れない。
 
 ## 絶対の決まり(どんな演出・手本よりも優先し、例外なく守る)
 - 文字どうし(タイトル・ラベル・見出し・強調テキスト・ずっと出す文字・字幕)を重ねない。
-- 字幕(テロップ)を顔に重ねない。字幕を、枠・カード・画像・図形にも重ねない。字幕は必ず出るので、顔の位置(5-2)と、
-  ずっと出す枠・カード・画像の位置を見て、どれにも重ならない帯(captionPosition)を選ぶ。枠やカードを字幕の帯に置かない。
+- 字幕(テロップ)を顔に重ねない。字幕を、枠・カード・画像・図形にも重ねない。字幕は動画全体で1か所に固定し、
+  演者の顎のすぐ下に置く(サーバー側で顔の位置(5-2)から決める)。顎の下と同じ高さ(字幕の帯)には、枠やカードを置かない。
+  顎の下に置けない時の予備として、captionPositionには顔にも枠にも重ならない位置を選ぶ。
   枠を縦に並べる一覧(ランキング・〇選)は、タイトルの下から画面の高さの80%までに収め、下の帯を字幕のために空ける
   (はみ出した時はサーバー側で枠の並びを上へ詰める)。
 - 文字・画像を置く時は、その時間に画面にある物(字幕・顔・ずっと出ている文字・枠)を全部避ける。置ける場所が無い物は入れない
@@ -378,7 +385,21 @@ ${templateSection}
 - 本人がカット画面で「使う」と決めた範囲(再生順)。**クリップはこの範囲の中からだけ切り出すこと**:
 ${keepRangesList}${lengthLine}
 
-## 編集の手順(必ずこの順に、前の手順の結果を土台にして進める)
+## 編集マニュアル(この投稿者の編集チームの手順。必ずこの順に編集し、下の「各項目の書き方」もこの手順に従って書く)
+1. 撮影したメイン映像(本人の動画)を並べる。
+2. 話し始める前の不要な部分を削除する(最初のクリップは、話し始める所から始める)。
+3. 言い間違いや言葉に詰まった部分をカットする。
+4. 説明の間にある長い無音部分を削除する。
+5. 話の流れが自然になるように前後の映像をつなぐ(言葉の途中で切らない)。 → 2〜5はclips(2)
+6. 必要に応じて映像を拡大し、画面内の人物の位置を整える。人物の顔は、画面の中央より少し高めにする。 → framing(1-2)
+7. テロップ(字幕)の位置を決める。演者の顎より少し下に置き、演者とテロップが被らないようにする。 → face(5-2)を正確に書く
+   (位置はサーバー側で顎のすぐ下に固定する)。theme(6)
+8. 必要なオブジェクトを作る: ランキングの枠(globalShapes 1-3)・左上のタイトルテロップ(title 3)。
+9. テロップを入力する。基本テロップの位置は動画全体で常に固定する。 → speech(5)
+10. 強調したい言葉は、別のテロップ(強調テロップ)に変換する。 → その言葉のクリップを分けてemphasize=true(9-2)
+11. 強調テロップに効果音を付け、少し人物を拡大する。 → そのクリップの先頭にsfx(11)と、少しの寄り(zoom 10)
+
+## 各項目の書き方(上の編集マニュアルの順に、前の結果を土台にして書く)
 値はすべて自由。候補が書いてあるものだけは候補から選ぶ。
 数字はすべて小数点以下1桁まで(「70」「12.5」)で書く。「70.00000001」のような長い小数は書かない。
 
@@ -388,7 +409,9 @@ ${keepRangesList}${lengthLine}
 1-2. framing: 動画全体の画角。参考で人物が画面の片側に寄せられ、空いた側に枠・一覧・画像が置いてあるなら、全クリップの映像を
    寄せて同じ構図にする。scale(1.0〜1.5)倍に、focusXPercent/focusYPercentの点を中心に拡大する(その点は動かず、
    ほかは点から離れる方向へ広がる)。人物を右へ寄せたいなら中心を左寄り(focusXPercent 0〜20)、上下は人物の顔が
-   画面の上から3〜4割に来るように選ぶ。参考も本人の動画も人物が中央で、空ける必要が無ければnull。
+   画面の上から3〜4割に来るように選ぶ。参考が無くても、人物の顔が画面の中央より低い(顔の中心が縦45%より下)なら、
+   1.1〜1.3倍に寄せて、顔の中心が縦35〜45%に来るようにする(編集マニュアル6)。人物が中央・顔がもうその高さで、
+   片側を空ける必要も無ければnull。
 1-3. globalShapes: 参考にずっと出ている図形(ランキングの空の枠・一覧の箱・帯など)を、同じ位置・大きさ・線の太さ・
    角の丸み・色で置く(秒数は動画全体の先頭から。durationInSecondsをnullにすると最後まで)。xPercent/yPercentは図形の中心、
    widthPercentは画面幅に対する幅、heightPercentは画面の高さに対する高さ、borderWidthPxは横1080pxの画面での線の太さ。
@@ -456,30 +479,37 @@ ${imageSection}
    xPercent/yPercentは顔の中心、widthPercent/heightPercentは顔(髪・あごを含む)の幅・高さ。顔が映っていなければnull。
    文字・画像を顔に重ねないよう、サーバー側でこの位置を避けて配置し直すので、正確に書く。
 6. theme: テロップの見た目。全体の差し色(primaryColor、#RRGGBB)・テロップの位置・背景の付き方。参考スクショに合わせる。
-   手順①で置いた物と重ならない位置を選ぶ。フォントは本人が決めた物を動画全体で使うので選ばない。
+   テロップの位置は、サーバー側で演者の顎のすぐ下に、動画全体で固定する(編集マニュアル7・9)。captionPositionは、
+   顎の下に置けない時の予備の位置として、顔にも手順①で置いた物にも重ならない位置を選ぶ。フォントは本人が決めた物を動画全体で使うので選ばない。
    captionPosition候補: ${CAPTION_POSITION_VALUES.join(" / ")}
    captionStyle候補:
 ${captionStyleHints}
    captionFontSize(字幕の大きさ): small / medium / large / xlarge。字幕を画面中央に大きく出す参考ならlarge〜xlarge。
 7. captionAnimation: テロップの出現演出(候補は4と同じ)。
 
-### 手順③ 強調テキスト
-テロップの中の強調(色を変える語・書体・光)は、本人が後で選ぶので付けない。テロップの書体・色は動画全体で1つにそろえる。
+### 手順③ 強調テロップと強調テキスト
+テロップの中の一部の語の色変え・書体・光(emphasisWords等)は付けない。強調はemphasize(9-2)で、クリップの字幕ごと行う。
+9-2. emphasize: 強調したい言葉(項目名・答え・順位・数字・結論・本音・オチの一言)を言ったクリップをtrueにする(強調テロップになる。
+   白い帯に黒い文字など、基本テロップと違う見た目になる)。強調テロップにする言葉は、その言葉だけで1つのクリップに切り分ける
+   (前後の説明とは別のクリップにし、speechは短い一言にする)。説明・つなぎの言葉はfalse。多すぎると強調にならないので、
+   項目1つにつき1つ程度、動画全体の2〜3割のクリップまでにする。
+   強調テロップにしたクリップは、先頭(offsetSeconds=0)に効果音を1つ付け(11)、少し人物に寄る(10。サーバー側でも付ける)。
 9. overlays(強調): 項目ラベル(8)以外に足す文字は、本人の本音・ツッコミ・注釈(「※個人の感想です」など)だけで、
    本人の動画に本音・ツッコミ・注釈の場面がある所にだけ入れる。字幕の言い換えや煽り文句は入れない。
    項目は4と同じ。顔や手順①の物・テロップを隠さない位置に置く。
 
-### 手順④ カメラアングル(寄りは感情の山にだけ。迷ったら寄らない)
-10. zoom: 寄りは「感情の山」にだけ使う(本音・ツッコミ・オチ・答え合わせの後のリアクション)。順位や数字を発表する瞬間は、
-    ラベルと効果音で見せ、寄らない。globalShapesやglobalOverlays(枠・一覧・比較カード)をずっと出している動画では、
-    寄ると人物と枠の位置関係が崩れるので、寄りは動画全体で0〜1回にする。テンプレートによっては、寄り方はサーバー側の
-    カメラワークのルールで決め直す。
-    - 寄るならpunchで1.2〜1.3倍、効果音(impactなど)と同時にする。1.35を超えない
+### 手順④ カメラアングル(寄りは強調テロップと感情の山だけ。迷ったら寄らない)
+10. zoom: 強調テロップにしたクリップ(emphasize=true)では、少しだけ人物に寄る(punchで1.1〜1.15倍)。それ以外の寄りは
+    「感情の山」(本音・ツッコミ・オチ・答え合わせの後のリアクション)にだけ使う。globalShapesやglobalOverlays
+    (枠・一覧・比較カード)をずっと出している動画では、寄ると人物と枠の位置関係が崩れるので、強調テロップ以外では寄らない。
+    テンプレートによっては、寄り方はサーバー側のカメラワークのルールで決め直す。
+    - 感情の山で寄るならpunchで1.2〜1.3倍、効果音(impactなど)と同時にする。1.35を超えない
     - focusXPercent/focusYPercentは本人の顔(目のあたり)。1秒未満の短いクリップには入れない
 
 ### 仕上げ(①〜④が終わってから)
 11. sfx: 効果音は「画面に新しい物が出る瞬間」の合図としてだけ鳴らす(offsetSecondsはクリップ先頭からの秒)。新しい物とは、
-    項目ラベル・枠を埋める物・見出し・画像・〇印・答え合わせの一覧のこと。offsetSecondsは、その物のstartOffsetSecondsと同じ値にする。
+    強調テロップ・項目ラベル・枠を埋める物・見出し・画像・〇印・答え合わせの一覧のこと。offsetSecondsは、その物のstartOffsetSecondsと
+    同じ値にする(強調テロップは0)。
     話の内容(お金の話・問いかけ・驚き)だけを理由に、画面が何も変わらない所で鳴らさない。目安は「項目1つにつき1〜2個、
     項目と項目の間の説明の部分は0個」。同じ役割の出来事には、動画全体で同じ音を使う(例: 項目ラベルが出る=pop、
     勝ち・判定が決まる=decide、答え合わせ・一覧の公開=reveal、一番のオチ=impact)。音の種類は動画全体で2〜4種類に収める。候補:
@@ -506,10 +536,10 @@ ${sfxPresetHints}
 - title: 画面の左上にずっと出る(サーバー側で置く)
 - globalOverlays(ずっと出す物): titleと重ならない所
 - hook: 冒頭3秒だけ画面中央に大きく出る
-- テロップ: themeのcaptionPositionの位置(top=上部 / middle=中央 / bottom=下部)
+- テロップ(字幕): 動画全体で1か所に固定。演者の顎のすぐ下(サーバー側で置く。顔や枠に重なる時だけcaptionPositionの位置)
 - cta: 最後の5秒、画面下から2割あたりに出る
 - overlays・images: 上の要素と同じ時間に同じ場所へ置かない。5-2で書いた顔も隠さない
-- 先に役割ごとの場所(縦の帯)を決めてから置く: タイトル=上0〜12%、枠・一覧=globalShapesの場所、字幕=captionPositionの帯、
+- 先に役割ごとの場所(縦の帯)を決めてから置く: タイトル=上0〜12%、枠・一覧=globalShapesの場所、字幕=顎のすぐ下の帯、
   ラベル・見出し=字幕とも枠とも重ならない帯。右端の12%と下端の15%はアプリのボタンや説明文で隠れるので、文字を置かない
 - 文字の箱の大きさは、横=文字数×fontSizePx÷1080×100(%)、縦=行数×fontSizePx×1.3÷1920×100(%)で見積もり、
   中心(xPercent/yPercent)からその半分ずつ広がるとして、ほかと重ならない位置にする
@@ -526,7 +556,7 @@ ${sfxPresetHints}
 ## 量について
 - 量は数で決めず、中身で決める(一番大事な決まりのとおり)。目安は「近い手本の入れ方」の密度。それより大きく少ないのも、
   多すぎるのも不自然
-- 寄りは感情の山にだけ。枠や一覧をずっと出す動画では0〜1回
+- 寄りは強調テロップのクリップ(少しだけ)と感情の山だけ。枠や一覧をずっと出す動画では、強調テロップ以外では寄らない
 - 寄り・文字・効果音を同じ瞬間に全部重ねるのは、一番の山場だけにする
 
 ## 設計の考え方
@@ -1310,12 +1340,16 @@ const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle
   return { left: 50 - halfWidth, right: 50 + halfWidth, top, bottom: top + heightPercent };
 };
 
+/** 字幕の上端を、顎(顔の範囲の下端)からどれだけ下げるか(%)。 */
+const CHIN_CAPTION_GAP_PERCENT = 1;
+/** 字幕の下端の限界(%)。下の決まった位置(下から160px)と同じ所まで。 */
+const CAPTION_LOWEST_BOTTOM_PERCENT = 100 - (CAPTION_OFFSET_FROM_EDGE_PX / VIDEO_HEIGHT) * 100;
+
 /**
- * クリップごとに、テロップ(字幕)の位置を決める。字幕が顔に重ならないこと・ほかの文字や物(枠・カード・画像)に重ならないことは、
- * どんな時も守る決まり。全体で決めた位置(theme)で重ならなければそのまま、重なるなら下→上→中央の順に、
- * 顔にも文字にも重ならない位置を探す。そういう位置が無ければ、顔に重ならない位置のうち文字との重なりが一番小さい所、
- * それも無ければ顔との重なりが一番小さい所にする(顔を隠すより、文字の方を後から動かす・消す方がまし)。
- * テロップの位置は全体で1つだが、寄ったクリップや顔が下の方に映るクリップでは、決まった位置だと顔を隠していた。
+ * 字幕(基本テロップ)の位置を、動画全体で1か所に決める(編集マニュアル: 演者の顎より少し下・位置は常に固定・演者と被らない)。
+ * まず、全クリップの顔の一番下(顎)のすぐ下に置けるか確かめる。顔・ずっと出す文字・枠や画像に重なる、または画面の下に
+ * 収まらない時は、上・中央・下の決まった位置のうち、全クリップで重ならない所(無ければ顔→文字→物の重なりが一番小さい所)にする。
+ * 以前はクリップごとに位置を変えていたが、字幕が上下に飛ぶと読みにくい。
  */
 const chooseCaptionPositions = (
   clips: AutoEditClipPlan[],
@@ -1323,44 +1357,68 @@ const chooseCaptionPositions = (
   theme: { position: CaptionPosition; style: CaptionStyle; fontSize: CaptionFontSize },
   texts: TimedBox[],
   objects: TimedBox[] = []
-): { clips: AutoEditClipPlan[]; captionBoxes: TimedBox[] } => {
+): { clips: AutoEditClipPlan[]; captionBoxes: TimedBox[]; position: CaptionPosition; yPercent: number | null } => {
   let clipStart = 0;
-  const captionBoxes: TimedBox[] = [];
-  const result = clips.map((clip) => {
+  const timed = clips.map((clip) => {
     const start = clipStart;
     clipStart += clip.durationInSeconds;
-    const timed = (box: BoxPercent): TimedBox => ({ ...box, start, end: start + clip.durationInSeconds });
-    const face = clip.faceBox ? timed(faceOnScreen(clip.faceBox, framing, clip.zoom)) : null;
-    const boxAt = (position: CaptionPosition) => timed(captionBox(clip.speechText, position, theme.style, theme.fontSize));
-    const overlapArea = (box: TimedBox, others: TimedBox[]) =>
-      others
-        .filter((item) => item.start < box.end && box.start < item.end)
-        .reduce(
-          (sum, item) =>
-            sum +
-            Math.max(0, Math.min(box.right, item.right) - Math.max(box.left, item.left)) *
-              Math.max(0, Math.min(box.bottom, item.bottom) - Math.max(box.top, item.top)),
-          0
-        );
-    const faceArea = (position: CaptionPosition) => (face ? overlapArea(boxAt(position), [face]) : 0);
-    const textArea = (position: CaptionPosition) => overlapArea(boxAt(position), texts);
-    const objectArea = (position: CaptionPosition) => overlapArea(boxAt(position), objects);
-    const candidates = [theme.position, ...(["bottom", "top", "middle"] as const).filter((p) => p !== theme.position)];
-    const clear = (position: CaptionPosition) =>
-      !(face && boxesOverlap(boxAt(position), face)) &&
-      !texts.some((text) => boxesOverlap(boxAt(position), text)) &&
-      !objects.some((object) => boxesOverlap(boxAt(position), object));
-    // 全部を避けられない時は、顔→文字→物の順に重なりの小さい位置。残った重なりは、最後に字幕以外の方を消して必ずなくす
-    const chosen =
-      candidates.find(clear) ??
-      [...candidates].sort((a, b) => faceArea(a) - faceArea(b) || textArea(a) - textArea(b) || objectArea(a) - objectArea(b))[0];
-    if (chosen !== theme.position && face && faceArea(chosen) > 0) {
-      console.info(`[autoEditPlan] 字幕が顔に重ならない位置が無かったため、重なりが一番小さい位置にしました(${start.toFixed(1)}秒〜)`);
-    }
-    if (clip.speechText.trim()) captionBoxes.push(boxAt(chosen));
-    return chosen === theme.position ? clip : { ...clip, clipCaptionPosition: chosen };
+    const end = start + clip.durationInSeconds;
+    return { clip, start, end, face: clip.faceBox ? { ...faceOnScreen(clip.faceBox, framing, clip.zoom), start, end } : null };
   });
-  return { clips: result, captionBoxes };
+  const spoken = timed.filter((item) => item.clip.speechText.trim());
+  const faces = timed.flatMap((item) => (item.face ? [item.face] : []));
+  const boxesAt = (place: CaptionPosition | number): TimedBox[] =>
+    spoken.map((item) => {
+      const box =
+        typeof place === "number"
+          ? (() => {
+              const band = captionBox(item.clip.speechText, "top", theme.style, theme.fontSize);
+              return { ...band, top: place, bottom: place + (band.bottom - band.top) };
+            })()
+          : captionBox(item.clip.speechText, place, theme.style, theme.fontSize);
+      return { ...box, start: item.start, end: item.end };
+    });
+  const overlapArea = (boxes: TimedBox[], others: TimedBox[]) =>
+    boxes.reduce(
+      (sum, box) =>
+        sum +
+        others
+          .filter((item) => item.start < box.end && box.start < item.end)
+          .reduce(
+            (inner, item) =>
+              inner +
+              Math.max(0, Math.min(box.right, item.right) - Math.max(box.left, item.left)) *
+                Math.max(0, Math.min(box.bottom, item.bottom) - Math.max(box.top, item.top)),
+            0
+          ),
+      0
+    );
+  const clear = (boxes: TimedBox[]) =>
+    !boxes.some((box) => [...faces, ...texts, ...objects].some((other) => boxesOverlap(box, other)));
+  const unset = clips.map((clip) => (clip.clipCaptionPosition ? { ...clip, clipCaptionPosition: undefined } : clip));
+
+  // 1. 顎のすぐ下(全クリップの顔の一番下より少し下)
+  if (faces.length > 0) {
+    const y = Math.round((Math.max(...faces.map((face) => face.bottom)) + CHIN_CAPTION_GAP_PERCENT) * 10) / 10;
+    const boxes = boxesAt(y);
+    if (boxes.every((box) => box.bottom <= CAPTION_LOWEST_BOTTOM_PERCENT) && clear(boxes)) {
+      return { clips: unset, captionBoxes: boxes, position: theme.position, yPercent: y };
+    }
+  }
+  // 2. 上・中央・下の決まった位置のうち、全クリップで重ならない所
+  const candidates = [theme.position, ...(["bottom", "top", "middle"] as const).filter((p) => p !== theme.position)];
+  const chosen =
+    candidates.find((position) => clear(boxesAt(position))) ??
+    [...candidates].sort(
+      (a, b) =>
+        overlapArea(boxesAt(a), faces) - overlapArea(boxesAt(b), faces) ||
+        overlapArea(boxesAt(a), texts) - overlapArea(boxesAt(b), texts) ||
+        overlapArea(boxesAt(a), objects) - overlapArea(boxesAt(b), objects)
+    )[0];
+  if (faces.length > 0 && overlapArea(boxesAt(chosen), faces) > 0) {
+    console.info("[autoEditPlan] 字幕を顔に重ならない位置に固定できなかったため、重なりが一番小さい位置にしました");
+  }
+  return { clips: unset, captionBoxes: boxesAt(chosen), position: chosen, yPercent: null };
 };
 
 /**
@@ -1525,6 +1583,8 @@ export const avoidTextOverlaps = (
   globalImages: ImageOverlay[];
   globalShapes: ShapeOverlay[];
   captionPosition: CaptionPosition | null;
+  /** 字幕を顎のすぐ下に固定した時の、字幕の上端の高さ(%)。 */
+  captionYPercent: number | null;
 } => {
   if (captionTheme) {
     const fitted = fitFrameStackAboveCaptions(globalOverlays, clips, globalShapes, globalImages, totalSeconds, captionTheme);
@@ -1588,7 +1648,7 @@ export const avoidTextOverlaps = (
   ];
   const captions = captionTheme
     ? chooseCaptionPositions(clips, framing, captionTheme, placedPersistent, objects)
-    : { clips, captionBoxes: [] as TimedBox[] };
+    : { clips, captionBoxes: [] as TimedBox[], position: null, yPercent: null };
   clips = captions.clips;
   // 話の間だけ出す画像は、顔と字幕の両方を避けて動かす
   const facesAndCaptions = [...faces, ...captions.captionBoxes];
@@ -1718,7 +1778,8 @@ export const avoidTextOverlaps = (
     clips: finalClips,
     globalImages: finalImages,
     globalShapes,
-    captionPosition: captionTheme?.position ?? null,
+    captionPosition: captions.position ?? captionTheme?.position ?? null,
+    captionYPercent: captions.yPercent,
   };
 };
 
@@ -1832,6 +1893,7 @@ export const finalizeAutoEditPlan = async (
       // Geminiが入れた改行は最初の1つだけ残す(変な所の改行・短すぎる行はtidyLineBreaksで直す)。
       speechText: keepFirstLineBreak(tidyLineBreaks(raw.speech ?? "")),
       captionAnimation: (raw.captionAnimation ?? undefined) as CaptionAnimation | undefined,
+      captionEmphasize: raw.emphasize === true && Boolean(raw.speech?.trim()) ? true : undefined,
       // テロップの強調語・クリップごとの書体や色は付けない(本人が後で選ぶ。途中でテロップの書体が変わらないように)。
       zoom: normalizeZoom(raw),
       faceBox: normalizeFace(raw.face),
@@ -1866,6 +1928,19 @@ export const finalizeAutoEditPlan = async (
   const cameraRule = cameraRuleForTemplate(input.template?.id);
   applyCameraRule(cameraRule, clips).forEach((zoom, index) => {
     clips[index] = { ...clips[index], zoom };
+  });
+  // 強調テロップにしたクリップは、少し人物に寄る(編集マニュアル: 強調変換したテロップに効果音をつけ、少し人物を拡大する)
+  clips.forEach((clip, index) => {
+    if (!clip.captionEmphasize || clip.zoom || clip.durationInSeconds < 0.5) return;
+    clips[index] = {
+      ...clip,
+      zoom: {
+        scale: EMPHASIS_ZOOM_SCALE,
+        style: "punch",
+        focusXPercent: clip.faceBox?.xPercent ?? 50,
+        focusYPercent: clip.faceBox?.yPercent ?? 40,
+      },
+    };
   });
 
   const globalImages = linkImageMoves(
@@ -1966,6 +2041,7 @@ export const finalizeAutoEditPlan = async (
         : (theme.captionPosition ?? undefined)) as CaptionPosition | undefined,
       captionStyle: (theme.captionStyle ?? undefined) as CaptionStyle | undefined,
       captionFontSize: (theme.captionFontSize ?? undefined) as CaptionFontSize | undefined,
+      captionYPercent: arranged.captionYPercent ?? undefined,
     },
     hook,
     hookCandidates,

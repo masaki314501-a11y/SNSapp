@@ -29,6 +29,10 @@ import { SFX_PRESETS } from "@/components/editor/audioPresets";
 
 export const DEFAULT_CAPTION_ANIMATION: CaptionAnimation = CAPTION_ANIMATION_OPTIONS[0].value;
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = "pill";
+/** 字幕を強調した時の見た目の初期値。白い帯に黒い文字(シェイプテロップ)。 */
+export const DEFAULT_CAPTION_EMPHASIS: CaptionEmphasis = { band: true, bandColor: "#FFFFFF", textColor: "#111111" };
+/** 字幕を強調した時に鳴らす効果音の初期値(audioPresets.tsのid)。 */
+export const DEFAULT_EMPHASIS_SFX_PRESET_ID = "pop";
 export const DEFAULT_CAPTION_FONT_FAMILY: CaptionFontFamily = "Noto Sans JP";
 export const DEFAULT_CAPTION_POSITION: CaptionPosition = "bottom";
 export const DEFAULT_CAPTION_FONT_SIZE: CaptionFontSize = "medium";
@@ -161,6 +165,8 @@ export type VideoProject = {
   captionTextStyleId?: string;
   /** 文字スタイルを選んだ後にフォントを選び直したか。trueならスタイルの書体より、選んだフォントを使う。 */
   captionFontPinned?: boolean;
+  /** 字幕の上端の高さ(画面の%)。自動編集が顎のすぐ下に決め、動画全体で固定する。未指定ならcaptionPositionの位置。 */
+  captionYPercent?: number;
   /** 重大ワード(全クリップの字幕で色を変える言葉と、その色)。 */
   keywordHighlights?: { word: string; color: string }[];
   /** カメラワークのルール(cameraRules.tsのid)。 */
@@ -343,6 +349,7 @@ export const buildStandardVideoProps = (params: {
   muteOriginalUnderNarration?: boolean;
   captionTextStyleId?: string;
   captionFontPinned?: boolean;
+  captionYPercent?: number;
   keywordHighlights?: VideoProject["keywordHighlights"];
   speechSpans?: VideoProject["speechSpans"];
   captionWordSync?: WordSyncMode;
@@ -397,6 +404,7 @@ export const buildStandardVideoProps = (params: {
       fadeInOut: params.fadeInOut,
       captionTextStyleId: params.captionTextStyleId,
       captionFontPinned: params.captionFontPinned,
+      captionYPercent: params.captionYPercent,
       keywordHighlights: params.keywordHighlights?.filter((highlight) => highlight.word.trim().length > 0),
       captionWordSync: resolveWordSync(params.captionWordSync, params.speechSpans),
       captionWordHighlightColor: params.captionWordHighlightColor,

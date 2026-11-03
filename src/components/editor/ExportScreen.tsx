@@ -54,6 +54,7 @@ export const ExportScreen: React.FC = () => {
         muteOriginalUnderNarration: current.muteOriginalUnderNarration,
         captionTextStyleId: current.captionTextStyleId,
         captionFontPinned: current.captionFontPinned,
+        captionYPercent: current.captionYPercent,
         keywordHighlights: current.keywordHighlights,
         speechSpans: current.speechSpans,
         captionWordSync: current.captionWordSync,

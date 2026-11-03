@@ -99,6 +99,8 @@ const rawClipSchema = z.object({
   /** この区間で話している内容。字幕は編集画面で付けるかどうか決めるため、ここでは下書きとして保持する。 */
   speech: z.string().nullable().optional(),
   captionAnimation: z.enum(CAPTION_ANIMATION_VALUES as [string, ...string[]]).nullable().optional(),
+  /** このクリップの字幕を強調テロップにするか(強調したい言葉だけのクリップ)。 */
+  emphasize: z.boolean().nullable().optional(),
   emphasisWords: z.array(z.string()).nullable().optional(),
   emphasisColor: z.string().nullable().optional(),
   captionAccentColor: z.string().nullable().optional(),
@@ -315,6 +317,7 @@ export const autoEditResponseSchema = {
           sourceEndSeconds: { type: Type.NUMBER },
           speech: text(80, true),
           captionAnimation: { type: Type.STRING, format: "enum", enum: CAPTION_ANIMATION_VALUES, nullable: true },
+          emphasize: { type: Type.BOOLEAN, nullable: true },
           face: {
             type: Type.OBJECT,
             nullable: true,
@@ -365,6 +368,7 @@ export const autoEditResponseSchema = {
           "speech",
           "face",
           "captionAnimation",
+          "emphasize",
           "overlays",
           "images",
           "shapes",

@@ -511,7 +511,25 @@ describe("顔を避ける", () => {
     expect(plan.clips[0].faceBox).toEqual(face);
   });
 
-  it("下のテロップが顔に重なるクリップだけ、テロップの位置を変える", async () => {
+  it("字幕は、動画全体で1か所、全クリップの顎のすぐ下に固定する", async () => {
+    const plan = await finalizeAutoEditPlan(
+      basePlan(
+        [
+          { sourceStartSeconds: 0, sourceEndSeconds: 2, speech: "こんにちは", face },
+          { sourceStartSeconds: 2, sourceEndSeconds: 4, speech: "こんにちは", face: { ...face, yPercent: 42 } },
+        ],
+        { theme: { captionPosition: "bottom" } }
+      ),
+      input
+    );
+    // 低い方の顔(2つ目のクリップ)の顎より下。クリップごとの位置は付けない
+    expect(plan.theme.captionYPercent).toBeGreaterThan(52.4);
+    expect(plan.theme.captionYPercent).toBeLessThan(56);
+    expect(plan.clips.every((clip) => clip.clipCaptionPosition === undefined)).toBe(true);
+  });
+
+  it("顎の下に置けない時は、上・中央・下のうち顔に重ならない位置に、動画全体で固定する", async () => {
+    // 1つ目のクリップは顔が画面の下の方にあり、顎の下には字幕が収まらない
     const plan = await finalizeAutoEditPlan(
       basePlan(
         [
@@ -522,8 +540,9 @@ describe("顔を避ける", () => {
       ),
       input
     );
-    expect(plan.clips[0].clipCaptionPosition).toBe("top");
-    expect(plan.clips[1].clipCaptionPosition).toBeUndefined();
+    expect(plan.theme.captionYPercent).toBeUndefined();
+    expect(plan.theme.captionPosition).toBe("top");
+    expect(plan.clips.every((clip) => clip.clipCaptionPosition === undefined)).toBe(true);
   });
 
   it("字幕は、顔にもずっと出る文字にも重ならない位置にする", async () => {
@@ -538,7 +557,9 @@ describe("顔を避ける", () => {
       ),
       input
     );
-    expect(plan.clips[0].clipCaptionPosition).toBe("top");
+    // 顎の下(顔の下端50.4%より下)に置けば、下のずっと出る文字にも重ならない
+    expect(plan.theme.captionYPercent).toBeGreaterThan(50.4);
+    expect(plan.theme.captionYPercent).toBeLessThan(70);
   });
 
   it("どこに置いても重なる文字は出さない(重なったまま残さない)", async () => {
@@ -572,7 +593,9 @@ describe("顔を避ける", () => {
       ),
       input
     );
-    expect(["top", "middle"]).toContain(plan.clips[0].clipCaptionPosition);
+    // 顎のすぐ下に置けば、下のカードにも顔にも重ならない
+    expect(plan.theme.captionYPercent).toBeDefined();
+    expect(plan.theme.captionYPercent!).toBeLessThan(70);
   });
 
   it("枠の番号が「1」「2」だけでも、項目名は枠の中に入れ、顔を避けて枠の外へ押し出さない", async () => {

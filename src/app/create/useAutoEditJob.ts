@@ -19,6 +19,7 @@ export type AutoEditPlanSummary = {
     captionPosition?: CaptionPosition;
     captionStyle?: CaptionStyle;
     captionFontSize?: CaptionFontSize;
+    captionYPercent?: number;
   };
   hook: VideoProject["hook"];
   /** 冒頭の見出しの候補(おすすめが先頭)。古いサーバーからの答えには無い。 */
