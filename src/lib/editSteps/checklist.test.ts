@@ -76,4 +76,41 @@ describe("工程12 チェック", () => {
     });
     expect(item(items, "safe-zone").status).toBe("ng");
   });
+
+  it("声の無い所の字幕・AIが見つけた誤字・受け取った画像・急に切れるBGMを見つける", () => {
+    const segments = [seg(2, { caption: "こんにちは" }), seg(2, { caption: "無音の字幕", images: [{ src: "images/abc.png" } as never] })];
+    const { items } = runChecklist({
+      state: state(segments, { globalOverlays: [] }),
+      spans: [[0, 1.9]],
+      look,
+      hasBgm: true,
+      bgmFade: { fadeInSeconds: 0, fadeOutSeconds: 0 },
+      typos: [{ text: "こんにちわ", wrong: "わ", correct: "は", reason: "誤字" }],
+    });
+    expect(item(items, "sync").status).toBe("ng");
+    expect(item(items, "typo").status).toBe("ng");
+    expect(item(items, "copyright").status).toBe("review");
+    expect(item(items, "bgm").status).toBe("ng");
+  });
+
+  it("画像の棚の画像だけ・フェードアウトするBGM・誤字なし・光の補正済みなら○になる", () => {
+    const segments = [seg(2, { caption: "こんにちは", images: [{ src: "images/library/a.png" } as never] })];
+    const { items } = runChecklist({
+      state: state(segments),
+      spans: [[0, 1.9]],
+      look,
+      hasBgm: true,
+      bgmFade: { fadeInSeconds: 0.3, fadeOutSeconds: 1.5 },
+      typos: [],
+      lightAdjusted: { brightness: 1.1, contrast: 1, saturation: 1.05 },
+    });
+    for (const id of ["sync", "typo", "copyright", "bgm", "light"]) expect(item(items, id).status, id).toBe("ok");
+  });
+
+  it("広告に出す時は、セーフティゾーンが狭くなる", () => {
+    const segments = [seg(2, { caption: "こんにちは" })];
+    const lowCaption = state(segments, { captionYPercent: 72 });
+    expect(item(runChecklist({ state: lowCaption, spans: [[0, 1.9]], look, hasBgm: false }).items, "safe-zone").status).toBe("ok");
+    expect(item(runChecklist({ state: lowCaption, spans: [[0, 1.9]], look, hasBgm: false, zone: "ad" }).items, "safe-zone").status).toBe("ng");
+  });
 });

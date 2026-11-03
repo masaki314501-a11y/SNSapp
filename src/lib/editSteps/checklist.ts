@@ -1,4 +1,4 @@
-import type { CaptionFontFamily, CaptionFontSize, CaptionStyle, ClipZoom } from "@video/shared/schema";
+import type { CaptionFontFamily, CaptionFontSize, CaptionStyle, ClipZoom, ImageOverlay } from "@video/shared/schema";
 import { estimateOverlayBox } from "@video/shared/textWrap";
 import { findTextStylePreset } from "@video/shared/textStylePresets";
 import type { ProjectSegment } from "@/lib/videoProject";
@@ -21,8 +21,16 @@ export type CheckItem = {
   detail: string;
 };
 
-/** TikTokのセーフティゾーンの目安(画面に対する%)。上は検索欄、右はボタン、下は説明文で隠れる。 */
-export const SAFE_ZONE = { left: 5, right: 87, top: 8, bottom: 78 } as const;
+/** セーフティゾーンの目安(画面に対する%)。上は検索欄、右はボタン、下は説明文で隠れる。広告は「広告」の表示やボタンが増えるので狭い。 */
+export const SAFE_ZONES = {
+  tiktok: { label: "TikTok投稿", left: 5, right: 87, top: 8, bottom: 78 },
+  ad: { label: "広告", left: 7, right: 84, top: 10, bottom: 70 },
+} as const;
+export type SafeZoneKind = keyof typeof SAFE_ZONES;
+/** 声が出ていると見なす、字幕1つあたりの話している時間(秒)。 */
+const MIN_SPOKEN_SECONDS = 0.2;
+/** 画像の棚(AIが作った画像・使ってよい画像を貯めた所)の画像の場所。 */
+const LIBRARY_IMAGE_PREFIX = "images/library/";
 /** 字幕を読むのに要る時間の目安(1秒に読める文字数)と、短すぎる表示時間(秒)。 */
 const READ_CHARS_PER_SECOND = 8;
 const MIN_CAPTION_SECONDS = 0.6;
@@ -87,6 +95,16 @@ export type ChecklistInput = {
   look: { captionStyle: CaptionStyle; fontSize: CaptionFontSize; fontFamily: CaptionFontFamily; primaryColor: string };
   captionTextStyleId?: string;
   hasBgm: boolean;
+  /** BGMの音量が上がり切るまで・下がり切るまでの秒数(BGMがある時)。 */
+  bgmFade?: { fadeInSeconds: number; fadeOutSeconds: number };
+  /** AIが見つけた誤字・脱字の候補(nullは確かめていない)。 */
+  typos?: { text: string; wrong: string; correct: string; reason: string }[] | null;
+  /** どこに出す動画か(セーフティゾーンが変わる)。 */
+  zone?: SafeZoneKind;
+  /** 動画全体に出す画像(編集画面で足した物)。 */
+  globalImages?: ImageOverlay[];
+  /** 光の補正をしたか(工程12で明るさを測って整えた)。 */
+  lightAdjusted?: { brightness: number; contrast: number; saturation: number } | null;
 };
 
 /** チェックを行う。直せる物(同じ画角が続く所)は直し、直した後の状態で確かめる。 */
@@ -100,7 +118,24 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   const add = (item: CheckItem) => items.push(item);
 
   // ---- 基本項目 ----
-  add({ id: "sync", group: "基本", label: "話す言葉とタイミングが合っているか", status: "review", detail: "動画を再生して、字幕が話す言葉と一緒に出ているか確かめてください" });
+  // 字幕が出ている間に、実際に声が出ているか(音声から確かめる)。字幕が書き起こしのかたまりごとに入っているので、声の無い所に字幕が出ていなければ合っている
+  const silentCaptions = captioned.filter((segment) => {
+    const spoken = input.spans.reduce(
+      (sum, [start, end]) => sum + Math.max(0, Math.min(end, segmentEnd(segment)) - Math.max(start, segment.startFromSeconds)),
+      0
+    );
+    return spoken < Math.min(MIN_SPOKEN_SECONDS, segment.durationInSeconds / 2);
+  });
+  add({
+    id: "sync",
+    group: "基本",
+    label: "話す言葉とタイミングが合っているか",
+    status: silentCaptions.length === 0 ? "ok" : "ng",
+    detail:
+      silentCaptions.length === 0
+        ? `全${captioned.length}個の字幕が、声が出ている間に出ています`
+        : `声が出ていない所に出ている字幕: ${silentCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」`).join(" / ")}。工程9をやり直してください`,
+  });
 
   const shortCaptions = captioned.filter(
     (segment) => segment.durationInSeconds < Math.max(MIN_CAPTION_SECONDS, segment.caption.replace(/\s/g, "").length / READ_CHARS_PER_SECOND)
@@ -116,12 +151,25 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
         : `表示時間が短いテロップ: ${shortCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」${fmt(s.durationInSeconds)}`).join(" / ")}。文字を減らすか、クリップを長くしてください`,
   });
 
-  add({ id: "typo", group: "基本", label: "誤字・脱字はないか", status: "review", detail: "テロップ・タイトル・枠の文字を読んで確かめてください" });
+  const typos = input.typos;
+  add({
+    id: "typo",
+    group: "基本",
+    label: "誤字・脱字はないか",
+    status: typos === undefined || typos === null ? "review" : typos.length === 0 ? "ok" : "ng",
+    detail:
+      typos === undefined || typos === null
+        ? "テロップ・タイトル・枠の文字を読んで確かめてください"
+        : typos.length === 0
+          ? "AIが音声と見比べ、誤字・脱字は見つかりませんでした"
+          : `誤字・脱字の候補: ${typos.map((t) => `「${t.text.replace(/\n/g, "")}」の「${t.wrong}」→「${t.correct}」(${t.reason})`).join(" / ")}。編集画面で直してから、もう一度チェックしてください`,
+  });
 
   // セーフティゾーン: 字幕・文字・枠が画面の端(アプリのボタンや説明文で隠れる所)に出ていないか
   const outside: string[] = [];
+  const zone = SAFE_ZONES[input.zone ?? "tiktok"];
   const inZone = (box: { left: number; right: number; top: number; bottom: number }) =>
-    box.left >= SAFE_ZONE.left && box.right <= SAFE_ZONE.right && box.top >= SAFE_ZONE.top && box.bottom <= SAFE_ZONE.bottom;
+    box.left >= zone.left && box.right <= zone.right && box.top >= zone.top && box.bottom <= zone.bottom;
   for (const segment of captioned) {
     const band = captionBox(segment.caption, segment.clipCaptionPosition ?? "bottom", input.look.captionStyle, input.look.fontSize);
     const box =
@@ -151,15 +199,30 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "safe-zone",
     group: "基本",
-    label: "セーフティゾーンからはみ出していないか(TikTok)",
+    label: `セーフティゾーンからはみ出していないか(${zone.label})`,
     status: outside.length === 0 ? "ok" : "ng",
     detail:
       outside.length === 0
-        ? `字幕・文字・枠は、すべて画面の上${SAFE_ZONE.top}%・下${100 - SAFE_ZONE.bottom}%・右${100 - SAFE_ZONE.right}%を避けています`
-        : `はみ出している物: ${outside.join(" / ")}。編集画面で位置を内側へ動かしてください(広告に出す時は、広告のセーフゾーンも確かめてください)`,
+        ? `字幕・文字・枠は、すべて画面の上${zone.top}%・下${100 - zone.bottom}%・左${zone.left}%・右${100 - zone.right}%を避けています`
+        : `はみ出している物: ${outside.join(" / ")}。編集画面で位置を内側へ動かしてください`,
   });
 
-  add({ id: "copyright", group: "基本", label: "著作権に違反する画像や動画の使用はないか", status: "review", detail: "使った画像・動画が、使ってよい物か確かめてください" });
+  // 画像の出どころ: 画像の棚の物(AIが作った・使ってよいと確かめて貯めた物)は○。お客様から受け取って入れた画像は、使ってよい物か人が確かめる
+  const images = [...(input.globalImages ?? []), ...segments.flatMap((segment) => segment.images ?? [])];
+  const ownImages = [...new Set(images.map((image) => image.src).filter((src) => !src.startsWith(LIBRARY_IMAGE_PREFIX)))];
+  const libraryImages = new Set(images.map((image) => image.src).filter((src) => src.startsWith(LIBRARY_IMAGE_PREFIX)));
+  add({
+    id: "copyright",
+    group: "基本",
+    label: "著作権に違反する画像や動画の使用はないか",
+    status: ownImages.length === 0 ? "ok" : "review",
+    detail:
+      images.length === 0
+        ? "画像は使っていません(映像はお客様が撮影した動画です)"
+        : ownImages.length === 0
+          ? `使っている画像${libraryImages.size}枚は、すべて画像の棚の物(AIが作った画像)です`
+          : `お客様から受け取って入れた画像が${ownImages.length}枚あります(${ownImages.map((src) => src.split("/").pop()).join("・")})。使ってよい物か確かめてください`,
+  });
 
   // ---- クオリティ項目 ----
   const first = segments[0];
@@ -223,8 +286,13 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     id: "bgm",
     group: "クオリティ",
     label: "BGMのタイミングが0.2秒以上ズレていないか",
-    status: input.hasBgm ? "review" : "ok",
-    detail: input.hasBgm ? "BGMの入り・終わりが映像とそろっているか確かめてください" : "BGMは入っていません",
+    // BGMは動画の頭から鳴り、終わりに合わせて下げる。入り・終わりの音量の変化が0.2秒以上あれば、映像とずれて聞こえない
+    status: !input.hasBgm || (input.bgmFade && input.bgmFade.fadeOutSeconds >= 0.2) ? "ok" : "ng",
+    detail: !input.hasBgm
+      ? "BGMは入っていません"
+      : input.bgmFade && input.bgmFade.fadeOutSeconds >= 0.2
+        ? `BGMは動画の頭から鳴り、最後の${fmt(input.bgmFade.fadeOutSeconds)}で音量を下げて、動画の終わりと一緒に終わります`
+        : "BGMが動画の終わりで急に切れます。編集画面のBGMで、終わりのフェードアウトを付けてください",
   });
 
   const colors = new Set<string>();
@@ -275,7 +343,16 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     detail: `使っているフォントは${fonts.size}つです(${[...fonts].join("・")})${fonts.size <= 2 ? "" : "。フォントをそろえてください"}`,
   });
 
-  add({ id: "light", group: "クオリティ", label: "人間が美しく見えるよう光が補正されているか", status: "review", detail: "このツールでは光の補正はできません。元の動画の明るさを確かめてください" });
+  const light = input.lightAdjusted;
+  add({
+    id: "light",
+    group: "クオリティ",
+    label: "人間が美しく見えるよう光が補正されているか",
+    status: light ? "ok" : "review",
+    detail: light
+      ? `映像の明るさを測って補正しました(明るさ${Math.round(light.brightness * 100)}%・コントラスト${Math.round(light.contrast * 100)}%・彩度${Math.round(light.saturation * 100)}%)。編集画面の「演出」→「動画全体」で手でも直せます`
+      : "元の動画の明るさを確かめてください",
+  });
 
   const emphasized = segments.filter((segment) => segment.captionEmphasis);
   const noSfx = emphasized.filter((segment) => !segment.emphasisSfxPresetId);

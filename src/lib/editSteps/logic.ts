@@ -5,9 +5,10 @@ import type {
   FaceBox,
   ShapeOverlay,
   TextOverlay,
+  VideoAdjust,
   VideoFraming,
 } from "@video/shared/schema";
-import type { ProjectSegment } from "@/lib/videoProject";
+import type { ProjectBgm, ProjectSegment } from "@/lib/videoProject";
 import { captionBox, faceOnScreen } from "@/lib/gemini/autoEditPlan";
 import type { CheckItem } from "./checklist";
 
@@ -24,6 +25,10 @@ export type StepState = {
   captionYPercent: number | null;
   globalShapes: ShapeOverlay[];
   globalOverlays: TextOverlay[];
+  /** 映像の明るさ・コントラスト・彩度(工程14のチェックで、光の補正として決める)。 */
+  videoAdjust?: VideoAdjust | null;
+  /** BGM(工程13で入れる。無ければnull)。 */
+  bgm?: ProjectBgm | null;
 };
 
 /** 工程の結果(先方の確認用の説明)。工程12(チェック)は、チェック項目ごとの結果も持つ。 */

@@ -257,3 +257,99 @@ export const pickEmphasis = async (captions: string[]): Promise<{ index: number;
     return [{ index, reason: result.reasons[i] ?? "" }];
   });
 };
+
+/** 工程12(チェック)の誤字・脱字の確認の指示文。 */
+export const PROOFREAD_PROMPT = (texts: { kind: "字幕" | "タイトル・枠の文字"; text: string }[]) => `
+添付した動画の音声と、次の画面に出す文字を見比べて、誤字・脱字を探してください(番号: [種類] 文字)。
+${texts.map((item, index) => `${index + 1}: [${item.kind}] ${item.text.replace(/\n/g, "")}`).join("\n")}
+
+- [字幕]は話した言葉の書き起こし。聞き間違い(話している言葉と違う)・漢字の間違い・送り仮名の間違い・抜けている字・余計な字を探す。
+  字幕は話した言葉を短くしてよいので、言い回しが違うだけ・言葉を省いているだけの物は誤りにしない。
+- [タイトル・枠の文字]は話をまとめた言葉なので、話した言葉と違っていてよい。漢字・送り仮名の間違い、抜けている字・余計な字だけを探す。
+- 専門用語・略語(DM・IVなど)は、話している言葉のとおりなら誤りにしない。
+- 見つからなければ空の配列で答える。
+
+誤りごとに、文字の番号(index)、誤りの部分(wrong)、正しい書き方(correct)、理由(reason)を書いてください。
+`.trim();
+
+/** 12. 画面に出す文字の誤字・脱字の候補を探す。 */
+export const proofreadTexts = async (input: {
+  absolutePath: string;
+  mimeType: string;
+  texts: { kind: "字幕" | "タイトル・枠の文字"; text: string }[];
+}): Promise<{ text: string; wrong: string; correct: string; reason: string }[]> => {
+  if (input.texts.length === 0) return [];
+  const part = await videoPart(client(), input.absolutePath, input.mimeType);
+  const result = await askJson({
+    model: STEP_MODEL,
+    label: "誤字・脱字の確認",
+    parts: [part, { text: PROOFREAD_PROMPT(input.texts) }],
+    schema: {
+      type: Type.OBJECT,
+      properties: {
+        issues: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              index: { type: Type.INTEGER },
+              wrong: { type: Type.STRING },
+              correct: { type: Type.STRING },
+              reason: { type: Type.STRING },
+            },
+            required: ["index", "wrong", "correct", "reason"],
+          },
+        },
+      },
+      required: ["issues"],
+    },
+    parse: z.object({
+      issues: z.array(z.object({ index: z.number().int(), wrong: z.string(), correct: z.string(), reason: z.string() })),
+    }),
+  });
+  return result.issues
+    .filter((issue) => issue.index >= 1 && issue.index <= input.texts.length && issue.wrong !== issue.correct)
+    .map((issue) => ({ text: input.texts[issue.index - 1].text, wrong: issue.wrong, correct: issue.correct, reason: issue.reason }));
+};
+
+/** 工程12(長さを収める)の指示文。 */
+export const SHORTEN_PROMPT = (captions: { text: string; seconds: number }[], totalSeconds: number, targetSeconds: number) => `
+次は、ショート動画の字幕を順に並べたものです(番号: 字幕 [その字幕の秒数])。今の長さは${totalSeconds.toFixed(1)}秒です。
+${captions.map((caption, index) => `${index + 1}: ${caption.text.replace(/\n/g, "")} [${caption.seconds.toFixed(1)}秒]`).join("\n")}
+
+この動画を${targetSeconds}秒以内に収めるため、外す字幕(その字幕の場面ごと外す)を選んでください。
+- 外してよいのは、前置き・繰り返し・言い換え・話の本筋に関係ない脱線・締めのあいさつの重複。
+- 外さないのは、動画のテーマを言う最初の一言・挙げていく項目(順位・用語・治療名など)とその答え・結論。
+- 外す字幕の秒数の合計が、${(totalSeconds - targetSeconds).toFixed(1)}秒以上になるように選ぶ。外すと話がつながらなくなる所は外さない。
+
+外す字幕の番号(removes)と、それぞれの理由(reasons。removesと同じ順)を答えてください。
+`.trim();
+
+/** 12. 長さを収めるために外す字幕を選ぶ(0始まりの番号で返す)。 */
+export const pickRemovals = async (
+  captions: { text: string; seconds: number }[],
+  totalSeconds: number,
+  targetSeconds: number
+): Promise<{ index: number; reason: string }[]> => {
+  const result = await askJson({
+    model: STEP_MODEL,
+    label: "長さを収める",
+    parts: [{ text: SHORTEN_PROMPT(captions, totalSeconds, targetSeconds) }],
+    schema: {
+      type: Type.OBJECT,
+      properties: {
+        removes: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+        reasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+      required: ["removes", "reasons"],
+    },
+    parse: z.object({ removes: z.array(z.number().int()), reasons: z.array(z.string()) }),
+  });
+  const seen = new Set<number>();
+  return result.removes.flatMap((pick, i) => {
+    const index = pick - 1;
+    if (index < 0 || index >= captions.length || seen.has(index)) return [];
+    seen.add(index);
+    return [{ index, reason: result.reasons[i] ?? "" }];
+  });
+};

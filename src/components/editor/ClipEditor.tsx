@@ -347,6 +347,7 @@ export const ClipEditor: React.FC = () => {
         captionTextStyleId: project?.captionTextStyleId,
         captionFontPinned: project?.captionFontPinned,
         captionYPercent: project?.captionYPercent,
+        videoAdjust: project?.videoAdjust,
         keywordHighlights: project?.keywordHighlights,
         speechSpans: project?.speechSpans,
         captionWordSync: project?.captionWordSync,
@@ -365,6 +366,7 @@ export const ClipEditor: React.FC = () => {
       project?.captionTextStyleId,
       project?.captionFontPinned,
       project?.captionYPercent,
+      project?.videoAdjust,
       project?.keywordHighlights,
       project?.speechSpans,
       project?.captionWordSync,
@@ -1716,6 +1718,7 @@ export const ClipEditor: React.FC = () => {
         cta={project?.cta ?? null}
         globalOverlays={project?.globalOverlays ?? null}
         globalImages={project?.globalImages ?? null}
+        videoAdjust={project?.videoAdjust}
         fadeInOut={fadeInOut}
         onChangeFadeInOut={setFadeInOut}
         totalSeconds={stats.totalSeconds}

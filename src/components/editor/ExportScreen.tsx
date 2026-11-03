@@ -55,6 +55,7 @@ export const ExportScreen: React.FC = () => {
         captionTextStyleId: current.captionTextStyleId,
         captionFontPinned: current.captionFontPinned,
         captionYPercent: current.captionYPercent,
+        videoAdjust: current.videoAdjust,
         keywordHighlights: current.keywordHighlights,
         speechSpans: current.speechSpans,
         captionWordSync: current.captionWordSync,

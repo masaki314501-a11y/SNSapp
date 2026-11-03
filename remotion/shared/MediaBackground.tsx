@@ -5,7 +5,7 @@ import { AbsoluteFill, Easing, Html5Video, interpolate, useCurrentFrame, useRemo
 // (サーバーのメモリ512MBでは落ちていた。useWebRender.ts参照)、どちらでも動く<Video>を使う。
 import { Video } from "@remotion/media";
 import { resolveClipSrc } from "./resolveSrc";
-import type { ClipZoom, VideoFraming } from "./schema";
+import type { ClipZoom, VideoAdjust, VideoFraming } from "./schema";
 
 const PLACEHOLDER_COLORS = ["#1F2937", "#312E81", "#7C2D12", "#134E4A"];
 /** pan(横に流す)で寄る中心を動かす幅(中心から左右に、画面幅の%)。大きいと酔うので控えめにする。 */
@@ -20,6 +20,8 @@ type Props = {
   zoom?: ClipZoom;
   /** 動画全体の画角。クリップごとの寄り(zoom)はこの上に重なる。 */
   framing?: VideoFraming;
+  /** 映像の明るさ・コントラスト・彩度(光の補正)。 */
+  adjust?: VideoAdjust;
 };
 
 /**
@@ -35,8 +37,14 @@ export const MediaBackground: React.FC<Props> = ({
   volume = 1,
   zoom,
   framing,
+  adjust,
 }) => {
   const frame = useCurrentFrame();
+  // 光の補正は映像の要素そのものに掛ける(ブラウザ内の書き出しも、要素のfilterを描く時に使う)
+  const filter =
+    adjust && (adjust.brightness !== 1 || adjust.contrast !== 1 || adjust.saturation !== 1)
+      ? `brightness(${adjust.brightness}) contrast(${adjust.contrast}) saturate(${adjust.saturation})`
+      : undefined;
   const { fps, durationInFrames } = useVideoConfig();
   const { isPlayer } = useRemotionEnvironment();
 
@@ -84,7 +92,7 @@ export const MediaBackground: React.FC<Props> = ({
           src={resolveClipSrc(src)}
           trimBefore={Math.round(startFromSeconds * fps)}
           volume={volume}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{ width: "100%", height: "100%", objectFit: "cover", filter }}
         />
       ) : src ? (
         <Video
@@ -92,7 +100,7 @@ export const MediaBackground: React.FC<Props> = ({
           trimBefore={Math.round(startFromSeconds * fps)}
           volume={volume}
           objectFit="cover"
-          style={{ width: "100%", height: "100%" }}
+          style={{ width: "100%", height: "100%", filter }}
         />
       ) : (
         <AbsoluteFill

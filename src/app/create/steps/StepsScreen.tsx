@@ -10,6 +10,7 @@ import { buildStandardVideoProps, loadProject, saveProject, type VideoProject } 
 import type { EditStepsRecord, StepState } from "@/lib/editSteps/logic";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
+import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
 
 /** 編集マニュアルの工程(番号・名前・中身)。AIを使う工程には印を付ける(料金と待ち時間がかかる)。 */
 export const EDIT_STEPS: { step: number; title: string; detail: string; usesAi: boolean }[] = [
@@ -24,8 +25,15 @@ export const EDIT_STEPS: { step: number; title: string; detail: string; usesAi: 
   { step: 9, title: "テロップを入力する", detail: "話している言葉をAIが書き起こして入れます(位置は工程7で固定)", usesAi: true },
   { step: 10, title: "強調したい言葉を違うテロップに変換する", detail: "AIが強調したい言葉を選び、強調テロップにします", usesAi: true },
   { step: 11, title: "強調テロップに効果音をつけ、少し人物を拡大する", detail: "強調テロップに効果音と、少しの寄りを付けます", usesAi: false },
-  { step: 12, title: "チェック項目を確かめる", detail: "編集時チェック項目を確かめ、直せる所(同じ画角が続く所など)は自動で直します", usesAi: false },
+  { step: 12, title: "決めた長さに収める(長い時だけ)", detail: "上で決めた長さ(初期は30秒)を超えていたら、AIが前置きや繰り返しの場面を外します", usesAi: true },
+  { step: 13, title: "BGMを入れる(なくてもよい)", detail: "選んだ曲を、話し声より小さな音量で頭から入れ、最後に音量を下げて終わらせます", usesAi: false },
+  { step: 14, title: "チェック項目を確かめる", detail: "編集時チェック項目を確かめます。光の補正は明るさを測って自動で行い、誤字・脱字はAIが音声と見比べます", usesAi: true },
 ];
+
+/** チェック項目を確かめる工程。 */
+const CHECK_STEP = 14;
+/** 長さの上限の初期値(秒)。チェック項目: 30秒以内の動画になっているか(お客様の指定があれば変えてよい)。 */
+const DEFAULT_TARGET_SECONDS = 30;
 
 const CHECK_MARK = { ok: "○", ng: "×", review: "目視" } as const;
 
@@ -37,6 +45,9 @@ const withState = (project: VideoProject, state: StepState): VideoProject => ({
   segments: state.segments,
   framing: state.framing ?? undefined,
   captionYPercent: state.captionYPercent ?? undefined,
+  videoAdjust: state.videoAdjust ?? undefined,
+  // BGMは工程13で入れる(それより前の工程では、前から入っていた物をそのままにする)
+  bgm: state.bgm === undefined ? project.bgm : state.bgm,
   globalShapes: state.globalShapes,
   globalOverlays: state.globalOverlays,
   // 工程ごとの編集では、冒頭の見出し・締めの一言・画像は付けない。効果音は強調テロップの物だけ(クリップに付いている)
@@ -57,6 +68,7 @@ export const StepsScreen: React.FC = () => {
   const [hasChecked, setHasChecked] = useState(false);
   const [running, setRunning] = useState<number | null>(null);
   const [error, setError] = useState<{ step: number; message: string } | null>(null);
+  const [bgmUploading, setBgmUploading] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
@@ -87,6 +99,7 @@ export const StepsScreen: React.FC = () => {
             framing: project.framing,
             captionTextStyleId: project.captionTextStyleId,
             captionYPercent: project.captionYPercent,
+            videoAdjust: project.videoAdjust,
           })
         : null,
     [project]
@@ -126,6 +139,10 @@ export const StepsScreen: React.FC = () => {
           videoDurationInSeconds: project.videoDurationInSeconds,
           keepRanges,
           state: base,
+          targetSeconds: project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS,
+          bgm: project.stepBgmChoice ?? null,
+          zone: project.publishZone ?? "tiktok",
+          globalImages: project.globalImages ?? [],
           look: {
             captionStyle: project.captionStyle,
             fontSize: project.fontSize,
@@ -161,18 +178,36 @@ export const StepsScreen: React.FC = () => {
     }
   };
 
-  const checks = record.results[12]?.checks ?? [];
+  const checks = record.results[CHECK_STEP]?.checks ?? [];
   const reviewed = record.reviewed ?? {};
   const ngCount = checks.filter((item) => item.status === "ng").length;
   const unreviewed = checks.filter((item) => item.status === "review" && !reviewed[item.id]).length;
-  const canFinish = Boolean(record.results[12]) && ngCount === 0 && unreviewed === 0 && running === null;
-  const finishHint = !record.results[12]
-    ? "工程12までを終えると、生成完了にできます"
+  const canFinish = Boolean(record.results[CHECK_STEP]) && ngCount === 0 && unreviewed === 0 && running === null;
+  const finishHint = !record.results[CHECK_STEP]
+    ? `工程${CHECK_STEP}までを終えると、生成完了にできます`
     : ngCount > 0
       ? `満たしていない項目(×)が${ngCount}つあります`
       : unreviewed > 0
         ? `目で確かめる項目があと${unreviewed}つあります`
         : "すべてのチェック項目を満たしました";
+  /** 工程の前に決めておく設定(長さの上限・どこに出す動画か・BGMの曲)を変える。 */
+  const updateSettings = (patch: Partial<VideoProject>) => {
+    const next: VideoProject = { ...project, ...patch };
+    setProject(next);
+    saveProject(next);
+  };
+  const chooseBgm = async (file: File | undefined) => {
+    if (!file) return;
+    setBgmUploading(true);
+    try {
+      const uploaded = await uploadAudioFile(file);
+      updateSettings({ stepBgmChoice: { src: uploaded.path, label: uploaded.fileName } });
+    } catch (caught) {
+      setError({ step: 13, message: toFriendlyErrorMessage(caught, "曲を読み込めませんでした") });
+    } finally {
+      setBgmUploading(false);
+    }
+  };
   const toggleReviewed = (id: string) => {
     const next: VideoProject = { ...project, editSteps: { ...record, reviewed: { ...reviewed, [id]: !reviewed[id] } } };
     setProject(next);
@@ -188,6 +223,32 @@ export const StepsScreen: React.FC = () => {
         </span>
         <span className="text-xs font-semibold">
           {doneCount} / {EDIT_STEPS.length} 工程が完了
+        </span>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <label className="editor-field">
+            <span>どこに出す動画か</span>
+            <select
+              value={project.publishZone ?? "tiktok"}
+              onChange={(e) => updateSettings({ publishZone: e.target.value as "tiktok" | "ad" })}
+            >
+              <option value="tiktok">TikTok投稿</option>
+              <option value="ad">広告</option>
+            </select>
+          </label>
+          <label className="editor-field">
+            <span>長さの上限(秒)</span>
+            <input
+              type="number"
+              min={5}
+              max={180}
+              value={project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS}
+              onChange={(e) => updateSettings({ targetDurationSeconds: Number(e.target.value) || DEFAULT_TARGET_SECONDS })}
+              style={{ width: 90 }}
+            />
+          </label>
+        </div>
+        <span className="text-xs" style={{ color: "var(--muted)" }}>
+          長さの上限は、お客様の指定が無ければ30秒のままにしてください。広告に出す時は、チェックのセーフティゾーンが広告用になります。
         </span>
       </div>
 
@@ -254,7 +315,28 @@ export const StepsScreen: React.FC = () => {
                   ))}
                 </div>
               ) : null}
-              {step === 12 && checks.length > 0 ? (
+              {step === 13 ? (
+                <label className="flex flex-wrap items-center gap-2 text-xs">
+                  <span>曲:</span>
+                  <span className="font-semibold">{project.stepBgmChoice?.label ?? "選んでいません"}</span>
+                  <span className="btn-outline px-3 py-1 text-xs" style={{ cursor: "pointer" }}>
+                    {bgmUploading ? "読み込み中…" : "曲を選ぶ"}
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      className="sr-only"
+                      onChange={(e) => void chooseBgm(e.target.files?.[0])}
+                    />
+                  </span>
+                  {project.stepBgmChoice ? (
+                    <button type="button" className="btn-outline px-3 py-1 text-xs" onClick={() => updateSettings({ stepBgmChoice: null })}>
+                      外す
+                    </button>
+                  ) : null}
+                  <span style={{ color: "var(--muted)" }}>商用で使ってよい曲を選んでください。選び直した時は「やり直す」を押します</span>
+                </label>
+              ) : null}
+              {step === CHECK_STEP && checks.length > 0 ? (
                 <ul className="flex flex-col gap-1.5 text-xs">
                   {checks.map((item) => (
                     <li key={item.id} className="flex items-start gap-2">

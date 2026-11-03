@@ -22,7 +22,8 @@ import {
   trimBeforeSpeech,
   type StepState,
 } from "@/lib/editSteps/logic";
-import { decideObjects, detectFace, findMistakes, pickEmphasis } from "@/lib/editSteps/ai";
+import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts } from "@/lib/editSteps/ai";
+import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import type { CaptionFontFamily } from "@video/shared/schema";
 
@@ -31,7 +32,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const requestSchema = z.object({
-  step: z.number().int().min(1).max(12),
+  step: z.number().int().min(1).max(14),
   videoPath: z.string().regex(VIDEO_PATH_PATTERN),
   videoDurationInSeconds: z.number().positive(),
   keepRanges: z.array(z.object({ startFromSeconds: z.number(), durationInSeconds: z.number() })),
@@ -41,7 +42,17 @@ const requestSchema = z.object({
     captionYPercent: z.number().nullable(),
     globalShapes: z.array(z.any()),
     globalOverlays: z.array(z.any()),
+    videoAdjust: z.any().nullable().optional(),
+    bgm: z.any().nullable().optional(),
   }),
+  /** 完成動画の長さの上限(秒)。お客様の指定が無ければ30秒。 */
+  targetSeconds: z.number().positive().optional(),
+  /** 工程13で入れるBGM(工程ごとの編集の画面で選んだ物)。 */
+  bgm: z.object({ src: z.string(), label: z.string() }).nullable().optional(),
+  /** どこに出す動画か(チェックのセーフティゾーン)。 */
+  zone: z.enum(["tiktok", "ad"]).optional(),
+  /** 動画全体に出す画像(編集画面で足した物。チェックの画像の出どころに使う)。 */
+  globalImages: z.array(z.any()).optional(),
   look: z.object({
     captionStyle: z.string(),
     fontSize: z.string(),
@@ -54,6 +65,12 @@ const requestSchema = z.object({
 
 /** 下の決まった位置の字幕の上端(%)。顎の下に置けない時の、枠を並べる下の限界に使う。 */
 const BOTTOM_CAPTION_TOP_PERCENT = 82;
+/** 完成動画の長さの上限の初期値(秒。チェック項目: 30秒以内の動画になっているか)。 */
+const DEFAULT_TARGET_SECONDS = 30;
+/** BGMの音量(話し声が聞き取れる小ささ)と、入り・終わりで音量を変える秒数。 */
+const BGM_VOLUME = 0.15;
+const BGM_FADE_IN_SECONDS = 0.3;
+const BGM_FADE_OUT_SECONDS = 1.5;
 
 const fmt = (seconds: number) => `${(Math.round(seconds * 10) / 10).toFixed(1)}秒`;
 const totalSeconds = (segments: ProjectSegment[]) => segments.reduce((sum, segment) => sum + segment.durationInSeconds, 0);
@@ -193,9 +210,55 @@ export async function POST(request: Request) {
           };
         }
         case 12: {
+          const target = parsed.data.targetSeconds ?? DEFAULT_TARGET_SECONDS;
+          const total = totalSeconds(segments);
+          if (total <= target) {
+            return { state, note: `完成の長さが${fmt(total)}で、${target}秒以内に収まっているので、何も外しませんでした` };
+          }
+          const captioned = segments.filter((segment) => segment.caption.trim());
+          const removals = await pickRemovals(
+            captioned.map((segment) => ({ text: segment.caption, seconds: segment.durationInSeconds })),
+            total,
+            target
+          );
+          const removeKeys = new Set(removals.map((removal) => captioned[removal.index].key));
+          const kept = segments.filter((segment) => !removeKeys.has(segment.key));
+          return {
+            state: { ...state, segments: kept },
+            note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。お客様の指定が無ければ、編集画面で短くしてください)` : ""}`,
+            details: removals.map((removal) => `「${captioned[removal.index].caption.replace(/\n/g, "")}」 ${removal.reason}`),
+          };
+        }
+        case 13: {
+          const chosen = parsed.data.bgm;
+          if (!chosen) return { state: { ...state, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
+          return {
+            state: {
+              ...state,
+              bgm: { src: chosen.src, label: chosen.label, volume: BGM_VOLUME, fadeInSeconds: BGM_FADE_IN_SECONDS, fadeOutSeconds: BGM_FADE_OUT_SECONDS },
+            },
+            note: `BGM「${chosen.label}」を、動画の頭から話し声より小さな音量で入れ、最後の${fmt(BGM_FADE_OUT_SECONDS)}で下げて動画の終わりと一緒に終わるようにしました`,
+          };
+        }
+        case 14: {
           const { spans } = await analyzeSpeechActivity(video.absolutePath);
+          // 光の補正: 映像の明るさを測って整える。誤字・脱字: AIが音声と見比べて候補を出す
+          const light = await measureLightAdjust(
+            video.absolutePath,
+            segmentRanges(segments),
+            segments.find((segment) => segment.faceBox)?.faceBox
+          );
+          const texts = [
+            ...state.globalOverlays
+              .map((overlay) => String(overlay.text))
+              .filter((text) => !/^\d+$/.test(text))
+              .map((text) => ({ kind: "タイトル・枠の文字" as const, text })),
+            ...segments.map((segment) => segment.caption).filter((caption) => caption.trim()).map((text) => ({ kind: "字幕" as const, text })),
+          ];
+          const typos = await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts });
+          const adjusted: StepState = { ...state, videoAdjust: light.adjust };
           const result = runChecklist({
-            state,
+            state: adjusted,
             spans,
             look: {
               captionStyle: captionLook.style,
@@ -204,7 +267,12 @@ export async function POST(request: Request) {
               primaryColor: look.primaryColor,
             },
             captionTextStyleId: look.captionTextStyleId,
-            hasBgm: look.hasBgm ?? false,
+            hasBgm: Boolean(state.bgm),
+            bgmFade: state.bgm ? { fadeInSeconds: state.bgm.fadeInSeconds, fadeOutSeconds: state.bgm.fadeOutSeconds } : undefined,
+            typos,
+            zone: parsed.data.zone,
+            globalImages: parsed.data.globalImages,
+            lightAdjusted: light.adjust,
           });
           const ng = result.items.filter((item) => item.status === "ng").length;
           const review = result.items.filter((item) => item.status === "review").length;

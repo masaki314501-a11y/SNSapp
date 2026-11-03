@@ -26,7 +26,7 @@ export type SegmentEffectsPatch = Partial<
   >
 >;
 export type ProjectEffectsPatch = Partial<
-  Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages" | "captionTextStyleId" | "captionFontPinned" | "captionYPercent" | "keywordHighlights" | "cameraRuleId" | "captionWordSync" | "captionWordHighlightColor">
+  Pick<VideoProject, "hook" | "cta" | "globalOverlays" | "globalImages" | "captionTextStyleId" | "captionFontPinned" | "captionYPercent" | "videoAdjust" | "keywordHighlights" | "cameraRuleId" | "captionWordSync" | "captionWordHighlightColor">
 >;
 export type EffectsScope = "clip" | "global";
 
@@ -41,6 +41,8 @@ type Props = {
   cta: VideoProject["cta"];
   globalOverlays: VideoProject["globalOverlays"];
   globalImages: VideoProject["globalImages"];
+  /** 映像の明るさ・コントラスト・彩度(光の補正)。 */
+  videoAdjust: VideoProject["videoAdjust"];
   fadeInOut: boolean;
   onChangeFadeInOut: (value: boolean) => void;
   /** 動画全体の長さ(ずっと出す文字・画像の表示時間を選べる範囲)。 */
@@ -73,6 +75,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
   cta,
   globalOverlays,
   globalImages,
+  videoAdjust,
   fadeInOut,
   onChangeFadeInOut,
   totalSeconds,
@@ -436,6 +439,45 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
               >
                 このルールで寄りを付け直す
               </button>
+            </SettingsSection>
+
+            <SettingsSection title="映像の明るさ(光の補正)">
+              <span className="text-xs" style={{ color: "var(--muted-2)" }}>
+                人が明るく見えるように整えます。工程ごとの編集のチェックで、明るさを測って自動で決めた値が入ります
+              </span>
+              {(
+                [
+                  ["brightness", "明るさ", 0.6, 1.4],
+                  ["contrast", "コントラスト", 0.6, 1.4],
+                  ["saturation", "彩度", 0, 1.6],
+                ] as const
+              ).map(([key, label, min, max]) => {
+                const value = videoAdjust?.[key] ?? 1;
+                return (
+                  <label key={key} className="editor-field">
+                    <span>
+                      {label} {Math.round(value * 100)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={0.01}
+                      value={value}
+                      onChange={(e) =>
+                        onUpdateProjectEffects({
+                          videoAdjust: { brightness: 1, contrast: 1, saturation: 1, ...videoAdjust, [key]: Number(e.target.value) },
+                        })
+                      }
+                    />
+                  </label>
+                );
+              })}
+              {videoAdjust ? (
+                <button type="button" className="editor-toolbar-btn self-start" onClick={() => onUpdateProjectEffects({ videoAdjust: undefined })}>
+                  補正を外す(元の映像のまま)
+                </button>
+              ) : null}
             </SettingsSection>
 
             <SettingsSection title="全体のフェード">

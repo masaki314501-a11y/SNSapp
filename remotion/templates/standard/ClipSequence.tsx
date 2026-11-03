@@ -1,7 +1,7 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
 import type { ClipProps } from "./schema";
-import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle, VideoFraming } from "../../shared/schema";
+import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle, VideoAdjust, VideoFraming } from "../../shared/schema";
 import { resolveFontFamilyStack } from "../../shared/schema";
 import { TextOverlays } from "../../shared/TextOverlays";
 import { ImageOverlays } from "../../shared/ImageOverlays";
@@ -24,6 +24,8 @@ type Props = ClipProps & {
   captionFontPinned?: boolean;
   /** 字幕の上端の高さ(%)。動画全体で固定する時だけ。 */
   captionYPercent?: number;
+  /** 映像の明るさ・コントラスト・彩度(光の補正)。 */
+  videoAdjust?: VideoAdjust;
   keywordHighlights?: { word: string; color: string }[];
   /** 字幕を話に合わせて見せるか、元の動画で話している区間(元の動画の秒数)、光らせる色。 */
   wordSync?: WordSyncMode;
@@ -76,6 +78,7 @@ export const ClipSequence: React.FC<Props> = ({
   captionTextStyleId,
   captionFontPinned,
   captionYPercent,
+  videoAdjust,
   keywordHighlights,
   wordSync,
   speechSpans,
@@ -99,6 +102,7 @@ export const ClipSequence: React.FC<Props> = ({
         volume={volume}
         zoom={zoom}
         framing={framing}
+        adjust={videoAdjust}
       />
       <AnimatedCaption
         text={caption}

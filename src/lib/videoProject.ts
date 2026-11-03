@@ -13,6 +13,7 @@ import {
   type ImageOverlay,
   type ShapeOverlay,
   type TextOverlay,
+  type VideoAdjust,
   type VideoFraming,
 } from "@video/shared/schema";
 import { MAX_SFX_CLIPS, type StandardVideoProps } from "@video/templates/standard/schema";
@@ -168,6 +169,12 @@ export type VideoProject = {
   captionFontPinned?: boolean;
   /** 字幕の上端の高さ(画面の%)。自動編集が顎のすぐ下に決め、動画全体で固定する。未指定ならcaptionPositionの位置。 */
   captionYPercent?: number;
+  /** 映像の明るさ・コントラスト・彩度(光の補正)。工程ごとの編集のチェックで測って決め、編集画面で手でも直せる。 */
+  videoAdjust?: VideoAdjust;
+  /** 工程ごとの編集の工程13で入れるBGM(画面で選んだ曲)。 */
+  stepBgmChoice?: { src: string; label: string } | null;
+  /** どこに出す動画か(チェックのセーフティゾーンが変わる)。未指定はTikTok投稿。 */
+  publishZone?: "tiktok" | "ad";
   /** 工程ごとの編集(/create/steps)の、工程ごとの結果と、その工程を終えた時点の状態。 */
   editSteps?: EditStepsRecord;
   /** 重大ワード(全クリップの字幕で色を変える言葉と、その色)。 */
@@ -353,6 +360,7 @@ export const buildStandardVideoProps = (params: {
   captionTextStyleId?: string;
   captionFontPinned?: boolean;
   captionYPercent?: number;
+  videoAdjust?: VideoAdjust;
   keywordHighlights?: VideoProject["keywordHighlights"];
   speechSpans?: VideoProject["speechSpans"];
   captionWordSync?: WordSyncMode;
@@ -408,6 +416,7 @@ export const buildStandardVideoProps = (params: {
       captionTextStyleId: params.captionTextStyleId,
       captionFontPinned: params.captionFontPinned,
       captionYPercent: params.captionYPercent,
+      videoAdjust: params.videoAdjust,
       keywordHighlights: params.keywordHighlights?.filter((highlight) => highlight.word.trim().length > 0),
       captionWordSync: resolveWordSync(params.captionWordSync, params.speechSpans),
       captionWordHighlightColor: params.captionWordHighlightColor,

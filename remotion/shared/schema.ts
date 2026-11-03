@@ -136,6 +136,8 @@ export const themeSchema = z.object({
    * (自動編集が、話している人の顎のすぐ下に決める)。クリップごとに位置を変えたクリップ(clipCaptionPosition)はそちらが優先。
    */
   captionYPercent: z.number().min(0).max(100).optional(),
+  /** 映像の明るさ・コントラスト・彩度(光の補正)。省略時はそのまま。 */
+  videoAdjust: z.lazy(() => videoAdjustSchema).optional(),
   /** 字幕を話している言葉に合わせて見せるか(wordSync.ts)。省略時は合わせない。 */
   captionWordSync: z.enum(["none", "highlight", "reveal"]).optional(),
   /** 今話している言葉を光らせる時の色。 */
@@ -313,6 +315,15 @@ export const videoFramingSchema = z.object({
 });
 
 export type VideoFraming = z.infer<typeof videoFramingSchema>;
+
+/** 映像の明るさ・コントラスト・彩度(1=そのまま)。人が明るく見えるように整える(光の補正)。 */
+export const videoAdjustSchema = z.object({
+  brightness: z.number().min(0.5).max(1.5).default(1),
+  contrast: z.number().min(0.5).max(1.5).default(1),
+  saturation: z.number().min(0).max(2).default(1),
+});
+
+export type VideoAdjust = z.infer<typeof videoAdjustSchema>;
 
 /** 字幕の強調(シェイプテロップ・書体・色)。 */
 export const captionEmphasisSchema = z.object({
