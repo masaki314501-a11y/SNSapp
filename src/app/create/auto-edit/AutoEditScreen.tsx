@@ -279,6 +279,16 @@ export const AutoEditScreen: React.FC = () => {
 
         {isProcessing ? null : (
           <>
+            {/* 編集マニュアルの工程(1〜11)を、工程ごとのボタンで1つずつ進める画面。まとめて任せるより工程ごとの誤差が小さい */}
+            <div className="panel flex flex-col gap-2 p-4">
+              <span className="text-sm font-bold">工程ごとに編集する</span>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                編集マニュアルの工程(1〜11)を、1つずつボタンで進めます。工程ごとに結果を確かめられます。
+              </span>
+              <button type="button" className="btn-outline self-start px-4 py-2 text-sm" onClick={() => router.push("/create/steps")}>
+                工程ごとに編集する →
+              </button>
+            </div>
             {hasReference ? (
               <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
             ) : (

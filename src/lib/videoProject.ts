@@ -17,6 +17,7 @@ import {
 } from "@video/shared/schema";
 import { MAX_SFX_CLIPS, type StandardVideoProps } from "@video/templates/standard/schema";
 import type { WordSyncMode } from "@video/shared/wordSync";
+import type { EditStepsRecord } from "@/lib/editSteps/logic";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 
 /**
@@ -167,6 +168,8 @@ export type VideoProject = {
   captionFontPinned?: boolean;
   /** 字幕の上端の高さ(画面の%)。自動編集が顎のすぐ下に決め、動画全体で固定する。未指定ならcaptionPositionの位置。 */
   captionYPercent?: number;
+  /** 工程ごとの編集(/create/steps)の、工程ごとの結果と、その工程を終えた時点の状態。 */
+  editSteps?: EditStepsRecord;
   /** 重大ワード(全クリップの字幕で色を変える言葉と、その色)。 */
   keywordHighlights?: { word: string; color: string }[];
   /** カメラワークのルール(cameraRules.tsのid)。 */

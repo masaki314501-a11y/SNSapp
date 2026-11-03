@@ -1328,7 +1328,7 @@ const CAPTION_OFFSET_FROM_EDGE_PX = 160;
 const CAPTION_MAX_WIDTH_PX = VIDEO_WIDTH - 48 * 2;
 
 /** テロップがその位置で画面のどこを占めるかの見積もり(%)。 */
-const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle, fontSize: CaptionFontSize): BoxPercent => {
+export const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle, fontSize: CaptionFontSize): BoxPercent => {
   const fontPx = CAPTION_BASE_FONT_PX[style] * CAPTION_FONT_SIZE_SCALE[fontSize];
   const padding = style === "pill" ? 32 : 0;
   const lines = breakIntoLines(text || "あ", fontPx, CAPTION_MAX_WIDTH_PX - padding * 2);
