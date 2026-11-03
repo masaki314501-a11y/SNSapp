@@ -14,7 +14,8 @@ import { waitForGeminiFileActive } from "@/lib/gemini/geminiFiles";
 /** 判断のいる工程(3・8・10)のモデル。顔の位置(6)は軽いモデルで足りる。 */
 const STEP_MODEL = process.env.GEMINI_STEP_MODEL || "gemini-pro-latest";
 const FACE_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
-const TIMEOUT_MS = 180_000;
+/** 1回の答えを待つ時間。答えが詰まって返ってこないことがあるので、長く待たずに頼み直す。 */
+const TIMEOUT_MS = 90_000;
 const MAX_ATTEMPTS = 3;
 
 const client = () => {
@@ -71,7 +72,8 @@ const askJson = async <T>(params: {
         await new Promise((resolve) => setTimeout(resolve, 8_000 * attempt));
         continue;
       }
-      if (error instanceof SyntaxError && attempt < MAX_ATTEMPTS) continue;
+      // 答えの形が崩れた・待っても返ってこない時も、頼み直す
+      if ((error instanceof SyntaxError || (error instanceof Error && error.message === "Gemini API timeout")) && attempt < MAX_ATTEMPTS) continue;
       throw toFriendlyGeminiError(error);
     }
   }
@@ -183,7 +185,7 @@ export const OBJECTS_PROMPT = `
 添付した動画は、歯科医院などのショート動画の素材です。編集で画面に置く物を2つ決めてください。
 
 1. title: 動画の最初から最後まで、画面の左上に出すタイトル。何の話かが一目でわかる短い言葉(全角16文字以内)。
-   話の中に出てくる治療名・症状名を、話したとおりに1つ入れる。2行にするなら意味の切れ目に「\\n」を1つだけ入れる。
+   話の中に出てくる治療名・症状名を、話したとおりに1つ入れる。12文字を超える時だけ、意味の切れ目に「\\n」を1つ入れて2行にする。
    「絶対」「最強」「No.1」「〇〇初」「大人気」のような誇大・比較の言葉は使わない。言っていない数字は入れない。
 2. frameCount: ランキングや「〇選」のように、話の中で項目を順に挙げていく動画なら、その項目の数(2〜10)。
    ランキングの枠をその数だけ並べる。項目を順に挙げる動画でなければ0。
@@ -221,8 +223,10 @@ export const EMPHASIS_PROMPT = (captions: string[]) => `
 ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`).join("\n")}
 
 この中から、強調テロップ(基本の字幕とは違う、目立つ見た目の字幕)にしたい字幕を選んでください。
-- 選ぶのは、見ている人に一番残したい言葉が入った字幕: 項目名・答え・順位・数字・結論・本音やオチの一言。
-- 説明・つなぎ・前置きの字幕は選ばない。多すぎると強調にならないので、項目1つにつき1つ程度、全体の3割までにする。
+- ランキングや「〇選」のように項目を順に挙げていく動画では、項目名(順位・用語・治療名など、挙げていく物の名前)の
+  字幕を、1つ目から最後まで全部選ぶ。項目の説明・答えの字幕は選ばない。
+- それ以外の動画では、見ている人に一番残したい言葉が入った字幕(答え・数字・結論・本音やオチの一言)を、全体の3割までで選ぶ。
+- 説明・つなぎ・前置き・締めのあいさつの字幕は選ばない。
 - 効果を言い切る言葉(「絶対治る」「痛くない」など)を含む字幕は選ばない。
 
 選んだ字幕の番号(picks)と、それぞれを選んだ理由(reasons。picksと同じ順)を答えてください。

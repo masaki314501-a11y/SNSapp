@@ -24,7 +24,10 @@ export const EDIT_STEPS: { step: number; title: string; detail: string; usesAi: 
   { step: 9, title: "テロップを入力する", detail: "話している言葉をAIが書き起こして入れます(位置は工程7で固定)", usesAi: true },
   { step: 10, title: "強調したい言葉を違うテロップに変換する", detail: "AIが強調したい言葉を選び、強調テロップにします", usesAi: true },
   { step: 11, title: "強調テロップに効果音をつけ、少し人物を拡大する", detail: "強調テロップに効果音と、少しの寄りを付けます", usesAi: false },
+  { step: 12, title: "チェック項目を確かめる", detail: "編集時チェック項目を確かめ、直せる所(同じ画角が続く所など)は自動で直します", usesAi: false },
 ];
+
+const CHECK_MARK = { ok: "○", ng: "×", review: "目視" } as const;
 
 const EMPTY_STATE: StepState = { segments: [], framing: null, captionYPercent: null, globalShapes: [], globalOverlays: [] };
 
@@ -123,7 +126,14 @@ export const StepsScreen: React.FC = () => {
           videoDurationInSeconds: project.videoDurationInSeconds,
           keepRanges,
           state: base,
-          look: { captionStyle: project.captionStyle, fontSize: project.fontSize, primaryColor: project.primaryColor },
+          look: {
+            captionStyle: project.captionStyle,
+            fontSize: project.fontSize,
+            primaryColor: project.primaryColor,
+            fontFamily: project.fontFamily,
+            captionTextStyleId: project.captionTextStyleId,
+            hasBgm: Boolean(project.bgm),
+          },
         }),
       });
       const json = await response.json().catch(() => null);
@@ -136,8 +146,10 @@ export const StepsScreen: React.FC = () => {
         // 工程1を始めた時点で、カット画面で残した範囲を覚えておく(工程1はいつもここから並べ直す)
         cutKeepRanges: keepRanges,
         editSteps: {
-          results: { ...results, [step]: { note: json.note, details: json.details, at: new Date().toISOString() } },
+          results: { ...results, [step]: { note: json.note, details: json.details, checks: json.checks, at: new Date().toISOString() } },
           snapshots: { ...snapshots, [step]: json.state },
+          // 中身が変わったので、目で確かめたチェックは付け直してもらう
+          reviewed: {},
         },
       };
       setProject(next);
@@ -147,6 +159,24 @@ export const StepsScreen: React.FC = () => {
     } finally {
       setRunning(null);
     }
+  };
+
+  const checks = record.results[12]?.checks ?? [];
+  const reviewed = record.reviewed ?? {};
+  const ngCount = checks.filter((item) => item.status === "ng").length;
+  const unreviewed = checks.filter((item) => item.status === "review" && !reviewed[item.id]).length;
+  const canFinish = Boolean(record.results[12]) && ngCount === 0 && unreviewed === 0 && running === null;
+  const finishHint = !record.results[12]
+    ? "工程12までを終えると、生成完了にできます"
+    : ngCount > 0
+      ? `満たしていない項目(×)が${ngCount}つあります`
+      : unreviewed > 0
+        ? `目で確かめる項目があと${unreviewed}つあります`
+        : "すべてのチェック項目を満たしました";
+  const toggleReviewed = (id: string) => {
+    const next: VideoProject = { ...project, editSteps: { ...record, reviewed: { ...reviewed, [id]: !reviewed[id] } } };
+    setProject(next);
+    saveProject(next);
   };
 
   return (
@@ -224,6 +254,37 @@ export const StepsScreen: React.FC = () => {
                   ))}
                 </div>
               ) : null}
+              {step === 12 && checks.length > 0 ? (
+                <ul className="flex flex-col gap-1.5 text-xs">
+                  {checks.map((item) => (
+                    <li key={item.id} className="flex items-start gap-2">
+                      {item.status === "review" ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`${item.label}を確かめた`}
+                          checked={Boolean(reviewed[item.id])}
+                          onChange={() => toggleReviewed(item.id)}
+                          style={{ marginTop: 2 }}
+                        />
+                      ) : (
+                        <span
+                          className="font-bold"
+                          style={{ color: item.status === "ok" ? "var(--success-text, green)" : "var(--danger-text, crimson)", minWidth: 13 }}
+                        >
+                          {CHECK_MARK[item.status]}
+                        </span>
+                      )}
+                      <span className="flex flex-col">
+                        <span className="font-semibold">
+                          [{item.group}] {item.label}
+                          {item.status === "review" ? "(目で確かめてチェック)" : ""}
+                        </span>
+                        <span style={{ color: "var(--muted)" }}>{item.detail}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {error?.step === step ? <p className="badge-pill danger w-fit">{error.message}</p> : null}
             </li>
           );
@@ -231,13 +292,11 @@ export const StepsScreen: React.FC = () => {
       </ol>
 
       <div className="bottom-action-bar">
-        <button
-          type="button"
-          className="btn-primary"
-          disabled={doneCount < EDIT_STEPS.length || running !== null}
-          onClick={() => router.push("/create/emphasis")}
-        >
-          強調する字幕を確かめる
+        <span className="text-xs text-center" style={{ color: "var(--muted)" }}>
+          {finishHint}
+        </span>
+        <button type="button" className="btn-primary" disabled={!canFinish} onClick={() => router.push("/create/emphasis")}>
+          生成完了(強調する字幕を確かめる)
           <ChevronRightIcon size={18} />
         </button>
       </div>

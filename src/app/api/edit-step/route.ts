@@ -23,13 +23,15 @@ import {
   type StepState,
 } from "@/lib/editSteps/logic";
 import { decideObjects, detectFace, findMistakes, pickEmphasis } from "@/lib/editSteps/ai";
+import { runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
+import type { CaptionFontFamily } from "@video/shared/schema";
 
 export const runtime = "nodejs";
 // AIに頼む工程は、動画のアップロードと答えを待つので数十秒かかる
 export const maxDuration = 300;
 
 const requestSchema = z.object({
-  step: z.number().int().min(1).max(11),
+  step: z.number().int().min(1).max(12),
   videoPath: z.string().regex(VIDEO_PATH_PATTERN),
   videoDurationInSeconds: z.number().positive(),
   keepRanges: z.array(z.object({ startFromSeconds: z.number(), durationInSeconds: z.number() })),
@@ -40,7 +42,14 @@ const requestSchema = z.object({
     globalShapes: z.array(z.any()),
     globalOverlays: z.array(z.any()),
   }),
-  look: z.object({ captionStyle: z.string(), fontSize: z.string(), primaryColor: z.string() }),
+  look: z.object({
+    captionStyle: z.string(),
+    fontSize: z.string(),
+    primaryColor: z.string(),
+    fontFamily: z.string().optional(),
+    captionTextStyleId: z.string().optional(),
+    hasBgm: z.boolean().optional(),
+  }),
 });
 
 /** 下の決まった位置の字幕の上端(%)。顎の下に置けない時の、枠を並べる下の限界に使う。 */
@@ -70,7 +79,7 @@ export async function POST(request: Request) {
   const captionLook = { style: look.captionStyle as CaptionStyle, fontSize: look.fontSize as CaptionFontSize };
 
   try {
-    const run = async (): Promise<{ state: StepState; note: string; details?: string[] }> => {
+    const run = async (): Promise<{ state: StepState; note: string; details?: string[]; checks?: CheckItem[] }> => {
       switch (step) {
         case 1: {
           const placed = placeMainFootage(keepRanges, newKey);
@@ -108,7 +117,7 @@ export async function POST(request: Request) {
         }
         case 5: {
           const activity = await analyzeSpeechActivity(video.absolutePath);
-          const result = smoothJoins(segments, (seconds) => snapToQuiet(activity, seconds));
+          const result = smoothJoins(segments, (seconds) => snapToQuiet(activity, seconds), activity.spans);
           return {
             state: { ...state, segments: result.segments },
             note: `つなぎ目を整えました(静かな所へ寄せた切れ目${result.snapped}か所・外した短い切れ端${result.dropped}個・つないだ所${result.merged}か所)。完成の長さ${fmt(totalSeconds(result.segments))}`,
@@ -181,6 +190,28 @@ export async function POST(request: Request) {
           return {
             state: { ...state, segments: result.segments },
             note: `強調テロップ${result.count}個に効果音を付け、少し人物を拡大しました`,
+          };
+        }
+        case 12: {
+          const { spans } = await analyzeSpeechActivity(video.absolutePath);
+          const result = runChecklist({
+            state,
+            spans,
+            look: {
+              captionStyle: captionLook.style,
+              fontSize: captionLook.fontSize,
+              fontFamily: (look.fontFamily ?? "Noto Sans JP") as CaptionFontFamily,
+              primaryColor: look.primaryColor,
+            },
+            captionTextStyleId: look.captionTextStyleId,
+            hasBgm: look.hasBgm ?? false,
+          });
+          const ng = result.items.filter((item) => item.status === "ng").length;
+          const review = result.items.filter((item) => item.status === "review").length;
+          return {
+            state: result.state,
+            note: ng === 0 ? `自動で確かめる項目はすべて満たしました(目で確かめる項目が${review}つあります)` : `満たしていない項目が${ng}つあります`,
+            checks: result.items,
           };
         }
         default:

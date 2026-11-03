@@ -9,6 +9,7 @@ import type {
 } from "@video/shared/schema";
 import type { ProjectSegment } from "@/lib/videoProject";
 import { captionBox, faceOnScreen } from "@/lib/gemini/autoEditPlan";
+import type { CheckItem } from "./checklist";
 
 /**
  * 工程ごとの編集(編集マニュアルの1〜11)のうち、AIを使わず決まりで行う処理。
@@ -25,10 +26,17 @@ export type StepState = {
   globalOverlays: TextOverlay[];
 };
 
-/** 工程の結果(先方の確認用の説明)。 */
-export type StepResult = { note: string; details?: string[]; at: string };
-/** 工程ごとの結果と、その工程を終えた時点の状態(やり直す時は、1つ前の工程の状態から始める)。 */
-export type EditStepsRecord = { results: Record<number, StepResult>; snapshots: Record<number, StepState> };
+/** 工程の結果(先方の確認用の説明)。工程12(チェック)は、チェック項目ごとの結果も持つ。 */
+export type StepResult = { note: string; details?: string[]; checks?: CheckItem[]; at: string };
+/**
+ * 工程ごとの結果と、その工程を終えた時点の状態(やり直す時は、1つ前の工程の状態から始める)。
+ * reviewedは、目で確かめるチェック項目に人が付けたチェック。
+ */
+export type EditStepsRecord = {
+  results: Record<number, StepResult>;
+  snapshots: Record<number, StepState>;
+  reviewed?: Record<string, boolean>;
+};
 
 /** 話している区間(元の動画の秒数)。 */
 export type SpeechSpan = [number, number];
@@ -139,6 +147,8 @@ export const removeLongSilences = (
   };
 };
 
+/** 話し終えてから切るまでに残す間の上限(秒)。 */
+const MAX_TAIL_AFTER_SPEECH_SECONDS = 0.15;
 /** これより短いクリップは、つないだ時に一瞬のちらつきになるので外す(秒)。 */
 const MIN_JOINED_SECONDS = 0.3;
 
@@ -148,13 +158,18 @@ const MIN_JOINED_SECONDS = 0.3;
  */
 export const smoothJoins = (
   segments: ProjectSegment[],
-  snap: (seconds: number) => number
+  snap: (seconds: number) => number,
+  spans: SpeechSpan[] = []
 ): { segments: ProjectSegment[]; snapped: number; dropped: number; merged: number } => {
   let snapped = 0;
   const moved = segments.map((segment, index) => {
     // 先頭の入りは工程2で決めたので動かさない
     const start = index === 0 ? segment.startFromSeconds : snap(segment.startFromSeconds);
-    const end = snap(segmentEnd(segment));
+    // 終わりは、話し終えてから切れるまでが0.2秒を超えないようにする(チェック項目: 0.2秒以上カットが遅れていないか)
+    const lastSpeechEnd = spans
+      .filter(([s, e]) => e > segment.startFromSeconds && s < segmentEnd(segment))
+      .reduce((latest, [, e]) => Math.max(latest, Math.min(e, segmentEnd(segment))), -Infinity);
+    const end = Math.min(snap(segmentEnd(segment)), lastSpeechEnd > -Infinity ? lastSpeechEnd + MAX_TAIL_AFTER_SPEECH_SECONDS : Infinity);
     if (start !== segment.startFromSeconds) snapped++;
     if (end !== segmentEnd(segment)) snapped++;
     return { ...segment, startFromSeconds: round2(start), durationInSeconds: round2(end - start) };
@@ -218,7 +233,10 @@ export const chinCaptionY = (
 };
 
 /** 左上のタイトルの位置・大きさ(%・px)。 */
-const TITLE_STYLE = { xPercent: 4, yPercent: 7, fontSizePx: 64 } as const;
+const TITLE_STYLE = { xPercent: 7, yPercent: 12, fontSizePx: 64 } as const;
+/** タイトルの右端・上端の限界(%)。TikTokの右側のボタン・上の検索欄にかからない所まで。 */
+const TITLE_RIGHT_LIMIT_PERCENT = 86;
+const TITLE_TOP_LIMIT_PERCENT = 9;
 /** ランキングの枠の並べ方: 画面の左側に縦に並べる(%)。 */
 const FRAME_X_PERCENT = 20;
 const FRAME_WIDTH_PERCENT = 30;
@@ -234,25 +252,33 @@ export const buildObjects = (params: {
   captionTopPercent: number;
   accentColor: string;
 }): { globalOverlays: TextOverlay[]; globalShapes: ShapeOverlay[] } => {
+  // タイトルは、左の余白から画面の右86%(TikTokの右側のボタンの手前)までに収める。長ければ文字を小さくする
+  // (自動で2行にすると「看護/師」のように言葉の途中で切れたため、改行はAIが意味の切れ目に入れた時だけ)
+  const maxWidthPx = ((TITLE_RIGHT_LIMIT_PERCENT - TITLE_STYLE.xPercent) / 100) * 1080;
+  const titleText = params.title;
+  const longestLine = Math.max(...titleText.split("\n").map((line) => line.length));
+  const fontSizePx = Math.max(36, Math.min(TITLE_STYLE.fontSizePx, Math.floor(maxWidthPx / longestLine)));
+  // 上の端が、TikTokの検索欄で隠れる所(画面の上8%)より下に来るように置く
+  const titleHalfHeight = (titleText.split("\n").length * fontSizePx * 1.2 + fontSizePx * 0.2) * 100 / 1920 / 2;
   const title: TextOverlay = {
-    text: params.title,
+    text: titleText,
     startOffsetSeconds: 0,
     xPercent: TITLE_STYLE.xPercent,
-    yPercent: TITLE_STYLE.yPercent,
+    yPercent: round2(Math.max(TITLE_STYLE.yPercent, TITLE_TOP_LIMIT_PERCENT + titleHalfHeight)),
     textAlign: "left",
-    fontSizePx: TITLE_STYLE.fontSizePx,
+    fontSizePx,
     color: "#FFFFFF",
     strokeColor: "#000000",
     rotationDeg: 0,
     animation: "fade",
   };
   // 左寄せの文字は、xPercentを文字の中心として扱う描画に合わせ、文字幅の半分だけ右へずらす
-  const titleWidthPercent = (Math.max(...params.title.split("\n").map((line) => line.length)) * TITLE_STYLE.fontSizePx * 100) / 1080;
+  const titleWidthPercent = (longestLine * fontSizePx * 100) / 1080;
   title.xPercent = round2(TITLE_STYLE.xPercent + titleWidthPercent / 2);
   if (params.frameCount < 2) return { globalOverlays: [title], globalShapes: [] };
 
-  const titleLines = params.title.split("\n").length;
-  const top = TITLE_STYLE.yPercent + (titleLines * TITLE_STYLE.fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
+  const titleLines = titleText.split("\n").length;
+  const top = title.yPercent + (titleLines * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
   const bottom = params.captionTopPercent - 2;
   const frameHeight = (bottom - top - FRAME_GAP_PERCENT * (params.frameCount - 1)) / params.frameCount;
   const shapes: ShapeOverlay[] = [];
@@ -298,8 +324,13 @@ export const splitByCaptions = (segments: ProjectSegment[], phrases: CaptionPhra
   segments.flatMap((segment) => {
     const start = segment.startFromSeconds;
     const end = segmentEnd(segment);
+    // 言葉は、その大半が入っているクリップにだけ入れる(前のクリップにほとんど入っている言葉の切れ端を、
+    // 0.01秒のクリップや「慢性腎臓病CV」のような二重の字幕にしないため)
     const inside = phrases
-      .filter((phrase) => phrase.end > start && phrase.start < end && phrase.text.trim())
+      .filter((phrase) => {
+        const overlap = Math.min(phrase.end, end) - Math.max(phrase.start, start);
+        return phrase.text.trim() && (overlap >= 0.3 || overlap >= (phrase.end - phrase.start) * 0.6);
+      })
       .map((phrase) => ({ start: Math.max(phrase.start, start), end: Math.min(phrase.end, end), text: phrase.text.trim() }));
     if (inside.length === 0) return [{ ...segment, caption: "" }];
     // クリップの頭と終わりまで隙間なく埋める(かたまりの間の短い間は前のかたまりに含める)
@@ -323,7 +354,8 @@ export const splitByCaptions = (segments: ProjectSegment[], phrases: CaptionPhra
   });
 
 /** 強調テロップの見た目の初期値(白い帯に黒い文字)と、鳴らす効果音。 */
-export const STEP_EMPHASIS = { band: true, bandColor: "#FFFFFF", textColor: "#111111" } as const;
+// 文字の黒は、タイトルの縁取りと同じ#000000にそろえる(チェック項目: 4色以上色が混在していないか)
+export const STEP_EMPHASIS = { band: true, bandColor: "#FFFFFF", textColor: "#000000" } as const;
 export const STEP_EMPHASIS_SFX = "pop";
 /** 強調テロップで人物に寄る倍率(少しだけ)。 */
 export const STEP_EMPHASIS_ZOOM = 1.1;

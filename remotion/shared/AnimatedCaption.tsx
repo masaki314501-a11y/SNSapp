@@ -75,7 +75,9 @@ const DEFAULT_BAND_TEXT_COLOR = "#111111";
 
 const OFFSET_FROM_EDGE = 160;
 /** テロップの左右の余白(px)と、1行の最大幅。 */
-const CAPTION_SIDE_PADDING = 48;
+// 字幕の幅は画面の74%まで(左右に140pxずつ空ける)。TikTokの右側のボタン(画面の右13%)に字幕がかからないように
+// (以前は左右48pxで、長い字幕が右のボタンの下まで広がっていた)。
+const CAPTION_SIDE_PADDING = 140;
 const CAPTION_MAX_WIDTH_PX = 1080 - CAPTION_SIDE_PADDING * 2;
 /** 強調する語の大きさ(倍)。 */
 const EMPHASIS_SCALE = 1.25;

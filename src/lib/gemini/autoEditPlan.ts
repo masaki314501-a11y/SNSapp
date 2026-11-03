@@ -1325,7 +1325,8 @@ const placeWithoutOverlap = (
 /** テロップの文字の大きさ・余白・画面の端からの距離。描画側(AnimatedCaption.tsx)と同じ値。 */
 const CAPTION_BASE_FONT_PX: Record<CaptionStyle, number> = { outline: 48, pill: 44 };
 const CAPTION_OFFSET_FROM_EDGE_PX = 160;
-const CAPTION_MAX_WIDTH_PX = VIDEO_WIDTH - 48 * 2;
+// 描画側(AnimatedCaption.tsxのCAPTION_SIDE_PADDING)と同じ。TikTokの右側のボタンにかからない幅
+const CAPTION_MAX_WIDTH_PX = VIDEO_WIDTH - 140 * 2;
 
 /** テロップがその位置で画面のどこを占めるかの見積もり(%)。 */
 export const captionBox = (text: string, position: CaptionPosition, style: CaptionStyle, fontSize: CaptionFontSize): BoxPercent => {
