@@ -11,31 +11,13 @@ import type { EditStepsRecord, StepState } from "@/lib/editSteps/logic";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
 import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
+import { EDIT_STEPS } from "@/lib/editSteps/steps";
 
-/** 編集マニュアルの工程(番号・名前・中身)。AIを使う工程には印を付ける(料金と待ち時間がかかる)。 */
-export const EDIT_STEPS: { step: number; title: string; detail: string; usesAi: boolean }[] = [
-  { step: 1, title: "メイン映像を配置する", detail: "使う範囲を選ぶ画面で残した部分を、順に並べます", usesAi: false },
-  { step: 2, title: "話し始める前の不要な部分を削除する", detail: "音声から話し始めを見つけて、その前を切ります", usesAi: false },
-  { step: 3, title: "言い間違いや言葉に詰まった部分をカットする", detail: "言い直す前の言葉や「えーと」をAIが見つけて切ります", usesAi: true },
-  { step: 4, title: "説明の間にある長い無音部分を削除する", detail: "0.5秒以上の無音を、前後に少し余白を残して切ります", usesAi: false },
-  { step: 5, title: "話の流れが自然になるように前後の映像をつなぐ", detail: "切れ目を言葉の途切れに合わせ、ちらつく短い切れ端を外します", usesAi: false },
-  { step: 6, title: "映像を拡大し、人物の位置を整える", detail: "AIが顔の位置を調べ、顔が中央より少し高めに来るよう拡大します", usesAi: true },
-  { step: 7, title: "テロップの位置を決める", detail: "演者の顎より少し下に、演者と被らないよう固定します", usesAi: false },
-  { step: 8, title: "必要なオブジェクトを作成する", detail: "左上のタイトルと、ランキングの動画なら枠をAIが決めて作ります(手本も見せます)", usesAi: true },
-  { step: 9, title: "テロップを入力する", detail: "話している言葉をAIが書き起こして入れます(位置は工程7で固定)", usesAi: true },
-  { step: 10, title: "強調したい言葉を違うテロップに変換する", detail: "AIが強調したい言葉を選び、強調テロップにします(手本も見せます)", usesAi: true },
-  { step: 11, title: "強調テロップに効果音をつけ、少し人物を拡大する", detail: "強調テロップに効果音と、少しの寄りを付けます", usesAi: false },
-  { step: 12, title: "決めた長さに収める(長い時だけ)", detail: "上で決めた長さ(初期は30秒)を超えていたら、AIが前置きや繰り返しの場面を外します", usesAi: true },
-  { step: 13, title: "BGMを入れる(なくてもよい)", detail: "選んだ曲を、話し声より小さな音量で頭から入れ、最後に音量を下げて終わらせます", usesAi: false },
-  { step: 14, title: "チェック項目を確かめる", detail: "編集時チェック項目を確かめます。光の補正は明るさを測って自動で行い、誤字・脱字はAIが音声と見比べます", usesAi: true },
-];
 
 /** チェック項目を確かめる工程。 */
 const CHECK_STEP = 14;
 /** 長さの上限の初期値(秒)。チェック項目: 30秒以内の動画になっているか(お客様の指定があれば変えてよい)。 */
 const DEFAULT_TARGET_SECONDS = 30;
-
-const CHECK_MARK = { ok: "○", ng: "×", review: "目視" } as const;
 
 const EMPTY_STATE: StepState = { segments: [], framing: null, captionYPercent: null, globalShapes: [], globalOverlays: [] };
 
@@ -58,11 +40,12 @@ const withState = (project: VideoProject, state: StepState): VideoProject => ({
 });
 
 /**
- * 「工程ごとに編集」画面。編集マニュアルの工程1〜11を、工程ごとのボタンで1つずつ進める。
+ * 「工程ごとに編集」画面。編集マニュアルの工程を、1工程=1ページで1つずつ進める(/create/steps/<工程の番号>)。
  * まとめてAIに任せると工程ごとの誤差が大きかったため、工程ごとに結果(何をしたか・その時点の動画)を見て確かめてから次へ進む。
  * 気に入らない工程は、その工程からやり直せる(後ろの工程の結果は消える)。
+ * stepが無い時(/create/steps)は、まだ終わっていない最初の工程のページへ移る。
  */
-export const StepsScreen: React.FC = () => {
+export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
@@ -78,7 +61,14 @@ export const StepsScreen: React.FC = () => {
 
   const record: EditStepsRecord = project?.editSteps ?? { results: {}, snapshots: {} };
   const doneCount = EDIT_STEPS.filter(({ step }) => record.results[step]).length;
-  const nextStep = EDIT_STEPS.find(({ step }) => !record.results[step])?.step ?? null;
+  const nextStep = EDIT_STEPS.find(({ step }) => !record.results[step])?.step ?? CHECK_STEP;
+
+  // 工程の番号が無い・まだ前の工程が終わっていない工程を開いた時は、進められる工程のページへ移る
+  const reachable = (step: number) => step === 1 || Boolean(record.snapshots[step - 1]);
+  const redirectTo = hasChecked && project && (pageStep === undefined || !reachable(pageStep)) ? nextStep : null;
+  useEffect(() => {
+    if (redirectTo !== null) router.replace(`/create/steps/${redirectTo}`);
+  }, [redirectTo, router]);
 
   const props = useMemo(
     () =>
@@ -118,13 +108,17 @@ export const StepsScreen: React.FC = () => {
       </main>
     );
   }
+  if (redirectTo !== null || pageStep === undefined) return null;
 
+  const current = EDIT_STEPS.find((item) => item.step === pageStep) ?? EDIT_STEPS[0];
+  const step = current.step;
+  const result = record.results[step];
   const keepRanges = (project.cutKeepRanges ?? project.segments).map((s) => ({
     startFromSeconds: s.startFromSeconds,
     durationInSeconds: s.durationInSeconds,
   }));
 
-  const runStep = async (step: number) => {
+  const runStep = async () => {
     const base = step === 1 ? EMPTY_STATE : record.snapshots[step - 1];
     if (!base) return;
     setRunning(step);
@@ -181,12 +175,13 @@ export const StepsScreen: React.FC = () => {
   const checks = record.results[CHECK_STEP]?.checks ?? [];
   const reviewed = record.reviewed ?? {};
   const ngCount = checks.filter((item) => item.status === "ng").length;
+  const toConfirm = checks.filter((item) => item.status !== "ok");
   const unreviewed = checks.filter((item) => item.status === "review" && !reviewed[item.id]).length;
   const canFinish = Boolean(record.results[CHECK_STEP]) && ngCount === 0 && unreviewed === 0 && running === null;
   const finishHint = !record.results[CHECK_STEP]
-    ? `工程${CHECK_STEP}までを終えると、生成完了にできます`
+    ? "「実行」を押して、チェック項目を確かめてください"
     : ngCount > 0
-      ? `満たしていない項目(×)が${ngCount}つあります`
+      ? `直す必要がある項目が${ngCount}つあります`
       : unreviewed > 0
         ? `目で確かめる項目があと${unreviewed}つあります`
         : "すべてのチェック項目を満たしました";
@@ -213,47 +208,44 @@ export const StepsScreen: React.FC = () => {
     setProject(next);
     saveProject(next);
   };
+  const goTo = (target: number) => router.push(`/create/steps/${target}`);
 
   return (
     <main className="flow-main flex flex-col gap-4">
-      <div className="panel flex flex-col gap-1 p-4">
-        <span className="text-sm font-bold">編集マニュアルの工程を、1つずつ進めます</span>
-        <span className="text-xs" style={{ color: "var(--muted)" }}>
-          工程ごとに「実行」を押し、結果と下の動画を確かめてから次へ進んでください。気に入らない工程は「やり直す」で、その工程から作り直せます(後ろの工程はやり直しになります)。「AI」の印がある工程は、AIの料金と数十秒の待ち時間がかかります。
+      {/* 工程の進み具合。終わった工程・今の工程の点を押すと、そのページへ移る */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+          工程 {step} / {EDIT_STEPS.length}(完了 {doneCount})
         </span>
-        <span className="text-xs font-semibold">
-          {doneCount} / {EDIT_STEPS.length} 工程が完了
-        </span>
-        <div className="mt-2 flex flex-wrap gap-3">
-          <label className="editor-field">
-            <span>どこに出す動画か</span>
-            <select
-              value={project.publishZone ?? "tiktok"}
-              onChange={(e) => updateSettings({ publishZone: e.target.value as "tiktok" | "ad" })}
-            >
-              <option value="tiktok">TikTok投稿</option>
-              <option value="ad">広告</option>
-            </select>
-          </label>
-          <label className="editor-field">
-            <span>長さの上限(秒)</span>
-            <input
-              type="number"
-              min={5}
-              max={180}
-              value={project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS}
-              onChange={(e) => updateSettings({ targetDurationSeconds: Number(e.target.value) || DEFAULT_TARGET_SECONDS })}
-              style={{ width: 90 }}
-            />
-          </label>
+        <div className="flex gap-1" role="list" aria-label="工程の進み具合">
+          {EDIT_STEPS.map((item) => {
+            const done = Boolean(record.results[item.step]);
+            const open = reachable(item.step);
+            return (
+              <button
+                key={item.step}
+                type="button"
+                role="listitem"
+                aria-label={`工程${item.step} ${item.title}${done ? "(完了)" : ""}`}
+                aria-current={item.step === step ? "step" : undefined}
+                disabled={!open}
+                onClick={() => goTo(item.step)}
+                style={{
+                  flex: 1,
+                  height: 8,
+                  borderRadius: 4,
+                  border: item.step === step ? "2px solid var(--accent)" : "none",
+                  background: done ? "var(--accent)" : "var(--border)",
+                  cursor: open ? "pointer" : "default",
+                }}
+              />
+            );
+          })}
         </div>
-        <span className="text-xs" style={{ color: "var(--muted)" }}>
-          長さの上限は、お客様の指定が無ければ30秒のままにしてください。広告に出す時は、チェックのセーフティゾーンが広告用になります。
-        </span>
       </div>
 
       {props ? (
-        <div className="panel p-2" style={{ position: "sticky", top: 0, zIndex: 5 }}>
+        <div className="panel p-2">
           <div style={{ height: 320, background: "#000", borderRadius: 8, overflow: "hidden" }}>
             <Player
               component={StandardVideo}
@@ -270,117 +262,139 @@ export const StepsScreen: React.FC = () => {
         </div>
       ) : null}
 
-      <ol className="flex flex-col gap-3">
-        {EDIT_STEPS.map(({ step, title, detail, usesAi }) => {
-          const result = record.results[step];
-          const canRun = running === null && (step === 1 || Boolean(record.snapshots[step - 1]));
-          const isNext = step === nextStep;
-          return (
-            <li
-              key={step}
-              className="panel flex flex-col gap-2 p-4"
-              style={{ borderColor: isNext ? "var(--accent)" : undefined, opacity: canRun || result ? 1 : 0.6 }}
+      <section className="panel flex flex-col gap-3 p-4">
+        <div className="flex items-start gap-3">
+          <span className="step-badge">{step}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-base font-bold">
+              {current.title}
+              {current.usesAi ? (
+                <span className="badge-pill ml-2" style={{ fontSize: 11 }}>
+                  AI
+                </span>
+              ) : null}
+            </span>
+            <span className="text-sm" style={{ color: "var(--muted)" }}>
+              {current.detail}
+              {current.usesAi ? "。AIの料金と数十秒の待ち時間がかかります" : ""}
+            </span>
+          </div>
+        </div>
+
+        {step === 12 ? (
+          <label className="editor-field">
+            <span>長さの上限(秒)。お客様の指定が無ければ30秒のまま</span>
+            <input
+              type="number"
+              min={5}
+              max={180}
+              value={project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS}
+              onChange={(e) => updateSettings({ targetDurationSeconds: Number(e.target.value) || DEFAULT_TARGET_SECONDS })}
+              style={{ width: 90 }}
+            />
+          </label>
+        ) : null}
+        {step === 13 ? (
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            <span>曲:</span>
+            <span className="font-semibold">{project.stepBgmChoice?.label ?? "選んでいません"}</span>
+            <span className="btn-outline px-3 py-1 text-sm" style={{ cursor: "pointer" }}>
+              {bgmUploading ? "読み込み中…" : "曲を選ぶ"}
+              <input type="file" accept="audio/*" className="sr-only" onChange={(e) => void chooseBgm(e.target.files?.[0])} />
+            </span>
+            {project.stepBgmChoice ? (
+              <button type="button" className="btn-outline px-3 py-1 text-sm" onClick={() => updateSettings({ stepBgmChoice: null })}>
+                外す
+              </button>
+            ) : null}
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              商用で使ってよい曲を選んでください。入れない時は、曲を選ばずに「実行」を押します
+            </span>
+          </label>
+        ) : null}
+        {step === CHECK_STEP ? (
+          <label className="editor-field">
+            <span>どこに出す動画か(セーフティゾーンが変わります)</span>
+            <select
+              value={project.publishZone ?? "tiktok"}
+              onChange={(e) => updateSettings({ publishZone: e.target.value as "tiktok" | "ad" })}
             >
-              <div className="flex items-start gap-3">
-                <span className="step-badge">{step}</span>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-sm font-bold">
-                    {title}
-                    {usesAi ? (
-                      <span className="badge-pill ml-2" style={{ fontSize: 11 }}>
-                        AI
-                      </span>
-                    ) : null}
+              <option value="tiktok">TikTok投稿</option>
+              <option value="ad">広告</option>
+            </select>
+          </label>
+        ) : null}
+
+        <button
+          type="button"
+          className={result ? "btn-outline self-start px-4 py-2 text-sm" : "btn-primary self-start px-4 py-2 text-sm"}
+          disabled={running !== null}
+          onClick={() => void runStep()}
+        >
+          {running === step ? "実行中…" : result ? "やり直す" : "実行"}
+        </button>
+        {result ? (
+          <div className="flex flex-col gap-1 rounded-md p-3 text-sm" style={{ background: "var(--accent-soft)" }}>
+            <span className="font-semibold">✓ {result.note}</span>
+            {result.details?.map((line, index) => (
+              <span key={index} className="text-xs" style={{ color: "var(--muted)" }}>
+                ・{line}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {/* 自動で満たしている項目(○)は出さず、確かめてほしい物(目で確かめる項目と、直す必要がある項目)だけを出す */}
+        {step === CHECK_STEP && toConfirm.length > 0 ? (
+          <ul className="flex flex-col gap-1.5 text-xs">
+            <span className="text-sm font-semibold">確かめてほしいこと</span>
+            {toConfirm.map((item) => (
+              <li key={item.id} className="flex items-start gap-2">
+                {item.status === "review" ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`${item.label}を確かめた`}
+                    checked={Boolean(reviewed[item.id])}
+                    onChange={() => toggleReviewed(item.id)}
+                    style={{ marginTop: 2 }}
+                  />
+                ) : (
+                  <span className="font-bold" style={{ color: "var(--danger-text, crimson)", whiteSpace: "nowrap" }}>
+                    要修正
                   </span>
-                  <span className="text-xs" style={{ color: "var(--muted)" }}>
-                    {detail}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className={result ? "btn-outline px-3 py-1.5 text-sm" : "btn-primary px-3 py-1.5 text-sm"}
-                  disabled={!canRun}
-                  onClick={() => void runStep(step)}
-                >
-                  {running === step ? "実行中…" : result ? "やり直す" : "実行"}
-                </button>
-              </div>
-              {result ? (
-                <div className="flex flex-col gap-1 rounded-md p-2 text-xs" style={{ background: "var(--accent-soft)" }}>
-                  <span className="font-semibold">✓ {result.note}</span>
-                  {result.details?.map((line, index) => (
-                    <span key={index} style={{ color: "var(--muted)" }}>
-                      ・{line}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {step === 13 ? (
-                <label className="flex flex-wrap items-center gap-2 text-xs">
-                  <span>曲:</span>
-                  <span className="font-semibold">{project.stepBgmChoice?.label ?? "選んでいません"}</span>
-                  <span className="btn-outline px-3 py-1 text-xs" style={{ cursor: "pointer" }}>
-                    {bgmUploading ? "読み込み中…" : "曲を選ぶ"}
-                    <input
-                      type="file"
-                      accept="audio/*"
-                      className="sr-only"
-                      onChange={(e) => void chooseBgm(e.target.files?.[0])}
-                    />
-                  </span>
-                  {project.stepBgmChoice ? (
-                    <button type="button" className="btn-outline px-3 py-1 text-xs" onClick={() => updateSettings({ stepBgmChoice: null })}>
-                      外す
-                    </button>
-                  ) : null}
-                  <span style={{ color: "var(--muted)" }}>商用で使ってよい曲を選んでください。選び直した時は「やり直す」を押します</span>
-                </label>
-              ) : null}
-              {step === CHECK_STEP && checks.length > 0 ? (
-                <ul className="flex flex-col gap-1.5 text-xs">
-                  {checks.map((item) => (
-                    <li key={item.id} className="flex items-start gap-2">
-                      {item.status === "review" ? (
-                        <input
-                          type="checkbox"
-                          aria-label={`${item.label}を確かめた`}
-                          checked={Boolean(reviewed[item.id])}
-                          onChange={() => toggleReviewed(item.id)}
-                          style={{ marginTop: 2 }}
-                        />
-                      ) : (
-                        <span
-                          className="font-bold"
-                          style={{ color: item.status === "ok" ? "var(--success-text, green)" : "var(--danger-text, crimson)", minWidth: 13 }}
-                        >
-                          {CHECK_MARK[item.status]}
-                        </span>
-                      )}
-                      <span className="flex flex-col">
-                        <span className="font-semibold">
-                          [{item.group}] {item.label}
-                          {item.status === "review" ? "(目で確かめてチェック)" : ""}
-                        </span>
-                        <span style={{ color: "var(--muted)" }}>{item.detail}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {error?.step === step ? <p className="badge-pill danger w-fit">{error.message}</p> : null}
-            </li>
-          );
-        })}
-      </ol>
+                )}
+                <span className="flex flex-col">
+                  <span className="font-semibold">{item.label}</span>
+                  <span style={{ color: "var(--muted)" }}>{item.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {error?.step === step ? <p className="badge-pill danger w-fit">{error.message}</p> : null}
+      </section>
 
       <div className="bottom-action-bar">
-        <span className="text-xs text-center" style={{ color: "var(--muted)" }}>
-          {finishHint}
-        </span>
-        <button type="button" className="btn-primary" disabled={!canFinish} onClick={() => router.push("/create/emphasis")}>
-          生成完了(強調する字幕を確かめる)
-          <ChevronRightIcon size={18} />
-        </button>
+        {step === CHECK_STEP ? (
+          <>
+            <span className="text-xs text-center" style={{ color: "var(--muted)" }}>
+              {finishHint}
+            </span>
+            <button type="button" className="btn-primary" disabled={!canFinish} onClick={() => router.push("/create/emphasis")}>
+              生成完了(強調する字幕を確かめる)
+              <ChevronRightIcon size={18} />
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn-primary" disabled={!result || running !== null} onClick={() => goTo(step + 1)}>
+            {result ? `次の工程へ(工程${step + 1})` : "「実行」を押すと、次の工程へ進めます"}
+            <ChevronRightIcon size={18} />
+          </button>
+        )}
+        {step > 1 ? (
+          <button type="button" className="btn-outline" disabled={running !== null} onClick={() => goTo(step - 1)}>
+            前の工程へ(工程{step - 1})
+          </button>
+        ) : null}
       </div>
     </main>
   );
