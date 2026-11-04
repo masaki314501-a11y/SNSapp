@@ -194,7 +194,11 @@ export async function POST(request: Request) {
         }
         case 10: {
           const withCaption = segments.filter((segment) => segment.caption.trim());
-          const picks = await pickEmphasis(withCaption.map((segment) => segment.caption));
+          const picks = await pickEmphasis({
+            absolutePath: video.absolutePath,
+            mimeType: video.mimeType,
+            captions: withCaption.map((segment) => segment.caption),
+          });
           const keys = new Set(picks.map((pick) => withCaption[pick.index].key));
           return {
             state: { ...state, segments: applyEmphasis(segments, keys) },
@@ -216,11 +220,13 @@ export async function POST(request: Request) {
             return { state, note: `完成の長さが${fmt(total)}で、${target}秒以内に収まっているので、何も外しませんでした` };
           }
           const captioned = segments.filter((segment) => segment.caption.trim());
-          const removals = await pickRemovals(
-            captioned.map((segment) => ({ text: segment.caption, seconds: segment.durationInSeconds })),
-            total,
-            target
-          );
+          const removals = await pickRemovals({
+            absolutePath: video.absolutePath,
+            mimeType: video.mimeType,
+            captions: captioned.map((segment) => ({ text: segment.caption, seconds: segment.durationInSeconds })),
+            totalSeconds: total,
+            targetSeconds: target,
+          });
           const removeKeys = new Set(removals.map((removal) => captioned[removal.index].key));
           const kept = segments.filter((segment) => !removeKeys.has(segment.key));
           return {

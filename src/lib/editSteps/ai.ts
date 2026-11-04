@@ -4,6 +4,8 @@ import type { FaceBox } from "@video/shared/schema";
 import { runWithGeminiRateLimit } from "@/lib/gemini/rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "@/lib/gemini/geminiErrors";
 import { waitForGeminiFileActive } from "@/lib/gemini/geminiFiles";
+import { editExampleMediaPath, uploadExampleVideo, type EditExample } from "@/lib/gemini/editExamplesStore";
+import { selectEditExamples } from "@/lib/gemini/editExampleSelection";
 
 /**
  * 工程ごとの編集(編集マニュアルの1〜11)のうち、AIに頼む工程(3・6・8・10)。
@@ -39,6 +41,50 @@ const videoPart = async (ai: GoogleGenAI, absolutePath: string, mimeType: string
   await waitForGeminiFileActive(ai, uploaded.name);
   uploadedVideos.set(absolutePath, { uri: uploaded.uri, expiresAt: Date.now() + UPLOAD_REUSE_MS });
   return { fileData: { fileUri: uploaded.uri, mimeType } };
+};
+
+/**
+ * 手本(この投稿者の編集チームが作った動画)を見せる。手本から何をどう参考にするかは決まりにせず、AIに任せる。
+ * 見せる手本は、今回の動画に近い物をAIが選ぶ(最大3本。近い物が無ければ見せない)。同じ動画の間は同じ手本を使い回し、
+ * 手本の動画も1回だけアップロードして使い回す(料金と待ち時間を抑えるため、画質は低めで見せる)。
+ */
+export const EXAMPLES_INTRO = `
+次は、この投稿者の編集チームが過去に作ったショート動画(手本)です。今回の動画に近い物を選んであります。
+手本を見て、何をどう参考にするか(参考にしないことも含めて)は、あなたが判断してください。
+ただし、手本に出てくる文言・題材・項目名は、今回の動画に持ち込まないでください。
+`.trim();
+
+const chosenExamples = new Map<string, { examples: EditExample[]; expiresAt: number }>();
+const exampleUploads = new Map<string, { part: Part; expiresAt: number }>();
+
+const examplesFor = async (ai: GoogleGenAI, absolutePath: string, mimeType: string): Promise<EditExample[]> => {
+  const cached = chosenExamples.get(absolutePath);
+  if (cached && cached.expiresAt > Date.now()) return cached.examples;
+  const examples = await selectEditExamples(ai, await videoPart(ai, absolutePath, mimeType));
+  chosenExamples.set(absolutePath, { examples, expiresAt: Date.now() + UPLOAD_REUSE_MS });
+  return examples;
+};
+
+const examplePart = async (ai: GoogleGenAI, mediaPath: string, mimeType: string): Promise<Part> => {
+  const cached = exampleUploads.get(mediaPath);
+  if (cached && cached.expiresAt > Date.now()) return cached.part;
+  const part = await uploadExampleVideo(ai, mediaPath, mimeType, [], "low");
+  exampleUploads.set(mediaPath, { part, expiresAt: Date.now() + UPLOAD_REUSE_MS });
+  return part;
+};
+
+/** 手本を見せる部分(手本が無ければ空)。完成動画を見せる。 */
+const exampleParts = async (absolutePath: string, mimeType: string): Promise<Part[]> => {
+  const ai = client();
+  const examples = await examplesFor(ai, absolutePath, mimeType);
+  if (examples.length === 0) return [];
+  const parts: Part[] = [{ text: EXAMPLES_INTRO }];
+  for (const [index, example] of examples.entries()) {
+    parts.push({ text: `【手本${index + 1}「${example.label}」の完成動画】` });
+    parts.push(await examplePart(ai, editExampleMediaPath(example, "correct")!, example.correctMimeType));
+  }
+  parts.push({ text: "【ここから、今回編集する動画の話】" });
+  return parts;
 };
 
 /** JSONで答えてもらい、形を確かめて返す。混んでいる時だけ少し待って頼み直す。 */
@@ -199,10 +245,11 @@ export const decideObjects = async (input: {
   mimeType: string;
 }): Promise<{ title: string; frameCount: number; reason: string }> => {
   const part = await videoPart(client(), input.absolutePath, input.mimeType);
+  const examples = await exampleParts(input.absolutePath, input.mimeType);
   const result = await askJson({
     model: STEP_MODEL,
     label: "タイトルと枠",
-    parts: [part, { text: OBJECTS_PROMPT }],
+    parts: [...examples, part, { text: OBJECTS_PROMPT }],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -233,12 +280,18 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`
 `.trim();
 
 /** 10. 強調テロップにする字幕を選ぶ(0始まりの番号で返す)。 */
-export const pickEmphasis = async (captions: string[]): Promise<{ index: number; reason: string }[]> => {
+export const pickEmphasis = async (input: {
+  absolutePath: string;
+  mimeType: string;
+  captions: string[];
+}): Promise<{ index: number; reason: string }[]> => {
+  const { captions } = input;
   if (captions.length === 0) return [];
+  const examples = await exampleParts(input.absolutePath, input.mimeType);
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [{ text: EMPHASIS_PROMPT(captions) }],
+    parts: [...examples, { text: EMPHASIS_PROMPT(captions) }],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -326,11 +379,14 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.text.replace(/\n/g, 
 `.trim();
 
 /** 12. 長さを収めるために外す字幕を選ぶ(0始まりの番号で返す)。 */
-export const pickRemovals = async (
-  captions: { text: string; seconds: number }[],
-  totalSeconds: number,
-  targetSeconds: number
-): Promise<{ index: number; reason: string }[]> => {
+export const pickRemovals = async (input: {
+  absolutePath: string;
+  mimeType: string;
+  captions: { text: string; seconds: number }[];
+  totalSeconds: number;
+  targetSeconds: number;
+}): Promise<{ index: number; reason: string }[]> => {
+  const { captions, totalSeconds, targetSeconds } = input;
   const result = await askJson({
     model: STEP_MODEL,
     label: "長さを収める",
