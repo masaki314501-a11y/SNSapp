@@ -1,4 +1,7 @@
 import type {
+  CaptionAnimation,
+  CaptionEmphasis,
+  CaptionFontFamily,
   CaptionFontSize,
   CaptionStyle,
   ClipZoom,
@@ -29,6 +32,8 @@ export type StepState = {
   videoAdjust?: VideoAdjust | null;
   /** BGM(工程13で入れる。無ければnull)。 */
   bgm?: ProjectBgm | null;
+  /** 基本テロップの見た目(工程10でAIが手本とクセ帳を見て決める)。無ければプロジェクトの設定のまま。 */
+  captionLook?: { fontFamily: CaptionFontFamily; captionStyle: CaptionStyle; primaryColor: string } | null;
 };
 
 /** 工程の結果(先方の確認用の説明)。工程12(チェック)は、チェック項目ごとの結果も持つ。 */
@@ -237,6 +242,12 @@ export const chinCaptionY = (
   return y + (band.bottom - band.top) <= CAPTION_LOWEST_BOTTOM_PERCENT ? y : null;
 };
 
+/** テロップの帯の高さ(%)。2行のテロップが入る高さで見積もる。 */
+export const captionBandHeight = (style: CaptionStyle, fontSize: CaptionFontSize): number => {
+  const band = captionBox("テロップの高さの見本\n2行目", "top", style, fontSize);
+  return band.bottom - band.top;
+};
+
 /** 左上のタイトルの位置・大きさ(%・px)。 */
 const TITLE_STYLE = { xPercent: 7, yPercent: 12, fontSizePx: 64 } as const;
 /** タイトルの右端・上端の限界(%)。TikTokの右側のボタン・上の検索欄にかからない所まで。 */
@@ -246,17 +257,37 @@ const TITLE_TOP_LIMIT_PERCENT = 9;
 const FRAME_X_PERCENT = 20;
 const FRAME_WIDTH_PERCENT = 30;
 const FRAME_GAP_PERCENT = 1.5;
+/** 枠を並べてよい一番下(%)。TikTokの説明文で隠れる所(下22%)の手前まで。 */
+const FRAME_LOWEST_PERCENT = 77;
+/** 枠1つの高さの上限(%)。枠が少ない時に大きくなりすぎないように。 */
+const FRAME_MAX_HEIGHT_PERCENT = 11;
+/** タイトルの縁取りの見える太さ(文字の大きさに対する割合)。 */
+const TITLE_STROKE_RATIO = 0.06;
 
 /**
  * 8. 必要なオブジェクトを作る: 左上のタイトルテロップと、ランキングの枠(N個を左に縦に並べ、番号を付ける)。
  * 枠は、タイトルの下からテロップの帯の上まで(テロップと被らないように)に収める。
  */
+/**
+ * タイトル・枠の見た目(工程8でAIが手本とクセ帳を見て決める)。省略した時は、白い文字に黒の縁取りのタイトルと、
+ * 差し色の線の白い枠にする。
+ */
+export type ObjectStyle = {
+  title?: { fontFamily?: CaptionFontFamily; textColor: string; strokeColor: string | null; bandColor: string | null; animation: CaptionAnimation };
+  frame?: { borderColor: string; borderWidthPx: number; fillColor: string | null; cornerRadiusPx: number; numberColor: string; animation: CaptionAnimation };
+};
+
 export const buildObjects = (params: {
   title: string;
   frameCount: number;
   captionTopPercent: number;
+  /** テロップの帯の下端(%)。顎の下に固定した時は、枠をテロップの上と下に分けて並べる(帯には置かない)。 */
+  captionBottomPercent?: number;
   accentColor: string;
+  style?: ObjectStyle;
 }): { globalOverlays: TextOverlay[]; globalShapes: ShapeOverlay[] } => {
+  const titleStyle = params.style?.title;
+  const frameStyle = params.style?.frame;
   // タイトルは、左の余白から画面の右86%(TikTokの右側のボタンの手前)までに収める。長ければ文字を小さくする
   // (自動で2行にすると「看護/師」のように言葉の途中で切れたため、改行はAIが意味の切れ目に入れた時だけ)
   const maxWidthPx = ((TITLE_RIGHT_LIMIT_PERCENT - TITLE_STYLE.xPercent) / 100) * 1080;
@@ -272,10 +303,14 @@ export const buildObjects = (params: {
     yPercent: round2(Math.max(TITLE_STYLE.yPercent, TITLE_TOP_LIMIT_PERCENT + titleHalfHeight)),
     textAlign: "left",
     fontSizePx,
-    color: "#FFFFFF",
-    strokeColor: "#000000",
+    color: titleStyle?.textColor ?? "#FFFFFF",
+    strokeColor: titleStyle ? (titleStyle.strokeColor ?? undefined) : "#000000",
+    // 縁取りは細めにする(太い書体に太い縁取りが重なると、文字がつぶれて読めなかった)
+    strokeWidthPx: Math.max(3, Math.round(fontSizePx * TITLE_STROKE_RATIO)),
+    backgroundColor: titleStyle?.bandColor ?? undefined,
+    fontFamily: titleStyle?.fontFamily,
     rotationDeg: 0,
-    animation: "fade",
+    animation: titleStyle?.animation ?? "fade",
   };
   // 左寄せの文字は、xPercentを文字の中心として扱う描画に合わせ、文字幅の半分だけ右へずらす
   const titleWidthPercent = (longestLine * fontSizePx * 100) / 1080;
@@ -284,12 +319,32 @@ export const buildObjects = (params: {
 
   const titleLines = titleText.split("\n").length;
   const top = title.yPercent + (titleLines * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
-  const bottom = params.captionTopPercent - 2;
-  const frameHeight = (bottom - top - FRAME_GAP_PERCENT * (params.frameCount - 1)) / params.frameCount;
+  // 枠を並べられる所: タイトルの下からテロップの帯の上まで。テロップが画面の途中(顎の下)にある時は、帯の下から
+  // 画面の下の見える所(セーフティゾーンの下端)までも使う。以前は帯の上だけに詰めていて、枠がとても細くなっていた
+  const areas: [number, number][] = [[top, params.captionTopPercent - 2]];
+  if (params.captionBottomPercent !== undefined && params.captionBottomPercent + 2 < FRAME_LOWEST_PERCENT) {
+    areas.push([params.captionBottomPercent + 2, FRAME_LOWEST_PERCENT]);
+  }
+  const usable = areas.filter(([from, to]) => to - from > 3);
+  // 全部の枠が入る、一番大きい高さを探す(場所が分かれていると、余りの分だけ入る数が減るため)
+  const fits = (height: number) =>
+    usable.reduce((sum, [from, to]) => sum + Math.floor((to - from + FRAME_GAP_PERCENT + 0.01) / (height + FRAME_GAP_PERCENT)), 0) >=
+    params.frameCount;
+  let frameHeight = FRAME_MAX_HEIGHT_PERCENT;
+  while (frameHeight > 2 && !fits(frameHeight)) frameHeight -= 0.1;
+  // 上から順に、入る所へ枠を置いていく(入りきらない所は次の場所へ)
+  const centers: number[] = [];
+  for (const [from, to] of usable) {
+    let y = from + frameHeight / 2;
+    while (centers.length < params.frameCount && y + frameHeight / 2 <= to + 0.01) {
+      centers.push(y);
+      y += frameHeight + FRAME_GAP_PERCENT;
+    }
+  }
   const shapes: ShapeOverlay[] = [];
   const labels: TextOverlay[] = [];
-  for (let i = 0; i < params.frameCount; i++) {
-    const y = round2(top + frameHeight / 2 + i * (frameHeight + FRAME_GAP_PERCENT));
+  for (let i = 0; i < centers.length; i++) {
+    const y = round2(centers[i]);
     shapes.push({
       kind: "rect",
       startOffsetSeconds: 0,
@@ -297,12 +352,12 @@ export const buildObjects = (params: {
       yPercent: y,
       widthPercent: FRAME_WIDTH_PERCENT,
       heightPercent: round2(frameHeight),
-      borderColor: params.accentColor,
-      borderWidthPx: 6,
-      fillColor: "#FFFFFF",
+      borderColor: frameStyle?.borderColor ?? params.accentColor,
+      borderWidthPx: frameStyle?.borderWidthPx ?? 6,
+      fillColor: frameStyle ? (frameStyle.fillColor ?? undefined) : "#FFFFFF",
       fillOpacity: 0.85,
-      cornerRadiusPx: 16,
-      animation: "fade",
+      cornerRadiusPx: frameStyle?.cornerRadiusPx ?? 16,
+      animation: frameStyle?.animation ?? "fade",
     });
     labels.push({
       text: String(i + 1),
@@ -310,9 +365,10 @@ export const buildObjects = (params: {
       xPercent: FRAME_X_PERCENT - FRAME_WIDTH_PERCENT / 2 + 3,
       yPercent: y,
       fontSizePx: Math.max(32, Math.min(56, Math.round((frameHeight / 100) * 1920 * 0.45))),
-      color: params.accentColor,
+      color: frameStyle?.numberColor ?? params.accentColor,
+      fontFamily: titleStyle?.fontFamily,
       rotationDeg: 0,
-      animation: "fade",
+      animation: frameStyle?.animation ?? "fade",
     });
   }
   return { globalOverlays: [title, ...labels], globalShapes: shapes };
@@ -365,13 +421,21 @@ export const STEP_EMPHASIS_SFX = "pop";
 /** 強調テロップで人物に寄る倍率(少しだけ)。 */
 export const STEP_EMPHASIS_ZOOM = 1.1;
 
-/** 10. 強調したい言葉(のクリップ)を、強調テロップにする。 */
-export const applyEmphasis = (segments: ProjectSegment[], keys: Set<string>): ProjectSegment[] =>
-  segments.map((segment) =>
+/** 10. 強調したい言葉(のクリップ)を、強調テロップにする。見た目は工程10でAIが手本とクセ帳を見て決めた物(無ければ白い帯に黒い文字)。 */
+export const applyEmphasis = (
+  segments: ProjectSegment[],
+  keys: Set<string>,
+  look?: { fontFamily?: CaptionFontFamily; textColor: string; bandColor: string | null }
+): ProjectSegment[] => {
+  const emphasis: CaptionEmphasis = look
+    ? { band: look.bandColor !== null, bandColor: look.bandColor ?? undefined, textColor: look.textColor, fontFamily: look.fontFamily }
+    : { ...STEP_EMPHASIS };
+  return segments.map((segment) =>
     keys.has(segment.key)
-      ? { ...segment, captionEmphasis: { ...STEP_EMPHASIS } }
+      ? { ...segment, captionEmphasis: emphasis }
       : { ...segment, captionEmphasis: undefined, emphasisSfxPresetId: undefined }
   );
+};
 
 /** 11. 強調テロップに効果音を付け、少し人物を拡大する。 */
 export const emphasisEffects = (segments: ProjectSegment[]): { segments: ProjectSegment[]; count: number } => {

@@ -28,6 +28,10 @@ const withState = (project: VideoProject, state: StepState): VideoProject => ({
   framing: state.framing ?? undefined,
   captionYPercent: state.captionYPercent ?? undefined,
   videoAdjust: state.videoAdjust ?? undefined,
+  // 基本テロップの見た目は工程10で決める(それより前は、プロジェクトの設定のまま)
+  ...(state.captionLook
+    ? { fontFamily: state.captionLook.fontFamily, captionStyle: state.captionLook.captionStyle, primaryColor: state.captionLook.primaryColor }
+    : {}),
   // BGMは工程13で入れる(それより前の工程では、前から入っていた物をそのままにする)
   bgm: state.bgm === undefined ? project.bgm : state.bgm,
   globalShapes: state.globalShapes,

@@ -119,6 +119,19 @@ describe("工程ごとの編集(機械でやる工程)", () => {
     expect(buildObjects({ title: "解説", frameCount: 0, captionTopPercent: 55, accentColor: "#FF3366" }).globalShapes).toHaveLength(0);
   });
 
+  it("8. テロップが顎の下(画面の途中)にある時は、枠をテロップの上と下に分けて並べ、帯には置かない", () => {
+    const { globalShapes } = buildObjects({ title: "医療用語5選", frameCount: 5, captionTopPercent: 45, captionBottomPercent: 52, accentColor: "#FF3366" });
+    expect(globalShapes).toHaveLength(5);
+    for (const shape of globalShapes) {
+      const top = shape.yPercent - shape.heightPercent / 2;
+      const bottom = shape.yPercent + shape.heightPercent / 2;
+      expect(bottom <= 43.01 || top >= 53.99, `枠(${top}〜${bottom})がテロップの帯にかかっている`).toBe(true);
+      expect(bottom).toBeLessThanOrEqual(77.01);
+    }
+    // 帯の上だけに詰めた時(1つ約4%)より、ずっと大きい
+    expect(globalShapes[0].heightPercent).toBeGreaterThan(7);
+  });
+
   it("9. 書き起こしのかたまりごとにクリップを分けて字幕を入れる", () => {
     const segments = splitByCaptions(
       [seg(0, 6)],

@@ -1,6 +1,14 @@
 import { GoogleGenAI, Type, type Part, type Schema } from "@google/genai";
 import { z } from "zod";
-import type { FaceBox } from "@video/shared/schema";
+import {
+  CAPTION_ANIMATION_OPTIONS,
+  CAPTION_FONT_FAMILY_OPTIONS,
+  type CaptionAnimation,
+  type CaptionFontFamily,
+  type FaceBox,
+} from "@video/shared/schema";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { runWithGeminiRateLimit } from "@/lib/gemini/rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "@/lib/gemini/geminiErrors";
 import { waitForGeminiFileActive } from "@/lib/gemini/geminiFiles";
@@ -53,6 +61,30 @@ export const EXAMPLES_INTRO = `
 手本を見て、何をどう参考にするか(参考にしないことも含めて)は、あなたが判断してください。
 ただし、手本に出てくる文言・題材・項目名は、今回の動画に持ち込まないでください。
 `.trim();
+
+/**
+ * 工程別のクセ帳(data/edit-examples/step-guide.md。scripts/eval/build-step-guide.tsで手本から作る)。
+ * 工程8・10で、手本の動画と一緒に渡す。
+ */
+const STEP_GUIDE_PATH = path.join(process.cwd(), "data", "edit-examples", "step-guide.md");
+export const STEP_GUIDE_INTRO = `
+次は、この編集チームの編集のクセを、編集マニュアルの工程ごとにまとめた「工程別のクセ帳」です。手本と合わせて判断に使ってください。
+ただし、位置・大きさ・並べ方はツールの側で決めるので、ここでは見た目(書体・色・帯・形・出方)と、何を強調するかの参考にしてください。
+`.trim();
+const stepGuidePart = async (): Promise<Part[]> => {
+  const guide = await readFile(STEP_GUIDE_PATH, "utf8").then((text) => text.trim(), () => "");
+  return guide ? [{ text: `${STEP_GUIDE_INTRO}\n\n${guide}` }] : [];
+};
+
+const FONT_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value) as [CaptionFontFamily, ...CaptionFontFamily[]];
+const ANIMATION_VALUES = CAPTION_ANIMATION_OPTIONS.map((option) => option.value) as [CaptionAnimation, ...CaptionAnimation[]];
+const FONT_HINTS = CAPTION_FONT_FAMILY_OPTIONS.map((option) => `${option.value}(${option.label})`).join(" / ");
+const ANIMATION_HINTS = CAPTION_ANIMATION_OPTIONS.map((option) => `${option.value}(${option.label})`).join(" / ");
+const COLOR = /^#[0-9A-Fa-f]{6}$/;
+const color = z.string().regex(COLOR);
+const nullableColor = z.string().regex(COLOR).nullable();
+const colorSchema = { type: Type.STRING };
+const nullableColorSchema = { type: Type.STRING, nullable: true };
 
 const chosenExamples = new Map<string, { examples: EditExample[]; expiresAt: number }>();
 const exampleUploads = new Map<string, { part: Part; expiresAt: number }>();
@@ -228,44 +260,123 @@ export const detectFace = async (input: { absolutePath: string; mimeType: string
 
 /** 工程8の指示文。 */
 export const OBJECTS_PROMPT = `
-添付した動画は、歯科医院などのショート動画の素材です。編集で画面に置く物を2つ決めてください。
+添付した動画は、歯科医院などのショート動画の素材です。編集で画面に置く物(左上のタイトルと、ランキングの枠)を決めてください。
+見た目と出方は、手本とクセ帳の編集チームの物に近づけてください。
 
 1. title: 動画の最初から最後まで、画面の左上に出すタイトル。何の話かが一目でわかる短い言葉(全角16文字以内)。
    話の中に出てくる治療名・症状名を、話したとおりに1つ入れる。12文字を超える時だけ、意味の切れ目に「\\n」を1つ入れて2行にする。
    「絶対」「最強」「No.1」「〇〇初」「大人気」のような誇大・比較の言葉は使わない。言っていない数字は入れない。
-2. frameCount: ランキングや「〇選」のように、話の中で項目を順に挙げていく動画なら、その項目の数(2〜10)。
+2. titleLook: タイトルの見た目。fontFamily(書体)・textColor(文字の色)・strokeColor(縁取りの色。付けないならnull)・
+   bandColor(文字の後ろに敷く帯の色。敷かないならnull)・animation(出方)。
+3. frameCount: ランキングや「〇選」のように、話の中で項目を順に挙げていく動画なら、その項目の数(2〜10)。
    ランキングの枠をその数だけ並べる。項目を順に挙げる動画でなければ0。
+4. frameLook: 枠の見た目(frameCountが0なら、使わないので何でもよい)。borderColor(線の色)・borderWidthPx(線の太さ。2〜12)・
+   fillColor(中の塗り。塗らないならnull)・cornerRadiusPx(角の丸み。0〜40)・numberColor(枠に付ける番号の色)・animation(出方)。
 
-reasonに、そう決めた理由を1文で書いてください。
+- 書体は次から選ぶ: ${FONT_HINTS}
+- 出方は次から選ぶ: ${ANIMATION_HINTS}
+- 色は #RRGGBB で書く。タイトル・枠・テロップを合わせた動画全体の色は、白・黒も含めて3色以内にする(チェック項目)。
+- 位置・大きさ・並べ方はツールの側で決めるので書かない。
+
+reasonに、そう決めた理由(どの手本・クセ帳のどこを参考にしたか)を1〜2文で書いてください。
 `.trim();
+
+/** 工程8で決めるタイトル・枠の見た目。 */
+export type ObjectLook = {
+  title: { fontFamily: CaptionFontFamily; textColor: string; strokeColor: string | null; bandColor: string | null; animation: CaptionAnimation };
+  frame: {
+    borderColor: string;
+    borderWidthPx: number;
+    fillColor: string | null;
+    cornerRadiusPx: number;
+    numberColor: string;
+    animation: CaptionAnimation;
+  };
+};
 
 /** 8. 左上のタイトルと、ランキングの枠の数を決める。 */
 export const decideObjects = async (input: {
   absolutePath: string;
   mimeType: string;
-}): Promise<{ title: string; frameCount: number; reason: string }> => {
+}): Promise<{ title: string; frameCount: number; look: ObjectLook; reason: string }> => {
   const part = await videoPart(client(), input.absolutePath, input.mimeType);
   const examples = await exampleParts(input.absolutePath, input.mimeType);
+  const guide = await stepGuidePart();
   const result = await askJson({
     model: STEP_MODEL,
     label: "タイトルと枠",
-    parts: [...examples, part, { text: OBJECTS_PROMPT }],
+    parts: [...examples, ...guide, { text: "【ここから、今回編集する動画】" }, part, { text: OBJECTS_PROMPT }],
     schema: {
       type: Type.OBJECT,
       properties: {
         title: { type: Type.STRING },
+        titleLook: {
+          type: Type.OBJECT,
+          properties: {
+            fontFamily: { type: Type.STRING, format: "enum", enum: FONT_VALUES },
+            textColor: colorSchema,
+            strokeColor: nullableColorSchema,
+            bandColor: nullableColorSchema,
+            animation: { type: Type.STRING, format: "enum", enum: ANIMATION_VALUES },
+          },
+          required: ["fontFamily", "textColor", "strokeColor", "bandColor", "animation"],
+        },
         frameCount: { type: Type.INTEGER },
+        frameLook: {
+          type: Type.OBJECT,
+          properties: {
+            borderColor: colorSchema,
+            borderWidthPx: { type: Type.NUMBER },
+            fillColor: nullableColorSchema,
+            cornerRadiusPx: { type: Type.NUMBER },
+            numberColor: colorSchema,
+            animation: { type: Type.STRING, format: "enum", enum: ANIMATION_VALUES },
+          },
+          required: ["borderColor", "borderWidthPx", "fillColor", "cornerRadiusPx", "numberColor", "animation"],
+        },
         reason: { type: Type.STRING },
       },
-      required: ["title", "frameCount", "reason"],
+      required: ["title", "titleLook", "frameCount", "frameLook", "reason"],
     },
-    parse: z.object({ title: z.string(), frameCount: z.number().int(), reason: z.string() }),
+    parse: z.object({
+      title: z.string(),
+      titleLook: z.object({
+        fontFamily: z.enum(FONT_VALUES),
+        textColor: color,
+        strokeColor: nullableColor,
+        bandColor: nullableColor,
+        animation: z.enum(ANIMATION_VALUES),
+      }),
+      frameCount: z.number().int(),
+      frameLook: z.object({
+        borderColor: color,
+        borderWidthPx: z.number(),
+        fillColor: nullableColor,
+        cornerRadiusPx: z.number(),
+        numberColor: color,
+        animation: z.enum(ANIMATION_VALUES),
+      }),
+      reason: z.string(),
+    }),
   });
-  return { title: result.title.trim().slice(0, 20), frameCount: Math.max(0, Math.min(10, result.frameCount)), reason: result.reason };
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  return {
+    title: result.title.trim().slice(0, 20),
+    frameCount: clamp(result.frameCount, 0, 10),
+    look: {
+      title: result.titleLook,
+      frame: {
+        ...result.frameLook,
+        borderWidthPx: clamp(Math.round(result.frameLook.borderWidthPx), 2, 12),
+        cornerRadiusPx: clamp(Math.round(result.frameLook.cornerRadiusPx), 0, 40),
+      },
+    },
+    reason: result.reason,
+  };
 };
 
 /** 工程10の指示文。 */
-export const EMPHASIS_PROMPT = (captions: string[]) => `
+export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "") => `
 次は、ショート動画の字幕を順に並べたものです(番号: 字幕)。
 ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`).join("\n")}
 
@@ -276,39 +387,84 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`
 - 説明・つなぎ・前置き・締めのあいさつの字幕は選ばない。
 - 効果を言い切る言葉(「絶対治る」「痛くない」など)を含む字幕は選ばない。
 
-選んだ字幕の番号(picks)と、それぞれを選んだ理由(reasons。picksと同じ順)を答えてください。
+あわせて、字幕の見た目を、手本とクセ帳の編集チームの物に近づけて決めてください。
+- baseLook: 基本テロップ(強調しない字幕)の見た目。fontFamily(書体)・style(outline=縁取り文字 / pill=色付きの帯の上に白い文字)・
+  accentColor(outlineなら縁取りの色、pillなら帯の色)。
+- emphasisLook: 強調テロップの見た目。fontFamily(書体)・textColor(文字の色)・bandColor(文字の後ろに敷く帯の色。敷かないならnull)。
+- 書体は次から選ぶ: ${FONT_HINTS}
+- 色は #RRGGBB で書く。動画全体の色は、白・黒も含めて3色以内にする(チェック項目)。書体は基本と強調で2つまで(チェック項目)。
+${objectColorsLine}
+
+選んだ字幕の番号(picks)と、それぞれを選んだ理由(reasons。picksと同じ順)、見た目をそう決めた理由(lookReason)を答えてください。
 `.trim();
 
 /** 10. 強調テロップにする字幕を選ぶ(0始まりの番号で返す)。 */
+/** 工程10で決める字幕の見た目。 */
+export type CaptionLook = {
+  base: { fontFamily: CaptionFontFamily; style: "outline" | "pill"; accentColor: string };
+  emphasis: { fontFamily: CaptionFontFamily; textColor: string; bandColor: string | null };
+};
+
 export const pickEmphasis = async (input: {
   absolutePath: string;
   mimeType: string;
   captions: string[];
-}): Promise<{ index: number; reason: string }[]> => {
+  /** 工程8で使った色(タイトル・枠)。字幕の色と合わせて3色以内にするため。 */
+  objectColors?: string[];
+}): Promise<{ picks: { index: number; reason: string }[]; look: CaptionLook; lookReason: string }> => {
   const { captions } = input;
-  if (captions.length === 0) return [];
   const examples = await exampleParts(input.absolutePath, input.mimeType);
+  const guide = await stepGuidePart();
+  const colorsLine = input.objectColors?.length
+    ? `- タイトル・枠ですでに ${input.objectColors.join("・")} を使っているので、字幕もこの色の中から選ぶと3色以内に収まる。`
+    : "";
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [...examples, { text: EMPHASIS_PROMPT(captions) }],
+    parts: [...examples, ...guide, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine) }],
     schema: {
       type: Type.OBJECT,
       properties: {
         picks: { type: Type.ARRAY, items: { type: Type.INTEGER } },
         reasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+        baseLook: {
+          type: Type.OBJECT,
+          properties: {
+            fontFamily: { type: Type.STRING, format: "enum", enum: FONT_VALUES },
+            style: { type: Type.STRING, format: "enum", enum: ["outline", "pill"] },
+            accentColor: colorSchema,
+          },
+          required: ["fontFamily", "style", "accentColor"],
+        },
+        emphasisLook: {
+          type: Type.OBJECT,
+          properties: {
+            fontFamily: { type: Type.STRING, format: "enum", enum: FONT_VALUES },
+            textColor: colorSchema,
+            bandColor: nullableColorSchema,
+          },
+          required: ["fontFamily", "textColor", "bandColor"],
+        },
+        lookReason: { type: Type.STRING },
       },
-      required: ["picks", "reasons"],
+      required: ["picks", "reasons", "baseLook", "emphasisLook", "lookReason"],
     },
-    parse: z.object({ picks: z.array(z.number().int()), reasons: z.array(z.string()) }),
+    parse: z.object({
+      picks: z.array(z.number().int()),
+      reasons: z.array(z.string()),
+      baseLook: z.object({ fontFamily: z.enum(FONT_VALUES), style: z.enum(["outline", "pill"]), accentColor: color }),
+      emphasisLook: z.object({ fontFamily: z.enum(FONT_VALUES), textColor: color, bandColor: nullableColor }),
+      lookReason: z.string(),
+    }),
   });
   const seen = new Set<number>();
-  return result.picks.flatMap((pick, i) => {
+  const picks = result.picks.flatMap((pick, i) => {
     const index = pick - 1;
     if (index < 0 || index >= captions.length || seen.has(index)) return [];
     seen.add(index);
     return [{ index, reason: result.reasons[i] ?? "" }];
   });
+  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason };
 };
 
 /** 工程12(チェック)の誤字・脱字の確認の指示文。 */

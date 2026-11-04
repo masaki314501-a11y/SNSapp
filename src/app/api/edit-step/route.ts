@@ -22,10 +22,11 @@ import {
   trimBeforeSpeech,
   type StepState,
 } from "@/lib/editSteps/logic";
+import { captionBandHeight } from "@/lib/editSteps/logic";
 import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts } from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
-import type { CaptionFontFamily } from "@video/shared/schema";
+import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
 
 export const runtime = "nodejs";
 // AIに頼む工程は、動画のアップロードと答えを待つので数十秒かかる
@@ -44,6 +45,7 @@ const requestSchema = z.object({
     globalOverlays: z.array(z.any()),
     videoAdjust: z.any().nullable().optional(),
     bgm: z.any().nullable().optional(),
+    captionLook: z.any().nullable().optional(),
   }),
   /** 完成動画の長さの上限(秒)。お客様の指定が無ければ30秒。 */
   targetSeconds: z.number().positive().optional(),
@@ -165,12 +167,24 @@ export async function POST(request: Request) {
             title: objects.title,
             frameCount: objects.frameCount,
             captionTopPercent: state.captionYPercent ?? BOTTOM_CAPTION_TOP_PERCENT,
+            captionBottomPercent:
+              state.captionYPercent !== null
+                ? state.captionYPercent + captionBandHeight(captionLook.style, captionLook.fontSize)
+                : undefined,
             accentColor: look.primaryColor,
+            style: objects.look,
           });
+          const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
           return {
             state: { ...state, globalOverlays: built.globalOverlays, globalShapes: built.globalShapes },
             note: `左上のタイトル「${objects.title.replace(/\n/g, "")}」を作りました${objects.frameCount >= 2 ? `。ランキングの枠を${objects.frameCount}個並べました` : "(ランキングの枠は無し)"}`,
-            details: [objects.reason],
+            details: [
+              `タイトルの見た目: 書体「${fontLabel(objects.look.title.fontFamily)}」・文字${objects.look.title.textColor}・縁取り${objects.look.title.strokeColor ?? "なし"}・帯${objects.look.title.bandColor ?? "なし"}`,
+              ...(objects.frameCount >= 2
+                ? [`枠の見た目: 線${objects.look.frame.borderColor}(${objects.look.frame.borderWidthPx}px)・塗り${objects.look.frame.fillColor ?? "なし"}・角の丸み${objects.look.frame.cornerRadiusPx}px・番号${objects.look.frame.numberColor}`]
+                : []),
+              objects.reason,
+            ],
           };
         }
         case 9: {
@@ -194,16 +208,38 @@ export async function POST(request: Request) {
         }
         case 10: {
           const withCaption = segments.filter((segment) => segment.caption.trim());
-          const picks = await pickEmphasis({
+          // 工程8で使った色(タイトル・枠)。字幕の色と合わせて3色以内にするため、AIに伝える
+          const objectColors = [
+            ...new Set(
+              [
+                ...state.globalOverlays.flatMap((overlay) => [overlay.color, overlay.strokeColor, overlay.backgroundColor]),
+                ...state.globalShapes.flatMap((shape) => [shape.borderColor, shape.fillColor]),
+              ]
+                .filter((value): value is string => Boolean(value))
+                .map((value) => value.toUpperCase())
+            ),
+          ];
+          const { picks, look: chosen, lookReason } = await pickEmphasis({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
+            objectColors,
           });
           const keys = new Set(picks.map((pick) => withCaption[pick.index].key));
+          const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
           return {
-            state: { ...state, segments: applyEmphasis(segments, keys) },
+            state: {
+              ...state,
+              segments: applyEmphasis(segments, keys, chosen.emphasis),
+              captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
+            },
             note: `${picks.length}個のテロップを強調テロップにしました`,
-            details: picks.map((pick) => `「${withCaption[pick.index].caption.replace(/\n/g, "")}」 ${pick.reason}`),
+            details: [
+              `基本テロップの見た目: 書体「${fontLabel(chosen.base.fontFamily)}」・${chosen.base.style === "outline" ? "縁取り" : "帯"}${chosen.base.accentColor}`,
+              `強調テロップの見た目: 書体「${fontLabel(chosen.emphasis.fontFamily)}」・文字${chosen.emphasis.textColor}・帯${chosen.emphasis.bandColor ?? "なし"}`,
+              lookReason,
+              ...picks.map((pick) => `「${withCaption[pick.index].caption.replace(/\n/g, "")}」 ${pick.reason}`),
+            ],
           };
         }
         case 11: {
