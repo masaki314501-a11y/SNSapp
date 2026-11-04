@@ -1,7 +1,10 @@
 import Link from "next/link";
 
-/** 使い方マニュアル(Claude Docs)。変更した時は .env の NEXT_PUBLIC_MANUAL_URL で差し替えられる。 */
-const MANUAL_URL = process.env.NEXT_PUBLIC_MANUAL_URL || "https://claude.ai/artifact/JCJdkxuFbogkZwxVqJVfvJ";
+/**
+ * 使い方マニュアル(public/docs/manual)。Claudeを持っていない人も、アプリと同じID・パスワードで開けるよう、アプリの中に置く。
+ * 別の場所にした時は .env の NEXT_PUBLIC_MANUAL_URL で差し替えられる。
+ */
+const MANUAL_URL = process.env.NEXT_PUBLIC_MANUAL_URL || "/docs/manual/index.html";
 
 const STEPS = [
   {
