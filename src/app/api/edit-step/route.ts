@@ -4,6 +4,7 @@ import { z } from "zod";
 import { MAX_CLIPS, MIN_CLIPS } from "@video/templates/standard/schema";
 import type { CaptionFontSize, CaptionStyle } from "@video/shared/schema";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
+import { isStyleReferencePath, resolveStyleReference } from "@/lib/styleReference";
 import { analyzeSpeechActivity, snapToQuiet } from "@/lib/audio/speechActivity";
 import { transcribeCaptions } from "@/lib/gemini/transcribeCaptions";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
@@ -53,6 +54,8 @@ const requestSchema = z.object({
   bgm: z.object({ src: z.string(), label: z.string() }).nullable().optional(),
   /** どこに出す動画か(チェックのセーフティゾーン)。 */
   zone: z.enum(["tiktok", "ad"]).optional(),
+  /** 見た目の手本(ステップ3で選んだスクショ・動画の場所)。工程8・10で、一番優先する手本として見せる。 */
+  styleReferences: z.array(z.string()).max(10).optional(),
   /** 動画全体に出す画像(編集画面で足した物。チェックの画像の出どころに使う)。 */
   globalImages: z.array(z.any()).optional(),
   look: z.object({
@@ -96,6 +99,13 @@ export async function POST(request: Request) {
   const segments = state.segments as ProjectSegment[];
   const newKey = () => randomUUID();
   const captionLook = { style: look.captionStyle as CaptionStyle, fontSize: look.fontSize as CaptionFontSize };
+  // 見た目の手本(工程8・10で使う)。見つからない物は外す
+  const resolveReferences = async () =>
+    (
+      await Promise.all(
+        (parsed.data.styleReferences ?? []).filter(isStyleReferencePath).map((referencePath) => resolveStyleReference(referencePath))
+      )
+    ).filter((file): file is NonNullable<typeof file> => file !== null);
 
   try {
     const run = async (): Promise<{ state: StepState; note: string; details?: string[]; checks?: CheckItem[] }> => {
@@ -162,7 +172,11 @@ export async function POST(request: Request) {
           };
         }
         case 8: {
-          const objects = await decideObjects({ absolutePath: video.absolutePath, mimeType: video.mimeType });
+          const objects = await decideObjects({
+            absolutePath: video.absolutePath,
+            mimeType: video.mimeType,
+            references: await resolveReferences(),
+          });
           const built = buildObjects({
             title: objects.title,
             frameCount: objects.frameCount,
@@ -224,6 +238,7 @@ export async function POST(request: Request) {
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
             objectColors,
+            references: await resolveReferences(),
           });
           const keys = new Set(picks.map((pick) => withCaption[pick.index].key));
           const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;

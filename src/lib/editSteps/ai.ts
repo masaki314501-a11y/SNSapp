@@ -86,6 +86,79 @@ const nullableColor = z.string().regex(COLOR).nullable();
 const colorSchema = { type: Type.STRING };
 const nullableColorSchema = { type: Type.STRING, nullable: true };
 
+/** 見た目の手本(ステップ3でお客様が選んだスクショ・動画。サーバー上の場所)。 */
+export type StyleReferenceFile = { absolutePath: string; mimeType: string; kind: "image" | "video" };
+
+export const REFERENCES_INTRO = `
+次は、この動画のために選ばれた「見た目の手本」(まねしたい投稿のスクリーンショット・動画)です。一番優先して参考にしてください。
+手本(編集チームの過去の動画)やクセ帳と食い違う所は、こちらに合わせてください。何をどう参考にするかは、あなたが判断してください。
+ただし、見た目の手本に写っている文言・題材は、今回の動画に持ち込まないでください。
+`.trim();
+
+/** 見た目の手本から、工程とチェック項目に沿ってクセを読み取らせる指示文(工程別のクセ帳と同じ見出し)。 */
+export const REFERENCE_GUIDE_PROMPT = `
+上は、これから編集する動画のために選ばれた「見た目の手本」(まねしたい投稿のスクリーンショット・動画)です。
+この見た目に近づけて、別の動画をAIが工程ごとに編集します。そのAIに渡すメモを、次の見出しの順に書いてください。
+スクリーンショット(静止画)からは動きが分からないので、動きは動画の手本がある時だけ書き、分からない所は「分からない」と書いてください。
+
+### ジャンル・動画の型
+### 工程7・9 基本テロップ(書体・色・縁取り・帯・大きさ・位置)
+### 工程8 左上のタイトル(位置・書体・色・縁取り・帯・大きさ・出方)
+### 工程8 ランキングの枠・一覧(形・線の色と太さ・角の丸み・塗り・並べ方・番号の付け方・出方・中身の埋め方)
+### 工程10 強調テロップ(書体・色・帯・大きさ・何を強調しているか)
+### 色と書体の数(この手本で使っている色の数・書体の数)
+
+## 書き方の決まり
+- 書体は、次の候補のうち一番近い物の名前で書く: ${CAPTION_FONT_FAMILY_OPTIONS.map((option) => `${option.label}(${option.value})`).join("・")}
+- 色は #RRGGBB で書く。位置・大きさは画面に対する%で書く。
+- 手本に写っている文言は例に出さない。全体で2000字以内。
+`.trim();
+
+const referenceUploads = new Map<string, { part: Part; expiresAt: number }>();
+const referenceGuides = new Map<string, { guide: string; expiresAt: number }>();
+
+const referencePart = async (ai: GoogleGenAI, file: StyleReferenceFile): Promise<Part> => {
+  const cached = referenceUploads.get(file.absolutePath);
+  if (cached && cached.expiresAt > Date.now()) return cached.part;
+  const uploaded = await ai.files.upload({ file: file.absolutePath, config: { mimeType: file.mimeType } });
+  if (!uploaded.name || !uploaded.uri) throw new Error("見た目の手本のアップロードに失敗しました");
+  await waitForGeminiFileActive(ai, uploaded.name);
+  const part: Part = { fileData: { fileUri: uploaded.uri, mimeType: file.mimeType } };
+  referenceUploads.set(file.absolutePath, { part, expiresAt: Date.now() + UPLOAD_REUSE_MS });
+  return part;
+};
+
+/**
+ * 見た目の手本を見せる部分と、そこから工程・チェック項目に沿って読み取ったメモ(見た目の手本が無ければ空)。
+ * メモは同じ手本の組み合わせなら1回だけ作って使い回す。
+ */
+const referenceParts = async (references: StyleReferenceFile[] | undefined): Promise<Part[]> => {
+  if (!references || references.length === 0) return [];
+  const ai = client();
+  const media: Part[] = [];
+  for (const [index, file] of references.entries()) {
+    media.push({ text: `【見た目の手本${index + 1}(${file.kind === "video" ? "動画" : "スクリーンショット"})】` });
+    media.push(await referencePart(ai, file));
+  }
+  const key = references.map((file) => file.absolutePath).join("|");
+  let guide = referenceGuides.get(key);
+  if (!guide || guide.expiresAt < Date.now()) {
+    const response = await runWithGeminiRateLimit(() =>
+      Promise.race([
+        ai.models.generateContent({ model: STEP_MODEL, contents: [{ role: "user", parts: [...media, { text: REFERENCE_GUIDE_PROMPT }] }] }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Gemini API timeout")), TIMEOUT_MS)),
+      ])
+    );
+    guide = { guide: (response.text ?? "").trim(), expiresAt: Date.now() + UPLOAD_REUSE_MS };
+    referenceGuides.set(key, guide);
+  }
+  return [
+    { text: REFERENCES_INTRO },
+    ...media,
+    ...(guide.guide ? [{ text: `【見た目の手本から読み取った、工程ごとのメモ】\n${guide.guide}` }] : []),
+  ];
+};
+
 const chosenExamples = new Map<string, { examples: EditExample[]; expiresAt: number }>();
 const exampleUploads = new Map<string, { part: Part; expiresAt: number }>();
 
@@ -298,14 +371,16 @@ export type ObjectLook = {
 export const decideObjects = async (input: {
   absolutePath: string;
   mimeType: string;
+  references?: StyleReferenceFile[];
 }): Promise<{ title: string; frameCount: number; look: ObjectLook; reason: string }> => {
   const part = await videoPart(client(), input.absolutePath, input.mimeType);
   const examples = await exampleParts(input.absolutePath, input.mimeType);
   const guide = await stepGuidePart();
+  const references = await referenceParts(input.references);
   const result = await askJson({
     model: STEP_MODEL,
     label: "タイトルと枠",
-    parts: [...examples, ...guide, { text: "【ここから、今回編集する動画】" }, part, { text: OBJECTS_PROMPT }],
+    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, part, { text: OBJECTS_PROMPT }],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -411,17 +486,19 @@ export const pickEmphasis = async (input: {
   captions: string[];
   /** 工程8で使った色(タイトル・枠)。字幕の色と合わせて3色以内にするため。 */
   objectColors?: string[];
+  references?: StyleReferenceFile[];
 }): Promise<{ picks: { index: number; reason: string }[]; look: CaptionLook; lookReason: string }> => {
   const { captions } = input;
   const examples = await exampleParts(input.absolutePath, input.mimeType);
   const guide = await stepGuidePart();
+  const references = await referenceParts(input.references);
   const colorsLine = input.objectColors?.length
     ? `- タイトル・枠ですでに ${input.objectColors.join("・")} を使っているので、字幕もこの色の中から選ぶと3色以内に収まる。`
     : "";
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [...examples, ...guide, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine) }],
+    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine) }],
     schema: {
       type: Type.OBJECT,
       properties: {

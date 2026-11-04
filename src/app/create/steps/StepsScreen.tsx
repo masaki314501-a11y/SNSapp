@@ -141,6 +141,7 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
           bgm: project.stepBgmChoice ?? null,
           zone: project.publishZone ?? "tiktok",
           globalImages: project.globalImages ?? [],
+          styleReferences: (project.styleReferences ?? []).map((reference) => reference.path),
           look: {
             captionStyle: project.captionStyle,
             fontSize: project.fontSize,
