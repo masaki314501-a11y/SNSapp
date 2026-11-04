@@ -83,6 +83,16 @@ export default function Home() {
           >
             使い方マニュアルを見る
           </a>
+          {/* 先方確認用: 工程ごとの編集でAIに渡す指示文とルール(public/docs。アプリと同じID・パスワードで開ける) */}
+          <a
+            href="/docs/edit-steps-summary.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm underline"
+            style={{ color: "var(--muted, inherit)" }}
+          >
+            工程ごとの指示文を見る(要点・全文)
+          </a>
         </div>
 
         <ol className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">

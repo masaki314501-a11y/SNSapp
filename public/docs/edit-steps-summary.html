@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工程ごとの編集 要点</title>
+<style>
+@page { size: A4; margin: 14mm 13mm; }
+:root { --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --ai:#8A4B0C; --ai-soft:#FBEEDD; --m-soft:#E3F1ED; }
+* { box-sizing: border-box; }
+body { margin:0; color:var(--fg); background:#fff; font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:10.5pt; line-height:1.6; }
+h1 { font-size:17pt; margin:0 0 2px; }
+.sub { color:var(--muted); font-size:9.5pt; margin:0 0 12px; }
+h2 { font-size:12pt; margin:16px 0 6px; padding-bottom:3px; border-bottom:2px solid var(--accent); break-after:avoid; }
+table { width:100%; border-collapse:collapse; }
+th, td { text-align:left; vertical-align:top; padding:5px 7px; border-bottom:1px solid var(--line); }
+th { font-size:9pt; color:var(--muted); font-weight:700; }
+tr { break-inside:avoid; }
+td.n { width:2.2em; font-weight:800; color:var(--accent); }
+td.who { width:3.6em; }
+.tag { display:inline-block; font-size:8.5pt; font-weight:700; padding:0 6px; border-radius:9px; white-space:nowrap; }
+.ai { background:var(--ai-soft); color:var(--ai); }
+.mc { background:var(--m-soft); color:var(--accent); }
+td.t { width:13em; font-weight:700; }
+.num { color:var(--muted); font-size:9.5pt; }
+.box { border:1px solid var(--line); border-left:4px solid var(--ai); border-radius:6px; padding:8px 12px; margin:6px 0; }
+.box p { margin:0 0 4px; }
+ul { margin:4px 0; padding-left:1.3em; }
+li { margin:1px 0; }
+.two { columns:2; column-gap:18px; }
+.two li { break-inside:avoid; }
+.foot { color:var(--muted); font-size:9pt; margin-top:12px; }
+</style></head>
+<body>
+<div style="max-width:860px;margin:0 auto;padding:24px 16px">
+<p style="margin:0 0 10px;font-size:13px"><a href="/" style="color:#0F6B5C">← アプリのトップへ</a>　<a href="/docs/edit-steps-summary.html" style="color:#0F6B5C">要点版</a>　<a href="/docs/edit-steps-full.html" style="color:#0F6B5C">全文版</a></p>
+<h1>工程ごとの編集 要点</h1>
+<p class="sub">動画編集マニュアルの工程1〜11と、編集時チェック項目に沿って作っています。1工程ごとにボタンを押して進め、結果を見て次へ進みます。<br>
+<span class="tag ai">AI</span> はGeminiに頼む工程、<span class="tag mc">機械</span> は決まった計算だけで行う工程です。AIへの指示文の全文と細かい数値は、<a href="/docs/edit-steps-full.html" style="color:#0F6B5C">全文版</a>にあります。</p>
+
+<h2>工程と、それぞれで行うこと</h2>
+<table>
+<tr><th></th><th>担当</th><th>工程</th><th>行うこと</th></tr>
+<tr><td class="n">1</td><td class="who"><span class="tag mc">機械</span></td><td class="t">メイン映像を配置</td><td>使う範囲として残した部分を、順に並べる。</td></tr>
+<tr><td class="n">2</td><td class="who"><span class="tag mc">機械</span></td><td class="t">話し始める前を削除</td><td>音声から話し始めを見つけ、その0.15秒前より前を切る。</td></tr>
+<tr><td class="n">3</td><td class="who"><span class="tag ai">AI</span></td><td class="t">言い間違い・詰まりをカット</td><td>言い直す前の言葉や「えーと」をAIが見つけて切る。切れ目は近くの静かな所へ寄せる。</td></tr>
+<tr><td class="n">4</td><td class="who"><span class="tag mc">機械</span></td><td class="t">長い無音を削除</td><td>0.5秒以上の無音を切る。前後に0.12秒ずつ余白を残す。</td></tr>
+<tr><td class="n">5</td><td class="who"><span class="tag mc">機械</span></td><td class="t">前後を自然につなぐ</td><td>切れ目を言葉の途切れに合わせる。0.3秒未満のちらつく切れ端は外す。</td></tr>
+<tr><td class="n">6</td><td class="who"><span class="tag ai">AI</span></td><td class="t">拡大して人物の位置を整える</td><td>AIが顔の位置を調べ、顔が画面の高さ40%に来るよう拡大する(1.15〜1.4倍)。</td></tr>
+<tr><td class="n">7</td><td class="who"><span class="tag mc">機械</span></td><td class="t">テロップの位置を決める</td><td>顎のすぐ下に、動画全体で固定する。下に入りきらない時は画面の下に置く。</td></tr>
+<tr><td class="n">8</td><td class="who"><span class="tag ai">AI</span></td><td class="t">オブジェクトを作る</td><td>左上のタイトルと、ランキングなら枠の数をAIが決める。<b>タイトルと枠の見た目</b>(書体・色・縁取り・形・出方)も、手本に合わせてAIが決める。位置と大きさは機械で計算し、枠はテロップを避けて並べる。</td></tr>
+<tr><td class="n">9</td><td class="who"><span class="tag ai">AI</span></td><td class="t">テロップを入力</td><td>話している言葉をAIが書き起こし、言葉のまとまりごとにテロップにする。</td></tr>
+<tr><td class="n">10</td><td class="who"><span class="tag ai">AI</span></td><td class="t">強調テロップに変える</td><td>強調する言葉をAIが選ぶ。<b>基本テロップと強調テロップの見た目</b>も、手本に合わせてAIが決める。</td></tr>
+<tr><td class="n">11</td><td class="who"><span class="tag mc">機械</span></td><td class="t">効果音と寄り</td><td>強調テロップの頭で効果音を鳴らし、1.1倍に寄る。</td></tr>
+<tr><td class="n">12</td><td class="who"><span class="tag ai">AI</span></td><td class="t">長さを収める(長い時だけ)</td><td>上限(初期は30秒)を超えた時だけ、AIが前置きや繰り返しの場面を選んで外す。</td></tr>
+<tr><td class="n">13</td><td class="who"><span class="tag mc">機械</span></td><td class="t">BGMを入れる(任意)</td><td>選んだ曲を音量15%で入れ、最後の1.5秒で音量を下げて終える。</td></tr>
+<tr><td class="n">14</td><td class="who"><span class="tag ai">AI</span></td><td class="t">チェック項目を確かめる</td><td>下の項目を確かめる。自動で直せる物(光の補正・同じ画角)は直す。人が確かめる物だけを画面に出す。</td></tr>
+</table>
+
+<h2>手本の使い方(工程8・10)</h2>
+<div class="box">
+<p>AIには、次の3つを「見せる」だけにしています。何をどう真似るかはAIが判断します。工程3・12では手本を使いません。</p>
+<ul>
+<li><b>近い完成動画</b>: 手本16本から、動画の型と話し方が近い物を最大3本、AIが選ぶ。</li>
+<li><b>工程別のクセ帳</b>: 手本16本から、工程とチェック項目に沿ってまとめた編集のクセ。特に「ジャンルごとの組み立て」「タイトル・枠の見た目と動き」「書体と強調のクセ」を詳しく書いている。</li>
+<li><b>見た目の手本</b>(選んだ時だけ): お客様の参考スクショ・動画。工程ごとのクセを読み取り、<b>一番優先</b>して真似る。</li>
+</ul>
+</div>
+
+<h2>工程14 チェック項目</h2>
+<ul class="two">
+<li>話す言葉とテロップのタイミングが合っている</li>
+<li>テロップが読める長さ出ている(1秒8文字まで、0.6秒以上)</li>
+<li>誤字・脱字がない(AIが音声と見比べる)</li>
+<li>セーフティゾーンからはみ出していない(TikTok/広告)</li>
+<li>著作権に触れる画像がない(お客様の画像は人が確認)</li>
+<li>冒頭に空白がない(0.3秒以内に話し始める)</li>
+<li>冒頭5秒に3カット以上ある</li>
+<li>同じ画角が5秒以内(超える所は自動で寄りを足す)</li>
+<li>カットが遅れていない</li>
+<li>BGMの終わりがズレていない</li>
+<li>色が3色以内</li>
+<li>フォントが2つ以内</li>
+<li>光が補正されている(顔の明るさを測って自動補正)</li>
+<li>強調テロップに効果音が入っている</li>
+<li>30秒以内(お客様の指定があれば変更)</li>
+<li>薬機法・景品表示法・比較広告の表現がない(該当語があれば人が確認)</li>
+<li>企業イメージを損ねない(いつも人が確認)</li>
+</ul>
+<p class="foot">自動の項目がすべて満たされ、人が確かめる項目すべてにチェックが付くと「生成完了」にできます。</p>
+</div>
+</body></html>
