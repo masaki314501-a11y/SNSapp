@@ -348,7 +348,7 @@ export const OBJECTS_PROMPT = `
 
 - 書体は次から選ぶ: ${FONT_HINTS}
 - 出方は次から選ぶ: ${ANIMATION_HINTS}
-- 色は #RRGGBB で書く。タイトル・枠・テロップを合わせた動画全体の色は、白・黒も含めて3色以内にする(チェック項目)。
+- 色は #RRGGBB で書く。タイトル・枠・テロップを合わせた動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。
 - 位置・大きさ・並べ方はツールの側で決めるので書かない。
 
 reasonに、そう決めた理由(どの手本・クセ帳のどこを参考にしたか)を1〜2文で書いてください。
@@ -467,7 +467,7 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`
   accentColor(outlineなら縁取りの色、pillなら帯の色)。
 - emphasisLook: 強調テロップの見た目。fontFamily(書体)・textColor(文字の色)・bandColor(文字の後ろに敷く帯の色。敷かないならnull)。
 - 書体は次から選ぶ: ${FONT_HINTS}
-- 色は #RRGGBB で書く。動画全体の色は、白・黒も含めて3色以内にする(チェック項目)。書体は基本と強調で2つまで(チェック項目)。
+- 色は #RRGGBB で書く。動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。書体は基本と強調で2つまで(チェック項目)。
 ${objectColorsLine}
 
 選んだ字幕の番号(picks)と、それぞれを選んだ理由(reasons。picksと同じ順)、見た目をそう決めた理由(lookReason)を答えてください。
@@ -484,7 +484,7 @@ export const pickEmphasis = async (input: {
   absolutePath: string;
   mimeType: string;
   captions: string[];
-  /** 工程8で使った色(タイトル・枠)。字幕の色と合わせて3色以内にするため。 */
+  /** 工程8で使った色(タイトル・枠。白・黒は除く)。字幕の色と合わせて3色以内にするため。 */
   objectColors?: string[];
   references?: StyleReferenceFile[];
 }): Promise<{ picks: { index: number; reason: string }[]; look: CaptionLook; lookReason: string }> => {
@@ -493,7 +493,7 @@ export const pickEmphasis = async (input: {
   const guide = await stepGuidePart();
   const references = await referenceParts(input.references);
   const colorsLine = input.objectColors?.length
-    ? `- タイトル・枠ですでに ${input.objectColors.join("・")} を使っているので、字幕もこの色の中から選ぶと3色以内に収まる。`
+    ? `- タイトル・枠ですでに白・黒のほかに ${input.objectColors.join("・")} を使っているので、字幕もこの色(か白・黒)から選ぶと3色以内に収まる。`
     : "";
   const result = await askJson({
     model: STEP_MODEL,

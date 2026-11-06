@@ -26,7 +26,7 @@ import {
 import { captionBandHeight } from "@/lib/editSteps/logic";
 import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts } from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
-import { runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
+import { isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
 
 export const runtime = "nodejs";
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
         }
         case 10: {
           const withCaption = segments.filter((segment) => segment.caption.trim());
-          // 工程8で使った色(タイトル・枠)。字幕の色と合わせて3色以内にするため、AIに伝える
+          // 工程8で使った色(タイトル・枠。白・黒は除く)。字幕の色と合わせて3色以内にするため、AIに伝える
           const objectColors = [
             ...new Set(
               [
@@ -230,6 +230,7 @@ export async function POST(request: Request) {
                 ...state.globalShapes.flatMap((shape) => [shape.borderColor, shape.fillColor]),
               ]
                 .filter((value): value is string => Boolean(value))
+                .filter((value) => !isWhiteOrBlack(value))
                 .map((value) => value.toUpperCase())
             ),
           ];

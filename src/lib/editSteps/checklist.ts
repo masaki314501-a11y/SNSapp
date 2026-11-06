@@ -11,6 +11,20 @@ import type { SpeechSpan, StepState } from "./logic";
  * - review: 機械では判断できないので、人が目で確かめてチェックを付ける。
  * 撮影・音声のチェック項目(噛んでいないか・照明など)は、編集では確かめられないので扱わない。
  */
+/**
+ * 色の数のチェックで数えない、白・黒(と、それに近い色)か。
+ * 白い文字・黒い縁取りのように、白と黒はどの動画でも使うので、3色の中には入れない(2026-11 先方確認)。
+ * 色みがほとんどなく(明るさの差が小さい)、とても明るいか暗い色を白・黒とみなす。
+ */
+export const isWhiteOrBlack = (color: string): boolean => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return max - min <= 0x18 && (max <= 0x33 || min >= 0xe6);
+};
+
 export type CheckStatus = "ok" | "ng" | "review";
 export type CheckItem = {
   id: string;
@@ -297,7 +311,7 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
 
   const colors = new Set<string>();
   const addColor = (color: string | undefined) => {
-    if (color) colors.add(color.toUpperCase());
+    if (color && !isWhiteOrBlack(color)) colors.add(color.toUpperCase());
   };
   const captionPreset = findTextStylePreset(input.captionTextStyleId);
   if (!captionPreset) {
@@ -322,7 +336,7 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     group: "クオリティ",
     label: "4色以上色が混在していないか",
     status: colors.size <= 3 ? "ok" : "ng",
-    detail: `使っている色は${colors.size}色です(${[...colors].join("・")})${colors.size <= 3 ? "" : "。色をそろえてください"}${captionPreset ? "。文字スタイルの色は数えていないので、目でも確かめてください" : ""}`,
+    detail: `白・黒のほかに使っている色は${colors.size}色です${colors.size ? `(${[...colors].join("・")})` : ""}${colors.size <= 3 ? "" : "。色をそろえてください"}${captionPreset ? "。文字スタイルの色は数えていないので、目でも確かめてください" : ""}`,
   });
 
   const fonts = new Set<string>([input.look.fontFamily]);

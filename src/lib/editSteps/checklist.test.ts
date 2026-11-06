@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectSegment } from "@/lib/videoProject";
-import { breakLongSameAngle, runChecklist } from "./checklist";
+import { breakLongSameAngle, isWhiteOrBlack, runChecklist } from "./checklist";
 import type { StepState } from "./logic";
 
 let counter = 0;
@@ -112,5 +112,22 @@ describe("工程12 チェック", () => {
     const lowCaption = state(segments, { captionYPercent: 72 });
     expect(item(runChecklist({ state: lowCaption, spans: [[0, 1.9]], look, hasBgm: false }).items, "safe-zone").status).toBe("ok");
     expect(item(runChecklist({ state: lowCaption, spans: [[0, 1.9]], look, hasBgm: false, zone: "ad" }).items, "safe-zone").status).toBe("ng");
+  });
+});
+
+describe("色の数(白・黒は数えない)", () => {
+  it("白・黒とそれに近い色だけを、白・黒とみなす", () => {
+    for (const c of ["#FFFFFF", "#000000", "#111111", "#1a1a1a", "#F5F5F5", "#333333"]) expect(isWhiteOrBlack(c)).toBe(true);
+    for (const c of ["#FF0000", "#3CB4E5", "#808080", "#FFFF00", "#1A1A3A"]) expect(isWhiteOrBlack(c)).toBe(false);
+  });
+
+  it("白・黒を除いて3色までなら○、4色なら×", () => {
+    const shape = (borderColor: string) => ({ kind: "rect", xPercent: 20, yPercent: 50, widthPercent: 30, heightPercent: 10, borderColor, borderWidthPx: 4, fillColor: "#FFFFFF" }) as never;
+    const base = { spans: [[0, 1.9]] as [number, number][], look, hasBgm: false };
+    // 字幕の差し色(#FF3366)+枠の2色=3色。白い塗りと黒(#111111)は数えない
+    const three = state([seg(2, { caption: "テスト" })], { globalShapes: [shape("#3CB4E5"), shape("#FFFF00"), shape("#111111")] });
+    expect(item(runChecklist({ ...base, state: three }).items, "colors").status).toBe("ok");
+    const four = state([seg(2, { caption: "テスト" })], { globalShapes: [shape("#3CB4E5"), shape("#FFFF00"), shape("#00AA00")] });
+    expect(item(runChecklist({ ...base, state: four }).items, "colors").status).toBe("ng");
   });
 });
