@@ -131,3 +131,15 @@ describe("色の数(白・黒は数えない)", () => {
     expect(item(runChecklist({ ...base, state: four }).items, "colors").status).toBe("ng");
   });
 });
+
+describe("長さ(工程12で長さを指定した時だけ、その長さで確かめる)", () => {
+  const base = { spans: [[0, 40]] as [number, number][], look, hasBgm: false };
+  const long = state([seg(20, { caption: "前半" }), seg(20, { caption: "後半" })]);
+  it("指定が無い時は、30秒を超えたら目で確かめる項目にする", () => {
+    expect(item(runChecklist({ ...base, state: long }).items, "length").status).toBe("review");
+  });
+  it("指定した長さを超えていたら要修正、収まっていれば○", () => {
+    expect(item(runChecklist({ ...base, state: long, targetSeconds: 30 }).items, "length").status).toBe("ng");
+    expect(item(runChecklist({ ...base, state: long, targetSeconds: 45 }).items, "length").status).toBe("ok");
+  });
+});

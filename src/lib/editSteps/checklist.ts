@@ -56,6 +56,8 @@ const ANGLE_CHANGE_ZOOM = 1.08;
 const MAX_CUT_DELAY_SECONDS = 0.2 + 0.12;
 /** 完成動画の長さの上限(秒)。お客様の指定があれば変えてよい。 */
 const MAX_VIDEO_SECONDS = 30;
+/** 指定した長さを、これだけ超えていても収まったとみなす(秒)。場面ごとにしか外せないため。 */
+const LENGTH_TOLERANCE_SECONDS = 0.5;
 
 /** 広告として問題になりやすい表現(薬機法・景品表示法・比較広告)。見つかったら人が確かめる。 */
 const AD_RISK_PATTERNS: { pattern: RegExp; law: string }[] = [
@@ -115,6 +117,8 @@ export type ChecklistInput = {
   typos?: { text: string; wrong: string; correct: string; reason: string }[] | null;
   /** どこに出す動画か(セーフティゾーンが変わる)。 */
   zone?: SafeZoneKind;
+  /** 工程12で決めた長さの上限(秒)。指定が無い時は null(その時は30秒を目安に、超えたら目で確かめてもらう)。 */
+  targetSeconds?: number | null;
   /** 動画全体に出す画像(編集画面で足した物)。 */
   globalImages?: ImageOverlay[];
   /** 光の補正をしたか(工程12で明るさを測って整えた)。 */
@@ -388,11 +392,21 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     id: "length",
     group: "原稿",
     label: "30秒以内の動画になっているか(お客様の指定があれば変更OK)",
-    status: totalSeconds <= MAX_VIDEO_SECONDS ? "ok" : "review",
-    detail:
-      totalSeconds <= MAX_VIDEO_SECONDS
+    // 長さを指定した時は、その長さに収まっているか。指定が無い時は30秒を目安にし、超えたら目で確かめてもらう
+    status: input.targetSeconds
+      ? totalSeconds <= input.targetSeconds + LENGTH_TOLERANCE_SECONDS
+        ? "ok"
+        : "ng"
+      : totalSeconds <= MAX_VIDEO_SECONDS
+        ? "ok"
+        : "review",
+    detail: input.targetSeconds
+      ? totalSeconds <= input.targetSeconds + LENGTH_TOLERANCE_SECONDS
+        ? `完成の長さは${fmt(totalSeconds)}で、指定した${input.targetSeconds}秒以内です`
+        : `完成の長さが${fmt(totalSeconds)}で、指定した${input.targetSeconds}秒を超えています。工程12をやり直してください`
+      : totalSeconds <= MAX_VIDEO_SECONDS
         ? `完成の長さは${fmt(totalSeconds)}です`
-        : `完成の長さが${fmt(totalSeconds)}あります。お客様の指定で長くてよい時だけチェックしてください`,
+        : `完成の長さが${fmt(totalSeconds)}あります(長さは指定していません)。このままでよければチェックしてください。短くする時は、工程12で長さの上限を入れてやり直してください`,
   });
 
   const texts = [

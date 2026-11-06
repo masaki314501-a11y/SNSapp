@@ -48,7 +48,7 @@ li { margin:1px 0; }
 <tr><td class="n">9</td><td class="who"><span class="tag ai">AI</span></td><td class="t">テロップを入力</td><td>話している言葉をAIが書き起こし、言葉のまとまりごとにテロップにする。</td></tr>
 <tr><td class="n">10</td><td class="who"><span class="tag ai">AI</span></td><td class="t">強調テロップに変える</td><td>強調する言葉をAIが選ぶ。<b>基本テロップと強調テロップの見た目</b>も、手本に合わせてAIが決める。</td></tr>
 <tr><td class="n">11</td><td class="who"><span class="tag mc">機械</span></td><td class="t">効果音と寄り</td><td>強調テロップの頭で効果音を鳴らし、1.1倍に寄る。</td></tr>
-<tr><td class="n">12</td><td class="who"><span class="tag ai">AI</span></td><td class="t">長さを収める(長い時だけ)</td><td>上限(初期は30秒)を超えた時だけ、AIが前置きや繰り返しの場面を選んで外す。</td></tr>
+<tr><td class="n">12</td><td class="who"><span class="tag ai">AI</span></td><td class="t">長さを収める(長い時だけ)</td><td>長さの上限を入れた時だけ、超えた分をAIが前置きや繰り返しの場面から選んで外す(空なら動画の長さのまま)。</td></tr>
 <tr><td class="n">13</td><td class="who"><span class="tag mc">機械</span></td><td class="t">BGMを入れる(任意)</td><td>選んだ曲を音量15%で入れ、最後の1.5秒で音量を下げて終える。</td></tr>
 <tr><td class="n">14</td><td class="who"><span class="tag ai">AI</span></td><td class="t">チェック項目を確かめる</td><td>下の項目を確かめる。自動で直せる物(光の補正・同じ画角)は直す。人が確かめる物だけを画面に出す。</td></tr>
 </table>
@@ -79,7 +79,7 @@ li { margin:1px 0; }
 <li>フォントが2つ以内</li>
 <li>光が補正されている(顔の明るさを測って自動補正)</li>
 <li>強調テロップに効果音が入っている</li>
-<li>30秒以内(お客様の指定があれば変更)</li>
+<li>長さ: 上限を入れた時はその秒数以内。入れていない時は30秒を超えたら人が確認</li>
 <li>薬機法・景品表示法・比較広告の表現がない(該当語があれば人が確認)</li>
 <li>企業イメージを損ねない(いつも人が確認)</li>
 </ul>

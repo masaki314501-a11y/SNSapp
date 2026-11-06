@@ -72,8 +72,6 @@ const requestSchema = z.object({
 
 /** 下の決まった位置の字幕の上端(%)。顎の下に置けない時の、枠を並べる下の限界に使う。 */
 const BOTTOM_CAPTION_TOP_PERCENT = 82;
-/** 完成動画の長さの上限の初期値(秒。チェック項目: 30秒以内の動画になっているか)。 */
-const DEFAULT_TARGET_SECONDS = 30;
 /** BGMの音量(話し声が聞き取れる小ささ)と、入り・終わりで音量を変える秒数。 */
 const BGM_VOLUME = 0.15;
 const BGM_FADE_IN_SECONDS = 0.3;
@@ -271,8 +269,12 @@ export async function POST(request: Request) {
           };
         }
         case 12: {
-          const target = parsed.data.targetSeconds ?? DEFAULT_TARGET_SECONDS;
+          // 長さの上限は、短くしたい時だけ指定する(指定が無ければ、動画の長さのまま)
+          const target = parsed.data.targetSeconds;
           const total = totalSeconds(segments);
+          if (!target) {
+            return { state, note: `長さの上限を指定していないので、何も外しませんでした(完成の長さは${fmt(total)})` };
+          }
           if (total <= target) {
             return { state, note: `完成の長さが${fmt(total)}で、${target}秒以内に収まっているので、何も外しませんでした` };
           }
@@ -288,7 +290,7 @@ export async function POST(request: Request) {
           const kept = segments.filter((segment) => !removeKeys.has(segment.key));
           return {
             state: { ...state, segments: kept },
-            note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。お客様の指定が無ければ、編集画面で短くしてください)` : ""}`,
+            note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。「やり直す」を押すか、編集画面で短くしてください)` : ""}`,
             details: removals.map((removal) => `「${captioned[removal.index].caption.replace(/\n/g, "")}」 ${removal.reason}`),
           };
         }
@@ -334,6 +336,7 @@ export async function POST(request: Request) {
             bgmFade: state.bgm ? { fadeInSeconds: state.bgm.fadeInSeconds, fadeOutSeconds: state.bgm.fadeOutSeconds } : undefined,
             typos,
             zone: parsed.data.zone,
+            targetSeconds: parsed.data.targetSeconds ?? null,
             globalImages: parsed.data.globalImages,
             lightAdjusted: light.adjust,
           });

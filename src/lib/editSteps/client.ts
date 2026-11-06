@@ -9,8 +9,6 @@ import { EDIT_STEPS } from "./steps";
 
 /** チェック項目を確かめる工程。 */
 export const CHECK_STEP = 14;
-/** 長さの上限の初期値(秒)。チェック項目: 30秒以内の動画になっているか(お客様の指定があれば変えてよい)。 */
-export const DEFAULT_TARGET_SECONDS = 30;
 
 export const EMPTY_STATE: StepState = { segments: [], framing: null, captionYPercent: null, globalShapes: [], globalOverlays: [] };
 
@@ -61,7 +59,8 @@ export const runEditStep = async (project: VideoProject, step: number, signal?: 
       videoDurationInSeconds: project.videoDurationInSeconds,
       keepRanges,
       state: base,
-      targetSeconds: project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS,
+      // 長さの上限は、短くしたい時だけ(指定が無ければ、動画の長さのまま)
+      targetSeconds: project.targetDurationSeconds ?? undefined,
       bgm: project.stepBgmChoice ?? null,
       zone: project.publishZone ?? "tiktok",
       title: project.autoEditTitle?.trim() || undefined,

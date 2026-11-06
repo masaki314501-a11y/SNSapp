@@ -15,7 +15,7 @@ export const EDIT_STEPS: { step: number; title: string; detail: string; usesAi: 
   { step: 9, title: "テロップを入力する", detail: "話している言葉をAIが書き起こして入れます(位置は工程7で固定)", usesAi: true },
   { step: 10, title: "強調したい言葉を違うテロップに変換する", detail: "AIが強調したい言葉を選び、強調テロップにします(手本も見せます)", usesAi: true },
   { step: 11, title: "強調テロップに効果音をつけ、少し人物を拡大する", detail: "強調テロップに効果音と、少しの寄りを付けます", usesAi: false },
-  { step: 12, title: "決めた長さに収める(長い時だけ)", detail: "上で決めた長さ(初期は30秒)を超えていたら、AIが前置きや繰り返しの場面を外します", usesAi: true },
+  { step: 12, title: "決めた長さに収める(長い時だけ)", detail: "長さの上限を入れた時だけ、超えた分をAIが前置きや繰り返しの場面から外します(空なら動画の長さのまま)", usesAi: true },
   { step: 13, title: "BGMを入れる(なくてもよい)", detail: "選んだ曲を、話し声より小さな音量で頭から入れ、最後に音量を下げて終わらせます", usesAi: false },
   { step: 14, title: "チェック項目を確かめる", detail: "編集時チェック項目を確かめます。光の補正は明るさを測って自動で行い、誤字・脱字はAIが音声と見比べます", usesAi: true },
 ];

@@ -6,7 +6,7 @@ import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject"
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { EDIT_STEPS } from "@/lib/editSteps/steps";
-import { CHECK_STEP, DEFAULT_TARGET_SECONDS, MAX_AUTO_RETRIES, runAllSteps, type AutoRunProgress } from "@/lib/editSteps/client";
+import { CHECK_STEP, MAX_AUTO_RETRIES, runAllSteps, type AutoRunProgress } from "@/lib/editSteps/client";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -208,15 +208,16 @@ export const AutoEditScreen: React.FC = () => {
                 長さの上限(秒)
               </label>
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                お客様の指定が無ければ30秒のままにします。超えた時は、AIが前置きや繰り返しの場面を外します(工程12)。
+                短くしたい時だけ入れます。空なら動画の長さのままです。入れた時は、超えた分をAIが前置きや繰り返しの場面から外します(工程12)。
               </span>
               <input
                 id="auto-edit-length"
                 type="number"
                 min={5}
                 max={180}
-                value={project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS}
-                onChange={(e) => update({ targetDurationSeconds: Number(e.target.value) || DEFAULT_TARGET_SECONDS })}
+                value={project.targetDurationSeconds ?? ""}
+                placeholder="例: 30"
+                onChange={(e) => update({ targetDurationSeconds: Number(e.target.value) || null })}
                 className="field-input text-sm"
                 style={{ width: 100 }}
               />

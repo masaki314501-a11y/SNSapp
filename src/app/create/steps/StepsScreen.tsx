@@ -8,7 +8,7 @@ import { getStandardVideoDurationInFrames } from "@video/templates/standard/dura
 import { VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
 import { buildStandardVideoProps, loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import type { EditStepsRecord } from "@/lib/editSteps/logic";
-import { CHECK_STEP, DEFAULT_TARGET_SECONDS, runEditStep } from "@/lib/editSteps/client";
+import { CHECK_STEP, runEditStep } from "@/lib/editSteps/client";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
 import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
@@ -215,13 +215,14 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
 
         {step === 12 ? (
           <label className="editor-field">
-            <span>長さの上限(秒)。お客様の指定が無ければ30秒のまま</span>
+            <span>長さの上限(秒)。短くしたい時だけ入れます。空なら動画の長さのまま</span>
             <input
               type="number"
               min={5}
               max={180}
-              value={project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS}
-              onChange={(e) => updateSettings({ targetDurationSeconds: Number(e.target.value) || DEFAULT_TARGET_SECONDS })}
+              value={project.targetDurationSeconds ?? ""}
+              placeholder="例: 30"
+              onChange={(e) => updateSettings({ targetDurationSeconds: Number(e.target.value) || null })}
               style={{ width: 90 }}
             />
           </label>
