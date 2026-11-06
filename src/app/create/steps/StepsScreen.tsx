@@ -7,41 +7,13 @@ import { StandardVideo } from "@video/templates/standard/StandardVideo";
 import { getStandardVideoDurationInFrames } from "@video/templates/standard/duration";
 import { VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
 import { buildStandardVideoProps, loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
-import type { EditStepsRecord, StepState } from "@/lib/editSteps/logic";
+import type { EditStepsRecord } from "@/lib/editSteps/logic";
+import { CHECK_STEP, DEFAULT_TARGET_SECONDS, runEditStep } from "@/lib/editSteps/client";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
 import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
 import { EDIT_STEPS } from "@/lib/editSteps/steps";
 
-
-/** チェック項目を確かめる工程。 */
-const CHECK_STEP = 14;
-/** 長さの上限の初期値(秒)。チェック項目: 30秒以内の動画になっているか(お客様の指定があれば変えてよい)。 */
-const DEFAULT_TARGET_SECONDS = 30;
-
-const EMPTY_STATE: StepState = { segments: [], framing: null, captionYPercent: null, globalShapes: [], globalOverlays: [] };
-
-/** 工程の状態をプロジェクトに書き込む(プレビュー・この後の画面で使う)。 */
-const withState = (project: VideoProject, state: StepState): VideoProject => ({
-  ...project,
-  segments: state.segments,
-  framing: state.framing ?? undefined,
-  captionYPercent: state.captionYPercent ?? undefined,
-  videoAdjust: state.videoAdjust ?? undefined,
-  // 基本テロップの見た目は工程10で決める(それより前は、プロジェクトの設定のまま)
-  ...(state.captionLook
-    ? { fontFamily: state.captionLook.fontFamily, captionStyle: state.captionLook.captionStyle, primaryColor: state.captionLook.primaryColor }
-    : {}),
-  // BGMは工程13で入れる(それより前の工程では、前から入っていた物をそのままにする)
-  bgm: state.bgm === undefined ? project.bgm : state.bgm,
-  globalShapes: state.globalShapes,
-  globalOverlays: state.globalOverlays,
-  // 工程ごとの編集では、冒頭の見出し・締めの一言・画像は付けない。効果音は強調テロップの物だけ(クリップに付いている)
-  hook: null,
-  cta: null,
-  globalImages: [],
-  sfx: [],
-});
 
 /**
  * 「工程ごとに編集」画面。編集マニュアルの工程を、1工程=1ページで1つずつ進める(/create/steps/<工程の番号>)。
@@ -117,57 +89,12 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
   const current = EDIT_STEPS.find((item) => item.step === pageStep) ?? EDIT_STEPS[0];
   const step = current.step;
   const result = record.results[step];
-  const keepRanges = (project.cutKeepRanges ?? project.segments).map((s) => ({
-    startFromSeconds: s.startFromSeconds,
-    durationInSeconds: s.durationInSeconds,
-  }));
-
   const runStep = async () => {
-    const base = step === 1 ? EMPTY_STATE : record.snapshots[step - 1];
-    if (!base) return;
+    if (step > 1 && !record.snapshots[step - 1]) return;
     setRunning(step);
     setError(null);
     try {
-      const response = await fetch("/api/edit-step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          step,
-          videoPath: project.videoPath,
-          videoDurationInSeconds: project.videoDurationInSeconds,
-          keepRanges,
-          state: base,
-          targetSeconds: project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS,
-          bgm: project.stepBgmChoice ?? null,
-          zone: project.publishZone ?? "tiktok",
-          globalImages: project.globalImages ?? [],
-          styleReferences: (project.styleReferences ?? []).map((reference) => reference.path),
-          look: {
-            captionStyle: project.captionStyle,
-            fontSize: project.fontSize,
-            primaryColor: project.primaryColor,
-            fontFamily: project.fontFamily,
-            captionTextStyleId: project.captionTextStyleId,
-            hasBgm: Boolean(project.bgm),
-          },
-        }),
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !json?.state) throw new Error(json?.error ?? "工程を実行できませんでした");
-      // この工程より後ろの結果は、土台が変わったので消す
-      const results = Object.fromEntries(Object.entries(record.results).filter(([key]) => Number(key) < step));
-      const snapshots = Object.fromEntries(Object.entries(record.snapshots).filter(([key]) => Number(key) < step));
-      const next: VideoProject = {
-        ...withState(project, json.state as StepState),
-        // 工程1を始めた時点で、カット画面で残した範囲を覚えておく(工程1はいつもここから並べ直す)
-        cutKeepRanges: keepRanges,
-        editSteps: {
-          results: { ...results, [step]: { note: json.note, details: json.details, checks: json.checks, at: new Date().toISOString() } },
-          snapshots: { ...snapshots, [step]: json.state },
-          // 中身が変わったので、目で確かめたチェックは付け直してもらう
-          reviewed: {},
-        },
-      };
+      const next = await runEditStep(project, step);
       setProject(next);
       saveProject(next);
     } catch (caught) {

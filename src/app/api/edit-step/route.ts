@@ -54,6 +54,8 @@ const requestSchema = z.object({
   bgm: z.object({ src: z.string(), label: z.string() }).nullable().optional(),
   /** どこに出す動画か(チェックのセーフティゾーン)。 */
   zone: z.enum(["tiktok", "ad"]).optional(),
+  /** 左上のタイトル(工程8)。指定があればAIの案の代わりにそのまま使う。 */
+  title: z.string().max(40).optional(),
   /** 見た目の手本(ステップ3で選んだスクショ・動画の場所)。工程8・10で、一番優先する手本として見せる。 */
   styleReferences: z.array(z.string()).max(10).optional(),
   /** 動画全体に出す画像(編集画面で足した物。チェックの画像の出どころに使う)。 */
@@ -177,6 +179,9 @@ export async function POST(request: Request) {
             mimeType: video.mimeType,
             references: await resolveReferences(),
           });
+          // タイトルの指定があれば、文言はそれを使う(見た目と枠の数はAIの案のまま)
+          const fixedTitle = parsed.data.title?.trim();
+          if (fixedTitle) objects.title = fixedTitle;
           const built = buildObjects({
             title: objects.title,
             frameCount: objects.frameCount,

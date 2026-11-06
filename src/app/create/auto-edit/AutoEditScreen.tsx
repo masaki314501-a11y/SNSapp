@@ -3,293 +3,168 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
-import { useAutoEditJob, type AutoEditResult } from "../useAutoEditJob";
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
-import { EDIT_TEMPLATES, findEditTemplate } from "@/lib/editTemplates";
-import { WaitTime } from "@/components/WaitTime";
-import { AutoEditProgressList } from "./AutoEditProgressList";
-import { cameraRuleForTemplate } from "@/lib/cameraRules";
-import {
-  DEFAULT_MAX_GENERATED_IMAGES,
-  GenerateImagesField,
-  MaterialImagesPanel,
-  type MaterialImage,
-} from "./MaterialImagesPanel";
+import { toFriendlyErrorMessage } from "@/lib/friendlyError";
+import { EDIT_STEPS } from "@/lib/editSteps/steps";
+import { CHECK_STEP, DEFAULT_TARGET_SECONDS, MAX_AUTO_RETRIES, runAllSteps, type AutoRunProgress } from "@/lib/editSteps/client";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
-      <div className="panel flex flex-col items-center gap-3 p-10 text-center">
-        <p className="text-sm font-medium">対象の動画がありません</p>
-        <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-          まずは動画をアップロードし、使う範囲を選んでください
-        </p>
-        <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
-          動画をアップロードする →
-        </a>
-      </div>
+    <div className="panel flex flex-col items-center gap-3 p-10 text-center">
+      <p className="text-sm font-medium">対象の動画がありません</p>
+      <p className="text-xs" style={{ color: "var(--muted-2)" }}>
+        まずは動画をアップロードし、使う範囲を選んでください
+      </p>
+      <a href="/create" className="btn-primary px-4 py-1.5 text-sm">
+        動画をアップロードする →
+      </a>
+    </div>
   </main>
 );
 
-const totalSeconds = (ranges: { durationInSeconds: number }[]): number =>
-  ranges.reduce((sum, range) => sum + range.durationInSeconds, 0);
-
-/** 要望・手直しの指示の長さの上限。サーバー(api/auto-edit/route.ts)と合わせる。 */
-const MAX_USER_TEXT_LENGTH = 1000;
-/** タイトルの長さの上限。サーバーと合わせる。 */
+/** タイトルの長さの上限。サーバー(api/edit-step)と合わせる。 */
 const MAX_TITLE_LENGTH = 40;
 
-/** 完成動画の長さの選択肢(秒)。nullはAIにまかせる。 */
-const TARGET_DURATION_OPTIONS: (number | null)[] = [null, 15, 30, 45, 60, 90];
-
+type RunState =
+  | { status: "idle" }
+  | { status: "running"; progress: AutoRunProgress }
+  | { status: "error"; message: string; step: number | null };
 
 /**
- * カット後・手動編集(/edit)に入る前に割り込む「自動編集(バズる動画)」画面。Geminiに本人の動画・
- * 参考スクショ・編集例・選んだテンプレート(よく見るバズ編集の型)を見せ、切り方から強調テキスト・
- * 効果音まで編集をすべて任せる。
- * 生成結果は「この案を使う」を押すまでプロジェクトに一切書き込まない。ジョブが未完了・
- * 失敗していても「スキップして編集へ」は常に押せる(自動編集がパイプラインを詰まらせない)。
+ * 「AIで自動編集する」画面。工程ごとの編集と同じ工程1〜14を、自動で順に流す(編集マニュアルの工程どおり)。
+ * 最後の工程14で、工程ごとの編集と同じチェック項目を確かめ、AIの答えのぶれで「要修正」になった項目は、
+ * その工程から自動でやり直す(MAX_AUTO_RETRIES回まで)。終わったら工程14のページを開き、
+ * 目で確かめる項目にチェックを付ければ「生成完了」になる(工程ごとの編集と同じ終わり方)。
  */
 export const AutoEditScreen: React.FC = () => {
   const router = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [hasCheckedProject, setHasCheckedProject] = useState(false);
-  const { autoEditState, lastResult, isRevision: isRevising, handleStart, resumePendingJob, cancel } = useAutoEditJob();
-  /** 「ここを直して」の指示。直し終わったら空に戻す。 */
-  const [revisionText, setRevisionText] = useState("");
-  /** 選んだテンプレート。nullならおまかせ。次に開いた時も同じ型を使えるようプロジェクトに保存する。 */
-  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [run, setRun] = useState<RunState>({ status: "idle" });
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const loaded = loadProject();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
-    setProject(loaded);
-    setTemplateId(findEditTemplate(loaded?.editTemplateId)?.id ?? null);
+    setProject(loadProject());
     setHasCheckedProject(true);
-    // 待っている間に画面を閉じた・別のアプリへ切り替えて画面が作り直された時は、前に始めた自動編集の続きを見る
-    if (loaded) resumePendingJob(loaded.videoPath);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 開いた時に一度だけ確かめる
   }, []);
 
-  const keepRanges = project
-    ? (project.cutKeepRanges ?? project.segments).map((s) => ({
-        startFromSeconds: s.startFromSeconds,
-        durationInSeconds: s.durationInSeconds,
-      }))
-    : [];
-
-  const goToEditorWithoutChanges = () => router.push("/edit");
-
-  // 始めたら一番上(進み具合)を、終わったら案の中身を見せる。押すボタンは画面の下にあるため、そのままだと何も起きていないように見える
-  const resultRef = useRef<HTMLDivElement>(null);
-  const status = autoEditState.status;
+  // 流している間に画面を閉じると止まるので、閉じようとしたら確かめる
+  const running = run.status === "running";
   useEffect(() => {
-    if (status === "processing") window.scrollTo({ top: 0, behavior: "smooth" });
-    if (status === "done") resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [status]);
-
-  const handleCancel = () => {
-    const message = isRevising
-      ? "手直しをやめますか?(前の案はそのまま残ります)"
-      : "自動編集をやめますか?(ここまでの分は残りません)";
-    if (window.confirm(message)) cancel();
-  };
-
-  const handleRun = (revision?: { previousPlan: AutoEditResult["rawPlan"]; instruction: string }) => {
-    if (!project) return;
-    void handleStart({
-      videoPath: project.videoPath,
-      videoDurationInSeconds: project.videoDurationInSeconds,
-      keepRanges,
-      styleReferencePaths: (project.styleReferences ?? []).map((reference) => reference.path),
-      templateId,
-      materialImages: project.materialImages ?? [],
-      generateMissingImages: project.generateMissingImages ?? true,
-      maxGeneratedImages: project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES,
-      title: project.autoEditTitle ?? "",
-      targetDurationSeconds: project.targetDurationSeconds ?? null,
-      userRequest: project.autoEditRequest ?? "",
-      revision,
-    });
-  };
-
-  // 手直しに失敗しても、前にできた案はそのまま使えるようにする。
-  const result: AutoEditResult | null =
-    autoEditState.status === "done" ? autoEditState : autoEditState.status === "error" ? lastResult : null;
-
-  const handleRevise = () => {
-    const instruction = revisionText.trim();
-    if (!result || !instruction) return;
-    handleRun({ previousPlan: result.rawPlan, instruction });
-    setRevisionText("");
-  };
-
-  // 冒頭の見出しの選択。案が変わったら(作り直し・手直し)AIのおすすめに戻す
-  const [hookChoice, setHookChoice] = useState<{ result: AutoEditResult; headline: string | null } | null>(null);
-  const hookCandidates = result?.plan.hookCandidates ?? (result?.plan.hook ? [result.plan.hook.headline] : []);
-  const selectedHook =
-    hookChoice && hookChoice.result === result ? hookChoice.headline : (result?.plan.hook?.headline ?? null);
-
-  const applyPlan = () => {
-    if (!project || !result) return;
-    const { plan, segments, generatedClips } = result;
-    saveProject({
-      ...project,
-      editTemplateId: templateId,
-      // 次に自動編集をやり直すときも、カット画面で残した元の範囲から切り直せるようにする。
-      cutKeepRanges: keepRanges,
-      // AIが強調テロップにした字幕は、前に強調する字幕の画面で決めた見た目・効果音があればそれにそろえる
-      segments: project.emphasisPreset
-        ? segments.map((segment) =>
-            segment.captionEmphasis
-              ? {
-                  ...segment,
-                  captionEmphasis: project.emphasisPreset!.emphasis,
-                  emphasisSfxPresetId: project.emphasisPreset!.sfxPresetId ?? segment.emphasisSfxPresetId,
-                }
-              : segment
-          )
-        : segments,
-      primaryColor: plan.theme.primaryColor ?? project.primaryColor,
-      fontFamily: plan.theme.fontFamily ?? project.fontFamily,
-      captionPosition: plan.theme.captionPosition ?? project.captionPosition,
-      captionStyle: plan.theme.captionStyle ?? project.captionStyle,
-      fontSize: plan.theme.captionFontSize ?? project.fontSize,
-      // 字幕は顎のすぐ下に固定する(置けなかった時は上・中央・下の決まった位置)
-      captionYPercent: plan.theme.captionYPercent,
-      // 選んだ見出しを使う。補足(subline)はAIのおすすめの見出しに付けた物なので、それを選んだ時だけ付ける
-      hook: selectedHook
-        ? { headline: selectedHook, subline: selectedHook === plan.hook?.headline ? plan.hook.subline : undefined }
-        : null,
-      cta: plan.cta,
-      globalOverlays: plan.globalOverlays,
-      globalImages: plan.globalImages,
-      globalShapes: plan.globalShapes,
-      framing: plan.framing,
-      // 寄りは選んだテンプレートのカメラワークのルールで付けてある。編集画面で付け直す時も同じルールを選んでおく
-      cameraRuleId: cameraRuleForTemplate(templateId),
-      // 字幕を話に合わせて見せるための、話している区間(音を調べられなかった時は前のまま)
-      speechSpans: result.speechSpans ?? project.speechSpans,
-      // クリップの切り方が変わると、以前の効果音・AI音声の秒位置は意味を失うため作り直す(AI音声は自動編集では作らないので外れる)。
-      sfx: generatedClips,
-    });
-    // 次は、強調する字幕を選ぶ画面(AIが強調テロップにした字幕を、本人がここで選び直せる)
-    router.push("/create/emphasis");
-  };
+    if (!running) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [running]);
 
   if (!hasCheckedProject) return null;
-  if (!project || keepRanges.length === 0) return <EmptyState />;
+  const keepCount = project ? (project.cutKeepRanges ?? project.segments).length : 0;
+  if (!project || keepCount === 0) return <EmptyState />;
 
   const referenceCount = project.styleReferences?.length ?? 0;
-  const hasReference = referenceCount > 0;
-  const isProcessing = autoEditState.status === "processing";
-
-  const selectTemplate = (id: string | null) => {
-    setTemplateId(id);
-    // 案を使わずにやり直す場合も選んだ型を覚えておけるよう、選んだ時点で保存する。
-    const next = { ...project, editTemplateId: id };
+  const update = (patch: Partial<VideoProject>) => {
+    const next = { ...project, ...patch };
     setProject(next);
     saveProject(next);
   };
 
-  const changeMaterialImages = (materialImages: MaterialImage[]) => {
-    // やり直すたびに選び直さなくて済むよう、変えた時点で保存する。
-    const next = { ...project, materialImages };
-    setProject(next);
-    saveProject(next);
+  const start = async () => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setRun({ status: "running", progress: { step: 1, title: EDIT_STEPS[0].title, attempt: 0 } });
+    let lastStep: number | null = null;
+    try {
+      await runAllSteps(project, {
+        signal: controller.signal,
+        onProgress: (progress) => {
+          lastStep = progress.step;
+          setRun({ status: "running", progress });
+        },
+        // 1工程ごとに保存する(途中で止まっても、工程ごとの編集の画面から続きができる)
+        onStep: (next) => {
+          setProject(next);
+          saveProject(next);
+        },
+      });
+      setRun({ status: "idle" });
+      router.push(`/create/steps/${CHECK_STEP}`);
+    } catch (caught) {
+      if (controller.signal.aborted) {
+        setRun({ status: "idle" });
+        return;
+      }
+      setRun({ status: "error", message: toFriendlyErrorMessage(caught, "自動編集できませんでした"), step: lastStep });
+    } finally {
+      abortRef.current = null;
+    }
   };
 
-  const changeGenerate = (generateMissingImages: boolean, maxGeneratedImages: number) => {
-    const next = { ...project, generateMissingImages, maxGeneratedImages };
-    setProject(next);
-    saveProject(next);
+  const cancel = () => {
+    if (window.confirm("自動編集をやめますか?(終わった工程までは残ります。工程ごとの編集の画面から続きができます)")) {
+      abortRef.current?.abort();
+    }
   };
 
-  const changeTargetDuration = (targetDurationSeconds: number | null) => {
-    const next = { ...project, targetDurationSeconds };
-    setProject(next);
-    saveProject(next);
-  };
-
-  const changeTitle = (autoEditTitle: string) => {
-    const next = { ...project, autoEditTitle };
-    setProject(next);
-    saveProject(next);
-  };
-
-  const changeAutoEditRequest = (autoEditRequest: string) => {
-    const next = { ...project, autoEditRequest };
-    setProject(next);
-    saveProject(next);
-  };
-
-  const materialImageCount = project.materialImages?.length ?? 0;
+  const progress = run.status === "running" ? run.progress : null;
 
   return (
     <>
       <main className="flow-main">
-        {isProcessing ? null : (
-          <div className="panel flex flex-col gap-1 p-4">
-            <span className="text-sm font-bold">AIが切り方・タイトル・画像・寄り・効果音までまとめて編集します</span>
-            <span className="text-xs" style={{ color: "var(--muted)" }}>
-              数分かかることがあります。AIが強調した字幕は、次の画面で選び直せます。
-            </span>
-          </div>
-        )}
+        <div className="panel flex flex-col gap-1 p-4">
+          <span className="text-sm font-bold">AIが編集マニュアルの工程1〜14を、自動で順に進めます</span>
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            工程ごとの編集と同じ工程・同じチェック項目で作ります。チェックで直す所が見つかったら、その工程から自動でやり直します。
+            終わったら、目で確かめる項目にチェックを付けると完成です。5分ほどかかります。
+          </span>
+        </div>
 
-        {/* 処理中の様子と失敗の知らせは、画面を開き直した時にもすぐ目に入るよう、入力欄より上に出す。
-            処理中は入力欄を隠し(変えても今の編集には効かないため)、進み具合だけを見せる */}
-        {isProcessing ? (
-          <div className="panel flex flex-col gap-1 p-4">
-            <span className="text-sm font-bold">{isRevising ? "AIが手直し中…" : "AIが編集中…"}</span>
-            <AutoEditProgressList progress={autoEditState.progress} isRevision={isRevising} />
-            <span className="text-xs" style={{ color: "var(--muted)" }}>
-              待っている間は、別のアプリに切り替えたり画面を閉じたりしても大丈夫です。この画面を開き直すと、続きから結果が見られます。
+        {progress ? (
+          <div className="panel flex flex-col gap-2 p-4">
+            <span className="text-sm font-bold">
+              AIが編集中…(工程 {progress.step} / {EDIT_STEPS.length})
             </span>
-            {autoEditState.usedStyleReferenceCount !== null && autoEditState.usedStyleReferenceCount < referenceCount ? (
+            {progress.attempt > 0 ? (
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                {autoEditState.usedStyleReferenceCount === 0
-                  ? "見た目の手本がサーバー上に見つからなかったため、今回は手本無しで編集しています"
-                  : `見た目の手本${referenceCount}個のうち${referenceCount - autoEditState.usedStyleReferenceCount}個がサーバー上に見つからなかったため、残りの${autoEditState.usedStyleReferenceCount}個で編集しています`}
-                (見た目の手本の画面からもう一度選んでください)
+                チェックで直す所が見つかったので、やり直しています({progress.attempt}回目 / 最大{MAX_AUTO_RETRIES}回)
               </span>
             ) : null}
-            {autoEditState.usedMaterialImageCount !== null && autoEditState.usedMaterialImageCount < materialImageCount ? (
+            <ol className="flex flex-col gap-1 text-sm">
+              {EDIT_STEPS.map((item) => {
+                const state = item.step < progress.step ? "done" : item.step === progress.step ? "now" : "wait";
+                return (
+                  <li key={item.step} className="flex items-center gap-2" style={{ color: state === "wait" ? "var(--muted-2)" : undefined }}>
+                    <span style={{ width: 18, textAlign: "center" }}>{state === "done" ? "✓" : state === "now" ? "▶" : "・"}</span>
+                    <span className={state === "now" ? "font-bold" : undefined}>
+                      工程{item.step} {item.title}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            <span className="text-xs font-semibold" style={{ color: "var(--warning-text, #9a6700)" }}>
+              終わるまで、この画面を開いたままにしてください(閉じると止まります)。
+            </span>
+          </div>
+        ) : null}
+
+        {run.status === "error" ? (
+          <div className="flex flex-col gap-2">
+            <p className="badge-pill danger w-fit">
+              {run.step ? `工程${run.step}で止まりました: ` : ""}
+              {run.message}
+            </p>
+            {run.step && run.step > 1 ? (
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                使う画像{materialImageCount}枚のうち{materialImageCount - autoEditState.usedMaterialImageCount}
-                枚がサーバー上に見つからなかったため、残りで編集しています(消えた画像は✕で外して選び直してください)
+                終わった工程は残っています。「工程ごとに編集する」から、止まった工程の続きを進めることもできます。
               </span>
             ) : null}
           </div>
         ) : null}
 
-        {/* 終わった時に実績を記録できるよう、処理中かどうかに関わらず置いておく(処理中だけ表示される) */}
-        <WaitTime
-          task="auto-edit"
-          units={totalSeconds(keepRanges)}
-          active={isProcessing}
-          failed={autoEditState.status === "error"}
-        />
-
-        {autoEditState.status === "error" ? (
-          <p className="badge-pill danger w-fit">
-            {autoEditState.message}
-            {result ? "(前の案はそのまま使えます)" : ""}
-          </p>
-        ) : null}
-
-        {isProcessing ? null : (
+        {progress ? null : (
           <>
-            {/* 編集マニュアルの工程(1〜11)を、工程ごとのボタンで1つずつ進める画面。まとめて任せるより工程ごとの誤差が小さい */}
-            <div className="panel flex flex-col gap-2 p-4">
-              <span className="text-sm font-bold">工程ごとに編集する</span>
-              <span className="text-xs" style={{ color: "var(--muted)" }}>
-                編集マニュアルの工程(1〜11)を、1つずつボタンで進めます。工程ごとに結果を確かめられます。
-              </span>
-              <button type="button" className="btn-outline self-start px-4 py-2 text-sm" onClick={() => router.push("/create/steps")}>
-                工程ごとに編集する →
-              </button>
-            </div>
-            {hasReference ? (
+            {referenceCount > 0 ? (
               <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
             ) : (
               <div
@@ -321,9 +196,8 @@ export const AutoEditScreen: React.FC = () => {
                 id="auto-edit-title"
                 type="text"
                 value={project.autoEditTitle ?? ""}
-                onChange={(e) => changeTitle(e.target.value)}
+                onChange={(e) => update({ autoEditTitle: e.target.value })}
                 maxLength={MAX_TITLE_LENGTH}
-                disabled={isProcessing}
                 placeholder="例: 矯正した方がいい歯並びTOP5"
                 className="field-input w-full text-sm"
               />
@@ -331,221 +205,70 @@ export const AutoEditScreen: React.FC = () => {
 
             <div className="panel flex flex-col gap-2 p-4">
               <label htmlFor="auto-edit-length" className="text-sm font-bold">
-                完成動画の長さ
+                長さの上限(秒)
               </label>
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                使う範囲は合計{totalSeconds(keepRanges).toFixed(0)}秒です。短くしたい時は、要点を残して前置きや繰り返しから削ります。
+                お客様の指定が無ければ30秒のままにします。超えた時は、AIが前置きや繰り返しの場面を外します(工程12)。
+              </span>
+              <input
+                id="auto-edit-length"
+                type="number"
+                min={5}
+                max={180}
+                value={project.targetDurationSeconds ?? DEFAULT_TARGET_SECONDS}
+                onChange={(e) => update({ targetDurationSeconds: Number(e.target.value) || DEFAULT_TARGET_SECONDS })}
+                className="field-input text-sm"
+                style={{ width: 100 }}
+              />
+            </div>
+
+            <div className="panel flex flex-col gap-2 p-4">
+              <label htmlFor="auto-edit-zone" className="text-sm font-bold">
+                どこに出す動画か
+              </label>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                文字が隠れない範囲(セーフティゾーン)のチェックが変わります。広告の方が狭くなります。
               </span>
               <select
-                id="auto-edit-length"
-                value={project.targetDurationSeconds ?? ""}
-                disabled={isProcessing}
-                onChange={(e) => changeTargetDuration(e.target.value ? Number(e.target.value) : null)}
+                id="auto-edit-zone"
+                value={project.publishZone ?? "tiktok"}
+                onChange={(e) => update({ publishZone: e.target.value as "tiktok" | "ad" })}
                 className="field-input w-full text-sm"
               >
-                {TARGET_DURATION_OPTIONS.filter((seconds) => seconds === null || seconds < totalSeconds(keepRanges)).map((seconds) => (
-                  <option key={seconds ?? "auto"} value={seconds ?? ""}>
-                    {seconds === null ? "AIにまかせる(間を詰めるだけ)" : `${seconds}秒くらい`}
-                  </option>
-                ))}
+                <option value="tiktok">TikTok投稿</option>
+                <option value="ad">広告</option>
               </select>
             </div>
 
-            {/* テンプレート: よく見るバズ編集の型を選ぶと、Geminiがその型に沿って編集する(見た目の手本があればそちらが優先) */}
             <div className="panel flex flex-col gap-2 p-4">
-              <span className="text-sm font-bold">動画の型</span>
-              {/* スマホで縦に長くならないよう、型は名前だけの小さいボタンを2列に並べ、説明は選んだ型の分だけ下に出す */}
-              <div className="grid grid-cols-2 gap-2">
-                {[null, ...EDIT_TEMPLATES].map((template) => {
-                  const id = template?.id ?? null;
-                  const selected = templateId === id;
-                  return (
-                    <button
-                      key={id ?? "none"}
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => selectTemplate(id)}
-                      aria-pressed={selected}
-                      className="rounded-lg px-2 py-2.5 text-center text-sm font-medium"
-                      style={{
-                        border: `2px solid ${selected ? "var(--accent)" : "var(--color-neutral-solid-gray-420)"}`,
-                        background: selected ? "var(--accent-soft)" : "var(--background-elevated)",
-                      }}
-                    >
-                      {template ? template.label : "おまかせ"}
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="text-sm font-bold">工程ごとに編集する</span>
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                {findEditTemplate(templateId)?.description ?? "型を決めず、動画の中身に合わせてAIが自由に編集します"}
-                {hasReference ? "(見た目の手本と違う所は手本に合わせます)" : ""}
+                同じ工程1〜14を、1つずつボタンで進めます。工程ごとに結果を確かめながら作りたい時に使います。
               </span>
+              <button type="button" className="btn-outline self-start px-4 py-2 text-sm" onClick={() => router.push("/create/steps")}>
+                工程ごとに編集する →
+              </button>
             </div>
-
-            <MaterialImagesPanel
-              images={project.materialImages ?? []}
-              onChange={changeMaterialImages}
-              disabled={isProcessing}
-            />
-
-            {/* 普段は触らなくてよい設定は畳んでおく(動画編集に詳しくない人が、どこを触ればいいか迷わないように) */}
-            <details className="panel p-4">
-              <summary className="cursor-pointer text-sm font-bold">詳しい設定(画像の作り方・AIへの要望)</summary>
-              <div className="mt-3 flex flex-col gap-4">
-                <GenerateImagesField
-                  generateMissing={project.generateMissingImages ?? true}
-                  maxGenerated={project.maxGeneratedImages ?? DEFAULT_MAX_GENERATED_IMAGES}
-                  onChange={changeGenerate}
-                  disabled={isProcessing}
-                />
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <label htmlFor="auto-edit-request" className="text-sm font-bold">
-                      AIへの要望
-                    </label>
-                    <span className="badge-pill neutral">なくてもOK</span>
-                  </div>
-                  <span className="text-xs" style={{ color: "var(--muted)" }}>
-                    こうしてほしい所があれば書いてください。手本より優先します。
-                  </span>
-                  <textarea
-                    id="auto-edit-request"
-                    value={project.autoEditRequest ?? ""}
-                    onChange={(e) => changeAutoEditRequest(e.target.value)}
-                    maxLength={MAX_USER_TEXT_LENGTH}
-                    rows={3}
-                    disabled={isProcessing}
-                    placeholder={"例: 保証の話は日本の方に〇を付ける\n例: 強調の文字は黄色を多めに\n例: 最後に「保存してね」を出す"}
-                    className="field-input w-full text-sm"
-                  />
-                </div>
-              </div>
-            </details>
           </>
         )}
-
-        {result ? (
-          <div ref={resultRef} className="panel flex scroll-mt-4 flex-col gap-3 p-4">
-            <p className="text-sm">{result.plan.summary}</p>
-            {result.plan.referenceNotes ? (
-              <p className="text-xs" style={{ color: "var(--muted)" }}>
-                参考から読み取った編集の感じ: {result.plan.referenceNotes}
-              </p>
-            ) : null}
-            <ul className="flex flex-col gap-1 text-xs" style={{ color: "var(--muted)" }}>
-              <li>
-                {keepRanges.length}区間・{totalSeconds(keepRanges).toFixed(1)}秒 → {result.segments.length}
-                クリップ・{totalSeconds(result.segments).toFixed(1)}秒
-              </li>
-              {result.plan.cta ? <li>締めの一言: {result.plan.cta.text}</li> : null}
-              {result.plan.globalOverlays.length > 0 ? (
-                <li>ずっと出す文字: {result.plan.globalOverlays.map((o) => o.text).join(" / ")}</li>
-              ) : null}
-              <li>寄り(ズーム): {result.segments.filter((s) => s.zoom).length}か所</li>
-              <li>
-                強調テキスト: {result.segments.reduce((sum, s) => sum + (s.overlays?.length ?? 0), 0)}個
-              </li>
-              <li>
-                画像:{" "}
-                {result.segments.reduce((sum, s) => sum + (s.images?.length ?? 0), 0) +
-                  result.plan.globalImages.length}
-                か所
-                {result.plan.imageSources
-                  ? `(あなたの画像${result.plan.imageSources.material}種類・前に作った画像${result.plan.imageSources.library}種類・新しく作った画像${result.plan.imageSources.generated}種類)`
-                  : result.plan.generatedImageCount > 0
-                    ? `(うちAIで作った画像${result.plan.generatedImageCount}種類)`
-                    : ""}
-              </li>
-              <li>
-                効果音: {result.generatedClips.length}個
-              </li>
-            </ul>
-            {/* 冒頭の見出しは動画が見られるかを一番左右するので、AIの案から本人が選ぶ */}
-            {hookCandidates.length > 0 ? (
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-1 text-sm font-bold">冒頭の見出し(最初の3秒に大きく出す一言)</legend>
-                {[...hookCandidates, null].map((headline) => (
-                  <label key={headline ?? "none"} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="hook-choice"
-                      checked={selectedHook === headline}
-                      onChange={() => result && setHookChoice({ result, headline })}
-                    />
-                    <span>
-                      {headline ?? "出さない"}
-                      {headline !== null && headline === result.plan.hook?.headline ? (
-                        <span className="badge-pill neutral ml-2">AIのおすすめ</span>
-                      ) : null}
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-            ) : null}
-            <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-              この案を使うと、クリップ構成と効果音が置き換わり、付けてあったAI音声は外れます(BGMはそのまま)。
-            </p>
-          </div>
-        ) : null}
-
-        {/* 手直し: 全部作り直すと良かった所まで変わるため、前の案を土台に言われた所だけ直させる */}
-        {result && !isProcessing ? (
-          <div className="panel flex flex-col gap-2 p-4">
-            <label htmlFor="auto-edit-revision" className="text-sm font-bold">
-              ここを直してほしい
-            </label>
-            <span className="text-xs" style={{ color: "var(--muted)" }}>
-              直してほしい所だけを書くと、今の案を土台にその所だけ直します(ほかの所は変えません)。
-            </span>
-            <textarea
-              id="auto-edit-revision"
-              value={revisionText}
-              onChange={(e) => setRevisionText(e.target.value)}
-              maxLength={MAX_USER_TEXT_LENGTH}
-              rows={3}
-              placeholder={"例: 3位の画像を八重歯のイラストに替えて\n例: 20秒あたりの文字を小さく"}
-              className="field-input w-full text-sm"
-            />
-            <button
-              type="button"
-              onClick={handleRevise}
-              disabled={!revisionText.trim()}
-              className="btn-outline flex w-fit items-center gap-1 px-4 py-2 text-sm font-bold"
-            >
-              <SparkleIcon size={16} />
-              この内容で直す
-            </button>
-          </div>
-        ) : null}
       </main>
 
       <div className="bottom-action-bar">
-        {result && !isProcessing ? (
-          <>
-            <button type="button" onClick={applyPlan} className="btn-primary">
-              この案を使う
-            </button>
-            <button type="button" onClick={() => handleRun()} className="btn-outline">
-              別の案を作る
-            </button>
-          </>
-        ) : isProcessing ? (
-          // 処理中は、ほかの操作をさせずに「やめる」だけを出す(途中で別の画面へ進むと、結果が後から来て分かりにくいため)
-          <button type="button" onClick={handleCancel} className="btn-outline">
-            {isRevising ? "手直しをやめる" : "自動編集をやめる"}
+        {progress ? (
+          <button type="button" onClick={cancel} className="btn-outline">
+            自動編集をやめる
           </button>
         ) : (
-          <button type="button" onClick={() => handleRun()} className="btn-primary">
-            <SparkleIcon size={18} />
-            {autoEditState.status === "error" ? "もう一度自動編集する" : "AIで自動編集する"}
-          </button>
-        )}
-        {isProcessing ? null : (
-          <button type="button" onClick={goToEditorWithoutChanges} className="btn-outline">
-            <EditIcon size={18} />
-            AIを使わず自分で編集する
-          </button>
+          <>
+            <button type="button" onClick={() => void start()} className="btn-primary">
+              <SparkleIcon size={18} />
+              {run.status === "error" ? "もう一度自動編集する" : "AIで自動編集する"}
+            </button>
+            <button type="button" onClick={() => router.push("/edit")} className="btn-outline">
+              <EditIcon size={18} />
+              AIを使わず自分で編集する
+            </button>
+          </>
         )}
       </div>
     </>
