@@ -8,7 +8,7 @@ import { getStandardVideoDurationInFrames } from "@video/templates/standard/dura
 import { VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
 import { buildStandardVideoProps, loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import type { EditStepsRecord } from "@/lib/editSteps/logic";
-import { CHECK_STEP, runEditStep } from "@/lib/editSteps/client";
+import { CHECK_STEP, MAX_AUTO_RETRIES, RETRY_STEP_BY_CHECK, runEditStep, runStepsFrom, stepToRetry, type AutoRunProgress } from "@/lib/editSteps/client";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
 import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
@@ -28,6 +28,8 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
   const [running, setRunning] = useState<number | null>(null);
   const [error, setError] = useState<{ step: number; message: string } | null>(null);
   const [bgmUploading, setBgmUploading] = useState(false);
+  /** 工程14から、引っかかった所を直すために後ろの工程を自動で流している時の進み具合。 */
+  const [fixing, setFixing] = useState<AutoRunProgress | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
@@ -41,7 +43,9 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
 
   // 工程の番号が無い・まだ前の工程が終わっていない工程を開いた時は、進められる工程のページへ移る
   const reachable = (step: number) => step === 1 || Boolean(record.snapshots[step - 1]);
-  const redirectTo = hasChecked && project && (pageStep === undefined || !reachable(pageStep)) ? nextStep : null;
+  // 工程14から後ろの工程を自動で流している間は、途中で工程14の結果が消えても、このページのままにする
+  const redirectTo =
+    hasChecked && project && running === null && (pageStep === undefined || !reachable(pageStep)) ? nextStep : null;
   useEffect(() => {
     if (redirectTo !== null) router.replace(`/create/steps/${redirectTo}`);
   }, [redirectTo, router]);
@@ -104,16 +108,42 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
     }
   };
 
+  /**
+   * 工程 from から工程14までを自動で流す(工程14で引っかかった項目を直す時)。1つずつ戻って進め直さなくてよいように。
+   * maxRetries>0 なら、まだ直す見込みがある項目が残る間は、その工程から流し直す。
+   */
+  const runFrom = async (from: number, maxRetries: number) => {
+    setRunning(CHECK_STEP);
+    setError(null);
+    try {
+      await runStepsFrom(project, from, {
+        maxRetries,
+        onProgress: setFixing,
+        onStep: (next) => {
+          setProject(next);
+          saveProject(next);
+        },
+      });
+    } catch (caught) {
+      setError({ step: CHECK_STEP, message: toFriendlyErrorMessage(caught, "やり直せませんでした") });
+    } finally {
+      setRunning(null);
+      setFixing(null);
+    }
+  };
+
   const checks = record.results[CHECK_STEP]?.checks ?? [];
   const reviewed = record.reviewed ?? {};
-  const ngCount = checks.filter((item) => item.status === "ng").length;
+  // 要修正の項目も、目で見て問題なければ「このままでよい」にチェックすれば進める
+  const ngCount = checks.filter((item) => item.status === "ng" && !reviewed[item.id]).length;
+  const fixFrom = stepToRetry(checks.filter((item) => !reviewed[item.id]));
   const toConfirm = checks.filter((item) => item.status !== "ok");
   const unreviewed = checks.filter((item) => item.status === "review" && !reviewed[item.id]).length;
   const canFinish = Boolean(record.results[CHECK_STEP]) && ngCount === 0 && unreviewed === 0 && running === null;
   const finishHint = !record.results[CHECK_STEP]
     ? "「実行」を押して、チェック項目を確かめてください"
     : ngCount > 0
-      ? `直す必要がある項目が${ngCount}つあります`
+      ? `直す必要がある項目が${ngCount}つあります。自動で直すか、問題なければ「このままでよい」にチェックしてください`
       : unreviewed > 0
         ? `目で確かめる項目があと${unreviewed}つあります`
         : "すべてのチェック項目を満たしました";
@@ -277,30 +307,60 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
           </div>
         ) : null}
         {/* 自動で満たしている項目(○)は出さず、確かめてほしい物(目で確かめる項目と、直す必要がある項目)だけを出す */}
+        {step === CHECK_STEP && fixing ? (
+          <p className="text-sm font-semibold">
+            工程{fixing.step} {fixing.title} を実行中…{fixing.attempt > 0 ? `(やり直し${fixing.attempt}回目)` : ""}
+          </p>
+        ) : null}
+        {step === CHECK_STEP && fixFrom !== null && running === null ? (
+          <button type="button" className="btn-primary self-start px-4 py-2 text-sm" onClick={() => void runFrom(fixFrom, MAX_AUTO_RETRIES)}>
+            引っかかった所を自動で直す(工程{fixFrom}から工程14まで)
+          </button>
+        ) : null}
         {step === CHECK_STEP && toConfirm.length > 0 ? (
-          <ul className="flex flex-col gap-1.5 text-xs">
+          <ul className="flex flex-col gap-2 text-xs">
             <span className="text-sm font-semibold">確かめてほしいこと</span>
-            {toConfirm.map((item) => (
-              <li key={item.id} className="flex items-start gap-2">
-                {item.status === "review" ? (
+            {toConfirm.map((item) => {
+              const retryStep = RETRY_STEP_BY_CHECK[item.id];
+              return (
+                <li key={item.id} className="flex items-start gap-2">
                   <input
                     type="checkbox"
-                    aria-label={`${item.label}を確かめた`}
+                    aria-label={item.status === "ng" ? `${item.label}はこのままでよい` : `${item.label}を確かめた`}
                     checked={Boolean(reviewed[item.id])}
                     onChange={() => toggleReviewed(item.id)}
+                    disabled={running !== null}
                     style={{ marginTop: 2 }}
                   />
-                ) : (
-                  <span className="font-bold" style={{ color: "var(--danger-text, crimson)", whiteSpace: "nowrap" }}>
-                    要修正
+                  <span className="flex flex-col gap-1">
+                    <span className="font-semibold">
+                      {item.status === "ng" ? (
+                        <span className="mr-1" style={{ color: "var(--danger-text, crimson)" }}>
+                          要修正
+                        </span>
+                      ) : null}
+                      {item.label}
+                    </span>
+                    <span style={{ color: "var(--muted)" }}>{item.detail}</span>
+                    {item.status === "ng" ? (
+                      <span className="flex flex-wrap items-center gap-2">
+                        {retryStep ? (
+                          <button
+                            type="button"
+                            className="btn-outline px-2 py-0.5 text-xs"
+                            disabled={running !== null}
+                            onClick={() => void runFrom(retryStep, 0)}
+                          >
+                            工程{retryStep}からやり直す
+                          </button>
+                        ) : null}
+                        <span style={{ color: "var(--muted)" }}>見て問題なければ、左にチェック(このままでよい)</span>
+                      </span>
+                    ) : null}
                   </span>
-                )}
-                <span className="flex flex-col">
-                  <span className="font-semibold">{item.label}</span>
-                  <span style={{ color: "var(--muted)" }}>{item.detail}</span>
-                </span>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         ) : null}
         {error?.step === step ? <p className="badge-pill danger w-fit">{error.message}</p> : null}

@@ -119,27 +119,41 @@ export const stepToRetry = (checks: CheckItem[]): number | null => {
 
 export type AutoRunProgress = { step: number; title: string; attempt: number };
 
+type RunOptions = {
+  onProgress?: (progress: AutoRunProgress) => void;
+  onStep?: (project: VideoProject) => void;
+  signal?: AbortSignal;
+  /** チェック項目を満たすまでやり直す回数の上限(0なら、やり直さない)。 */
+  maxRetries?: number;
+};
+
 /**
- * 工程1〜14を自動で順に流す(「AIで自動編集する」)。工程ごとの編集と同じ工程・同じチェック項目を使う。
- * 工程14のチェックで「要修正」が出て、やり直すと直る見込みがある時は、その工程から流し直す(MAX_AUTO_RETRIES回まで)。
+ * 工程 from から工程14までを自動で順に流す。
+ * 工程14のチェックで「要修正」が出て、やり直すと直る見込みがある時は、その工程から流し直す(maxRetries回まで)。
  * 1工程終わるごとに onStep で途中のプロジェクトを渡す(保存して、画面を閉じても途中から見られるように)。
  */
-export const runAllSteps = async (
+export const runStepsFrom = async (
   project: VideoProject,
-  options: { onProgress?: (progress: AutoRunProgress) => void; onStep?: (project: VideoProject) => void; signal?: AbortSignal } = {}
+  from: number,
+  options: RunOptions = {}
 ): Promise<{ project: VideoProject; retries: number }> => {
-  let current = { ...project, editSteps: { results: {}, snapshots: {}, reviewed: {} } } as VideoProject;
-  let from = 1;
+  const maxRetries = options.maxRetries ?? MAX_AUTO_RETRIES;
+  let current = project;
+  let start = from;
   let retries = 0;
   for (;;) {
-    for (let step = from; step <= CHECK_STEP; step++) {
+    for (let step = start; step <= CHECK_STEP; step++) {
       options.onProgress?.({ step, title: EDIT_STEPS[step - 1].title, attempt: retries });
       current = await runEditStep(current, step, options.signal);
       options.onStep?.(current);
     }
     const retry = stepToRetry(current.editSteps?.results[CHECK_STEP]?.checks ?? []);
-    if (retry === null || retries >= MAX_AUTO_RETRIES) return { project: current, retries };
+    if (retry === null || retries >= maxRetries) return { project: current, retries };
     retries += 1;
-    from = retry;
+    start = retry;
   }
 };
+
+/** 工程1〜14を自動で順に流す(「AIで自動編集する」)。工程ごとの編集と同じ工程・同じチェック項目を使う。 */
+export const runAllSteps = (project: VideoProject, options: RunOptions = {}) =>
+  runStepsFrom({ ...project, editSteps: { results: {}, snapshots: {}, reviewed: {} } }, 1, options);
