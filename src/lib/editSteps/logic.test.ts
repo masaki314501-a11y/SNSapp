@@ -12,7 +12,9 @@ import {
   smoothJoins,
   splitByCaptions,
   trimBeforeSpeech,
+  placeFrameFills,
   FACE_TARGET_Y_PERCENT,
+  FRAME_FILL_X_PERCENT,
 } from "./logic";
 
 let counter = 0;
@@ -161,3 +163,35 @@ describe("工程ごとの編集(機械でやる工程)", () => {
     expect(segments[1].zoom?.scale).toBe(1.1);
   });
 });
+
+describe("枠に項目名を入れる(工程10・12)", () => {
+  const objects = buildObjects({ title: "医療用語5選", frameCount: 3, captionTopPercent: 55, accentColor: "#FF3366" });
+  const a = seg(0, 2, "a");
+  const b = seg(2, 5, "b");
+  const c = seg(5, 7, "c");
+  const base = { framing: null, captionYPercent: 50, ...objects };
+  const fills = [
+    { frame: 1, key: "b", sourceSeconds: 2, label: "糖尿病" },
+    { frame: 2, key: "c", sourceSeconds: 5, label: "静脈注射" },
+  ];
+  const labelsOf = (state: ReturnType<typeof placeFrameFills>) => state.globalOverlays.filter((o) => o.xPercent === FRAME_FILL_X_PERCENT);
+
+  it("項目を言い始めたクリップの時刻から、その番号の枠の高さに出す", () => {
+    const placed = labelsOf(placeFrameFills({ ...base, segments: [a, b, c], frameFills: fills }));
+    expect(placed.map((o) => [o.text, o.startOffsetSeconds])).toEqual([["糖尿病", 2], ["静脈注射", 5]]);
+    expect(placed[0].yPercent).toBe(objects.globalShapes[0].yPercent);
+    expect(placed[1].yPercent).toBe(objects.globalShapes[1].yPercent);
+  });
+
+  it("場面を外した後に呼び直すと、時刻を合わせ直し、項目名は二重にならない", () => {
+    const first = placeFrameFills({ ...base, segments: [a, b, c], frameFills: fills });
+    const again = placeFrameFills({ ...first, segments: [b, c] });
+    expect(labelsOf(again).map((o) => [o.text, o.startOffsetSeconds])).toEqual([["糖尿病", 0], ["静脈注射", 3]]);
+  });
+
+  it("言い始めのクリップが外された時は、その後の最初のクリップから出す", () => {
+    const placed = labelsOf(placeFrameFills({ ...base, segments: [a, c], frameFills: fills }));
+    expect(placed.map((o) => [o.text, o.startOffsetSeconds])).toEqual([["糖尿病", 2], ["静脈注射", 2]]);
+  });
+});
+

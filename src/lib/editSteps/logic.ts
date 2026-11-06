@@ -34,7 +34,12 @@ export type StepState = {
   bgm?: ProjectBgm | null;
   /** 基本テロップの見た目(工程10でAIが手本とクセ帳を見て決める)。無ければプロジェクトの設定のまま。 */
   captionLook?: { fontFamily: CaptionFontFamily; captionStyle: CaptionStyle; primaryColor: string } | null;
+  /** ランキング・「〇選」の枠に入れる項目(工程10でAIが決める)。場面を外しても出る時刻を合わせ直せるよう、字幕のクリップで覚える。 */
+  frameFills?: FrameFill[];
 };
+
+/** 枠に入れる項目。frame は枠の番号(上から1〜)、key はその項目を言い始めるクリップ、sourceSeconds はその元の動画での時刻。 */
+export type FrameFill = { frame: number; key: string; sourceSeconds: number; label: string };
 
 /** 工程の結果(先方の確認用の説明)。工程12(チェック)は、チェック項目ごとの結果も持つ。 */
 export type StepResult = { note: string; details?: string[]; checks?: CheckItem[]; at: string };
@@ -453,3 +458,57 @@ export const emphasisEffects = (segments: ProjectSegment[]): { segments: Project
   });
   return { segments: result, count };
 };
+
+/** 枠の中の項目名の横位置(%)。左の番号の右から、枠の右端までの真ん中。 */
+export const FRAME_FILL_X_PERCENT = FRAME_X_PERCENT + 3;
+/** 枠の中で項目名に使える幅(px。横1080pxの画面)。 */
+const FRAME_FILL_WIDTH_PX = ((FRAME_WIDTH_PERCENT - 8) / 100) * 1080;
+
+/**
+ * ランキング・「〇選」の枠に、項目名を入れる(その項目を言い始めた時から最後まで出したままにする)。
+ * 枠と番号は工程8で作る。項目名は字幕ができてから(工程10で)決まるので、ここで入れる。
+ * 場面を外した後(工程12)も呼び直して、出る時刻を合わせ直す(前に入れた項目名は入れ直す)。
+ */
+export const placeFrameFills = (state: StepState): StepState => {
+  const fills = state.frameFills ?? [];
+  const isFill = (overlay: TextOverlay) => overlay.xPercent === FRAME_FILL_X_PERCENT && fills.some((fill) => fill.label === overlay.text);
+  const base = state.globalOverlays.filter((overlay) => !isFill(overlay));
+  if (fills.length === 0) return { ...state, globalOverlays: base };
+  const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
+  // 完成の動画で、各クリップが始まる時刻
+  const starts = new Map<string, number>();
+  let t = 0;
+  for (const segment of state.segments) {
+    starts.set(segment.key, t);
+    t += segment.durationInSeconds;
+  }
+  const startOf = (fill: FrameFill): number | undefined => {
+    const direct = starts.get(fill.key);
+    if (direct !== undefined) return direct;
+    // 言い始めのクリップが外された時は、その後に来る最初のクリップから出す
+    const after = state.segments.find((segment) => segment.startFromSeconds >= fill.sourceSeconds);
+    return after ? starts.get(after.key) : undefined;
+  };
+  const labels: TextOverlay[] = [];
+  for (const fill of fills) {
+    const rect = rects[fill.frame - 1];
+    const start = startOf(fill);
+    if (!rect || start === undefined) continue;
+    const number = base.find((overlay) => overlay.text === String(fill.frame) && Math.abs(overlay.yPercent - rect.yPercent) < 0.01);
+    const heightPx = (rect.heightPercent / 100) * 1920;
+    const chars = Math.max(1, [...fill.label].length);
+    labels.push({
+      text: fill.label,
+      startOffsetSeconds: round2(start),
+      xPercent: FRAME_FILL_X_PERCENT,
+      yPercent: rect.yPercent,
+      fontSizePx: Math.max(24, Math.min(56, Math.round(heightPx * 0.42), Math.floor(FRAME_FILL_WIDTH_PX / chars))),
+      color: number?.color ?? "#111111",
+      fontFamily: number?.fontFamily,
+      rotationDeg: 0,
+      animation: "pop",
+    });
+  }
+  return { ...state, globalOverlays: [...base, ...labels] };
+};
+

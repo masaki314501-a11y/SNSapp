@@ -20,7 +20,9 @@ import {
   removeRanges,
   smoothJoins,
   splitByCaptions,
+  placeFrameFills,
   trimBeforeSpeech,
+  type FrameFill,
   type StepState,
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
@@ -237,23 +239,35 @@ export async function POST(request: Request) {
                 .map((value) => value.toUpperCase())
             ),
           ];
-          const { picks, look: chosen, lookReason } = await pickEmphasis({
+          const { picks, look: chosen, lookReason, frameItems } = await pickEmphasis({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
             objectColors,
+            frameCount: state.globalShapes.filter((shape) => shape.kind === "rect").length,
             references: await resolveReferences(),
           });
           const keys = new Set(picks.map((pick) => withCaption[pick.index].key));
+          // ランキング・「〇選」の枠に、項目名を入れる(言い始めた時から最後まで出す)
+          const frameFills: FrameFill[] = frameItems.map((item) => ({
+            frame: item.frame,
+            key: withCaption[item.index].key,
+            sourceSeconds: withCaption[item.index].startFromSeconds,
+            label: item.label,
+          }));
           const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
           return {
-            state: {
+            state: placeFrameFills({
               ...state,
               segments: applyEmphasis(segments, keys, chosen.emphasis),
               captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
-            },
-            note: `${picks.length}個のテロップを強調テロップにしました`,
+              frameFills,
+            }),
+            note: `${picks.length}個のテロップを強調テロップにしました${frameFills.length > 0 ? `。枠${frameFills.length}個に項目名を入れました` : ""}`,
             details: [
+              ...(frameFills.length > 0
+                ? [`枠に入れた項目: ${[...frameFills].sort((a, b) => a.frame - b.frame).map((fill) => `${fill.frame}「${fill.label}」`).join("・")}`]
+                : []),
               `基本テロップの見た目: 書体「${fontLabel(chosen.base.fontFamily)}」・${chosen.base.style === "outline" ? "縁取り" : "帯"}${chosen.base.accentColor}`,
               `強調テロップの見た目: 書体「${fontLabel(chosen.emphasis.fontFamily)}」・文字${chosen.emphasis.textColor}・帯${chosen.emphasis.bandColor ?? "なし"}`,
               lookReason,
@@ -289,7 +303,8 @@ export async function POST(request: Request) {
           const removeKeys = new Set(removals.map((removal) => captioned[removal.index].key));
           const kept = segments.filter((segment) => !removeKeys.has(segment.key));
           return {
-            state: { ...state, segments: kept },
+            // 場面を外すと後ろの時刻がずれるので、枠の項目名が出る時刻を合わせ直す
+            state: placeFrameFills({ ...state, segments: kept }),
             note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。「やり直す」を押すか、編集画面で短くしてください)` : ""}`,
             details: removals.map((removal) => `「${captioned[removal.index].caption.replace(/\n/g, "")}」 ${removal.reason}`),
           };

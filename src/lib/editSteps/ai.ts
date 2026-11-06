@@ -451,7 +451,7 @@ export const decideObjects = async (input: {
 };
 
 /** 工程10の指示文。 */
-export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "") => `
+export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "", frameCount = 0) => `
 次は、ショート動画の字幕を順に並べたものです(番号: 字幕)。
 ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`).join("\n")}
 
@@ -470,6 +470,19 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`
 - 色は #RRGGBB で書く。動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。書体は基本と強調で2つまで(チェック項目)。
 ${objectColorsLine}
 
+${
+  frameCount >= 2
+    ? `
+画面の左には、項目を順に埋めていく枠が${frameCount}個、上から1〜${frameCount}の番号付きで並んでいます。挙げていく項目ごとに、
+- frame: 入れる枠の番号(1〜${frameCount})。ランキングを下の順位から発表する時は、順位と同じ番号の枠に入れる(5位なら5)。それ以外は挙げた順に1から。
+- index: その項目を言い始める字幕の番号(上の一覧の番号)。項目名が出てくる字幕。
+- label: 枠に入れる短い言葉。項目名を、そのまま全角8文字以内で(説明や答えは入れない)。
+を frameItems で答えてください。項目が枠より少なければ、ある分だけ答える。
+`
+    : `
+この動画には項目を埋める枠が無いので、frameItems は空の配列で答えてください。
+`
+}
 選んだ字幕の番号(picks)と、それぞれを選んだ理由(reasons。picksと同じ順)、見た目をそう決めた理由(lookReason)を答えてください。
 `.trim();
 
@@ -486,8 +499,16 @@ export const pickEmphasis = async (input: {
   captions: string[];
   /** 工程8で使った色(タイトル・枠。白・黒は除く)。字幕の色と合わせて3色以内にするため。 */
   objectColors?: string[];
+  /** 工程8で並べた、項目を埋める枠の数(枠が無ければ0)。 */
+  frameCount?: number;
   references?: StyleReferenceFile[];
-}): Promise<{ picks: { index: number; reason: string }[]; look: CaptionLook; lookReason: string }> => {
+}): Promise<{
+  picks: { index: number; reason: string }[];
+  look: CaptionLook;
+  lookReason: string;
+  /** 枠に入れる項目(index は0始まりの字幕の番号)。 */
+  frameItems: { frame: number; index: number; label: string }[];
+}> => {
   const { captions } = input;
   const examples = await exampleParts(input.absolutePath, input.mimeType);
   const guide = await stepGuidePart();
@@ -498,7 +519,7 @@ export const pickEmphasis = async (input: {
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine) }],
+    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine, input.frameCount ?? 0) }],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -523,8 +544,16 @@ export const pickEmphasis = async (input: {
           required: ["fontFamily", "textColor", "bandColor"],
         },
         lookReason: { type: Type.STRING },
+        frameItems: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: { frame: { type: Type.INTEGER }, index: { type: Type.INTEGER }, label: { type: Type.STRING } },
+            required: ["frame", "index", "label"],
+          },
+        },
       },
-      required: ["picks", "reasons", "baseLook", "emphasisLook", "lookReason"],
+      required: ["picks", "reasons", "baseLook", "emphasisLook", "lookReason", "frameItems"],
     },
     parse: z.object({
       picks: z.array(z.number().int()),
@@ -532,6 +561,7 @@ export const pickEmphasis = async (input: {
       baseLook: z.object({ fontFamily: z.enum(FONT_VALUES), style: z.enum(["outline", "pill"]), accentColor: color }),
       emphasisLook: z.object({ fontFamily: z.enum(FONT_VALUES), textColor: color, bandColor: nullableColor }),
       lookReason: z.string(),
+      frameItems: z.array(z.object({ frame: z.number().int(), index: z.number().int(), label: z.string() })).default([]),
     }),
   });
   const seen = new Set<number>();
@@ -541,7 +571,17 @@ export const pickEmphasis = async (input: {
     seen.add(index);
     return [{ index, reason: result.reasons[i] ?? "" }];
   });
-  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason };
+  // 枠に入れる項目: 番号が範囲外・同じ枠に2つ目・字幕の番号が範囲外の物は外す。長すぎる言葉は8文字で切る
+  const frames = new Set<number>();
+  const frameItems = result.frameItems.flatMap((item) => {
+    const index = item.index - 1;
+    const label = [...item.label.replace(/\s+/g, "")].slice(0, 8).join("");
+    if (item.frame < 1 || item.frame > (input.frameCount ?? 0) || frames.has(item.frame)) return [];
+    if (index < 0 || index >= captions.length || !label) return [];
+    frames.add(item.frame);
+    return [{ frame: item.frame, index, label }];
+  });
+  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason, frameItems };
 };
 
 /** 工程12(チェック)の誤字・脱字の確認の指示文。 */
