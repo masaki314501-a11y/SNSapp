@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ステップ3 見た目の手本を選ぶ(なくてもよい)</title><style>
+:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; --warm:#FFF6E5; --warm-line:#F0D9A8; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; --warm:#2E2717; --warm-line:#5A4A26; color-scheme:dark; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.85; }
+.wrap { max-width:760px; margin:0 auto; padding:16px 16px 72px; }
+nav.top { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:14px; padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+a { color:var(--accent); }
+h1 { font-size:25px; line-height:1.45; margin:6px 0 14px; }
+h2 { font-size:20px; margin:32px 0 10px; padding-bottom:5px; border-bottom:2px solid var(--accent); }
+h3 { font-size:17px; margin:22px 0 8px; }
+p { margin:0 0 12px; }
+ul, ol { margin:0 0 16px; padding-left:1.5em; } li { margin:4px 0; }
+ol.steps { list-style:none; padding:0; counter-reset:n; }
+ol.steps li { counter-increment:n; position:relative; padding:8px 0 8px 40px; border-bottom:1px dashed var(--line); margin:0; }
+ol.steps li::before { content:counter(n); position:absolute; left:0; top:8px; width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--bg); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; line-height:1; }
+figure { margin:12px 0 20px; } figure img { display:block; max-width:min(100%, 360px); height:auto; border:1px solid var(--line); border-radius:12px; }
+figcaption { font-size:13px; color:var(--muted); margin-top:4px; }
+.tbl { overflow-x:auto; margin:0 0 16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--line); }
+th { background:var(--soft); font-size:14px; white-space:nowrap; } tr:last-child td { border-bottom:0; }
+.note { background:var(--warm); border:1px solid var(--warm-line); border-radius:10px; padding:12px 14px 2px; margin:0 0 16px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; margin:0 0 20px; }
+.cards a { display:block; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-decoration:none; color:var(--fg); }
+.cards a:hover { border-color:var(--accent); }
+.cards small { display:block; color:var(--accent); font-weight:700; font-size:13px; }
+.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; font-size:13px; }
+.dots a, .dots span { display:inline-block; min-width:30px; text-align:center; padding:2px 8px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
+.dots span { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:700; }
+.pager { display:flex; justify-content:space-between; gap:12px; margin-top:36px; padding-top:16px; border-top:1px solid var(--line); }
+.pager a { display:inline-block; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); text-decoration:none; font-weight:700; }
+</style></head>
+<body><div class="wrap"><nav class="top"><a href="/">← アプリへ戻る</a><a href="/docs/manual/index.html">マニュアルのトップ</a><a href="/docs/manual/trouble.html">困ったとき</a><a href="/docs/manual/glossary.html">用語集</a></nav>
+<div class="dots"><a href="/docs/manual/screen-1.html">ステップ1</a><a href="/docs/manual/screen-2.html">ステップ2</a><span>ステップ3</span><a href="/docs/manual/screen-4.html">ステップ4</a><a href="/docs/manual/screen-5.html">ステップ5</a><a href="/docs/manual/screen-6.html">ステップ6</a><a href="/docs/manual/screen-7.html">ステップ7</a></div><h1>ステップ3 見た目の手本を選ぶ(なくてもよい)</h1>
+<p><strong>やること:</strong> まねしたい投稿があれば、そのスクショか動画を渡します。AIが色・文字の感じ・字幕の位置を、その雰囲気に寄せます。特になければ、左下の <strong>「手本なしで進む」</strong> を押します。</p>
+<figure><img src="/docs/manual/img/04.png" alt="見た目の手本を選ぶ画面" loading="lazy"><figcaption>見た目の手本を選ぶ画面</figcaption></figure>
+<ol class="steps"><li><strong>「手本の画像・動画を選ぶ」</strong> を押し、スクショか動画を選ぶ(10個まで、まとめて選べます)。</li><li>AIが手本を読み取るまで、少し待つ。</li><li><strong>「自動編集へ進む」</strong> を押す。</li></ol>
+<div class="note"><p>コツ: 同じ人の投稿を何枚か入れると、たまたま1枚に写っていた色ではなく、その人のいつもの編集のクセをまねします。「工程ごとに編集する」で進める時も、ここで選んだ手本を一番優先して使います。</p></div><div class="pager"><a href="/docs/manual/screen-2.html">← ステップ2 使う範囲を選ぶ</a><a href="/docs/manual/screen-4.html">ステップ4 AIで自動編集する →</a></div>
+</div></body></html>

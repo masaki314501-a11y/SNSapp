@@ -1,31 +1,52 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工程ごとの編集</title><style>
-:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; }
-@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; color-scheme:dark; } }
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工程ごとに編集する</title><style>
+:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; --warm:#FFF6E5; --warm-line:#F0D9A8; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; --warm:#2E2717; --warm-line:#5A4A26; color-scheme:dark; } }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.8; }
-.wrap { max-width:820px; margin:0 auto; padding:20px 16px 64px; }
-nav.top { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:14px; padding-bottom:12px; border-bottom:1px solid var(--line); margin-bottom:20px; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.85; }
+.wrap { max-width:760px; margin:0 auto; padding:16px 16px 72px; }
+nav.top { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:14px; padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:16px; }
 a { color:var(--accent); }
-h1 { font-size:26px; line-height:1.4; margin:8px 0 16px; }
-h2 { font-size:21px; margin:40px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--accent); scroll-margin-top:12px; }
-h3 { font-size:17px; margin:24px 0 8px; }
+h1 { font-size:25px; line-height:1.45; margin:6px 0 14px; }
+h2 { font-size:20px; margin:32px 0 10px; padding-bottom:5px; border-bottom:2px solid var(--accent); }
+h3 { font-size:17px; margin:22px 0 8px; }
 p { margin:0 0 12px; }
-ul, ol { margin:0 0 14px; padding-left:1.5em; } li { margin:3px 0; }
-figure { margin:12px 0 20px; } figure img { display:block; max-width:100%; max-height:640px; height:auto; border:1px solid var(--line); border-radius:10px; }
+ul, ol { margin:0 0 16px; padding-left:1.5em; } li { margin:4px 0; }
+ol.steps { list-style:none; padding:0; counter-reset:n; }
+ol.steps li { counter-increment:n; position:relative; padding:8px 0 8px 40px; border-bottom:1px dashed var(--line); margin:0; }
+ol.steps li::before { content:counter(n); position:absolute; left:0; top:8px; width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--bg); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; line-height:1; }
+figure { margin:12px 0 20px; } figure img { display:block; max-width:min(100%, 360px); height:auto; border:1px solid var(--line); border-radius:12px; }
 figcaption { font-size:13px; color:var(--muted); margin-top:4px; }
 .tbl { overflow-x:auto; margin:0 0 16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
 table { border-collapse:collapse; width:100%; font-size:15px; }
 th, td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--line); }
-th { background:var(--soft); font-size:14px; } tr:last-child td { border-bottom:0; }
-.toc { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:0 0 20px; font-size:15px; }
-.toc ol { margin:4px 0 0; }
-.pager { display:flex; justify-content:space-between; gap:12px; margin-top:32px; padding-top:16px; border-top:1px solid var(--line); font-size:15px; }
-.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; font-size:13px; }
-.dots a, .dots span { display:inline-block; min-width:28px; text-align:center; padding:2px 6px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
+th { background:var(--soft); font-size:14px; white-space:nowrap; } tr:last-child td { border-bottom:0; }
+.note { background:var(--warm); border:1px solid var(--warm-line); border-radius:10px; padding:12px 14px 2px; margin:0 0 16px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; margin:0 0 20px; }
+.cards a { display:block; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-decoration:none; color:var(--fg); }
+.cards a:hover { border-color:var(--accent); }
+.cards small { display:block; color:var(--accent); font-weight:700; font-size:13px; }
+.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; font-size:13px; }
+.dots a, .dots span { display:inline-block; min-width:30px; text-align:center; padding:2px 8px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
 .dots span { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:700; }
+.pager { display:flex; justify-content:space-between; gap:12px; margin-top:36px; padding-top:16px; border-top:1px solid var(--line); }
+.pager a { display:inline-block; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); text-decoration:none; font-weight:700; }
 </style></head>
-<body><div class="wrap"><nav class="top"><a href="/">← アプリのトップへ</a><a href="/docs/manual/index.html">使い方マニュアル</a><a href="/docs/manual/steps.html">工程ごとの編集</a><a href="/docs/edit-steps-summary.html">工程ごとの指示文</a></nav>
-<h1>工程ごとの編集</h1>
-<p>工程ごとに編集する画面の、工程1〜14の説明です。下の一覧から、知りたい工程のページを開いてください。画面でも、1つの工程が1ページになっていて、「次の工程へ」で次のページへ進みます。</p><ol><li><a href="/docs/manual/step-1.html">工程1 メイン映像を配置する</a></li><li><a href="/docs/manual/step-2.html">工程2 話し始める前の不要な部分を削除する</a></li><li><a href="/docs/manual/step-3.html">工程3 言い間違いや言葉に詰まった部分をカットする</a></li><li><a href="/docs/manual/step-4.html">工程4 説明の間にある長い無音部分を削除する</a></li><li><a href="/docs/manual/step-5.html">工程5 話の流れが自然になるように前後の映像をつなぐ</a></li><li><a href="/docs/manual/step-6.html">工程6 映像を拡大し、人物の位置を整える</a></li><li><a href="/docs/manual/step-7.html">工程7 テロップの位置を決める</a></li><li><a href="/docs/manual/step-8.html">工程8 必要なオブジェクトを作成する</a></li><li><a href="/docs/manual/step-9.html">工程9 テロップを入力する</a></li><li><a href="/docs/manual/step-10.html">工程10 強調したい言葉を違うテロップに変換する</a></li><li><a href="/docs/manual/step-11.html">工程11 強調テロップに効果音をつけ、少し人物を拡大する</a></li><li><a href="/docs/manual/step-12.html">工程12 決めた長さに収める(長い時だけ)</a></li><li><a href="/docs/manual/step-13.html">工程13 BGMを入れる(なくてもよい)</a></li><li><a href="/docs/manual/step-14.html">工程14 チェック項目を確かめる</a></li></ol>
+<body><div class="wrap"><nav class="top"><a href="/">← アプリへ戻る</a><a href="/docs/manual/index.html">マニュアルのトップ</a><a href="/docs/manual/trouble.html">困ったとき</a><a href="/docs/manual/glossary.html">用語集</a></nav>
+<h1>工程ごとに編集する</h1>
+<div class="note"><p>編集マニュアルの作業(工程1〜14)を、1つずつボタンで進める方法です。まとめてAIに任せるより仕上がりのぶれが小さく、工程ごとに結果を確かめながら作れます。</p></div>
+<p><strong>開き方:</strong> ステップ4(AIで自動編集)の画面で、 <strong>「工程ごとに編集する」</strong> を押します。</p>
+<figure><img src="/docs/manual/img/11.png" alt="工程ごとに編集する画面" loading="lazy"><figcaption>工程ごとに編集する画面</figcaption></figure>
+<h2>進め方</h2>
+<ol class="steps"><li>1つの工程が1ページになっています。ページの <strong>「実行」</strong> を押す。</li><li>上の動画と、「何をしたか」の結果を見る。</li><li>良ければ <strong>「次の工程へ」</strong> を押す。気に入らなければ <strong>「やり直す」</strong> を押す(その工程から作り直します)。</li><li>工程14まで進んで、「確かめてほしいこと」に全部チェックが付くと、 <strong>「生成完了」</strong> を押せるようになる。押すとステップ5(強調する字幕を選ぶ)へ進みます。</li></ol>
+<div class="note"><p>「AI」の印がある工程は、AIの料金と数十秒の待ち時間がかかります。「前の工程へ」で前のページに戻れます。</p></div>
+<figure><img src="/docs/manual/img/12.png" alt="工程の結果(工程8)" loading="lazy"><figcaption>工程の結果(工程8)</figcaption></figure>
+<h2>工程の一覧</h2>
+<p>押すと、その工程の説明のページへ飛びます。</p>
+<div class="tbl"><table><thead><tr><th>工程</th><th>やること</th><th>AI</th></tr></thead><tbody><tr><td><a href="/docs/manual/step-1.html">1</a></td><td>使う範囲を、順に並べる</td><td></td></tr><tr><td><a href="/docs/manual/step-2.html">2</a></td><td>話し始める前の、いらない所を切る</td><td></td></tr><tr><td><a href="/docs/manual/step-3.html">3</a></td><td>言い間違いや、言葉に詰まった所を切る</td><td>AI</td></tr><tr><td><a href="/docs/manual/step-4.html">4</a></td><td>0.5秒以上の無音を切る</td><td></td></tr><tr><td><a href="/docs/manual/step-5.html">5</a></td><td>話の流れが自然になるようにつなぐ</td><td></td></tr><tr><td><a href="/docs/manual/step-6.html">6</a></td><td>映像を拡大して、顔を画面の少し上に持ってくる</td><td>AI</td></tr><tr><td><a href="/docs/manual/step-7.html">7</a></td><td>字幕の位置を、話す人の顎の少し下に決める</td><td></td></tr><tr><td><a href="/docs/manual/step-8.html">8</a></td><td>左上のタイトルと、ランキングの枠を作る。見た目も手本に合わせる</td><td>AI</td></tr><tr><td><a href="/docs/manual/step-9.html">9</a></td><td>話している言葉を字幕にする</td><td>AI</td></tr><tr><td><a href="/docs/manual/step-10.html">10</a></td><td>大事な言葉を強調した字幕にする。字幕の見た目も手本に合わせる</td><td>AI</td></tr><tr><td><a href="/docs/manual/step-11.html">11</a></td><td>強調した字幕に、効果音と少しの寄りを付ける</td><td></td></tr><tr><td><a href="/docs/manual/step-12.html">12</a></td><td>長さの上限を超えていたら、前置きや繰り返しを外す</td><td>AI</td></tr><tr><td><a href="/docs/manual/step-13.html">13</a></td><td>BGMを入れる(曲を選んだ時だけ)</td><td></td></tr><tr><td><a href="/docs/manual/step-14.html">14</a></td><td>チェック項目を確かめる(光の補正もここで自動)</td><td>AI</td></tr></tbody></table></div>
+<h2>工程14 チェック項目</h2>
+<p>編集時のチェック項目を確かめて、自動で満たした項目は出さず、 <strong>「確かめてほしいこと」だけ</strong> を出します。</p>
+<ul><li>目で確かめる項目には、チェック欄が出ます。見て問題がなければチェックを付けます。</li><li>直す必要がある項目には「要修正」と、どの工程をやり直すかが出ます。</li><li>光の補正は、顔の明るさを測って自動で行います。誤字・脱字は、AIが音声と見比べて候補を出します。</li></ul>
+<figure><img src="/docs/manual/img/13.png" alt="チェック項目の結果" loading="lazy"><figcaption>チェック項目の結果</figcaption></figure>
+<div class="note"><p>目で確かめるのは、主に「企業イメージを損ねていないか」と、お客様から受け取った画像を使った時の著作権です。工程13のBGMは、商用で使ってよい曲を選んでから実行します。</p></div><div class="pager"><a href="/docs/manual/screen-4.html">← ステップ4</a><a href="/docs/manual/step-1.html">工程1 →</a></div>
 </div></body></html>

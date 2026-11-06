@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ステップ4 AIで自動編集する</title><style>
+:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; --warm:#FFF6E5; --warm-line:#F0D9A8; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; --warm:#2E2717; --warm-line:#5A4A26; color-scheme:dark; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.85; }
+.wrap { max-width:760px; margin:0 auto; padding:16px 16px 72px; }
+nav.top { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:14px; padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+a { color:var(--accent); }
+h1 { font-size:25px; line-height:1.45; margin:6px 0 14px; }
+h2 { font-size:20px; margin:32px 0 10px; padding-bottom:5px; border-bottom:2px solid var(--accent); }
+h3 { font-size:17px; margin:22px 0 8px; }
+p { margin:0 0 12px; }
+ul, ol { margin:0 0 16px; padding-left:1.5em; } li { margin:4px 0; }
+ol.steps { list-style:none; padding:0; counter-reset:n; }
+ol.steps li { counter-increment:n; position:relative; padding:8px 0 8px 40px; border-bottom:1px dashed var(--line); margin:0; }
+ol.steps li::before { content:counter(n); position:absolute; left:0; top:8px; width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--bg); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; line-height:1; }
+figure { margin:12px 0 20px; } figure img { display:block; max-width:min(100%, 360px); height:auto; border:1px solid var(--line); border-radius:12px; }
+figcaption { font-size:13px; color:var(--muted); margin-top:4px; }
+.tbl { overflow-x:auto; margin:0 0 16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--line); }
+th { background:var(--soft); font-size:14px; white-space:nowrap; } tr:last-child td { border-bottom:0; }
+.note { background:var(--warm); border:1px solid var(--warm-line); border-radius:10px; padding:12px 14px 2px; margin:0 0 16px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; margin:0 0 20px; }
+.cards a { display:block; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-decoration:none; color:var(--fg); }
+.cards a:hover { border-color:var(--accent); }
+.cards small { display:block; color:var(--accent); font-weight:700; font-size:13px; }
+.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; font-size:13px; }
+.dots a, .dots span { display:inline-block; min-width:30px; text-align:center; padding:2px 8px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
+.dots span { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:700; }
+.pager { display:flex; justify-content:space-between; gap:12px; margin-top:36px; padding-top:16px; border-top:1px solid var(--line); }
+.pager a { display:inline-block; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); text-decoration:none; font-weight:700; }
+</style></head>
+<body><div class="wrap"><nav class="top"><a href="/">← アプリへ戻る</a><a href="/docs/manual/index.html">マニュアルのトップ</a><a href="/docs/manual/trouble.html">困ったとき</a><a href="/docs/manual/glossary.html">用語集</a></nav>
+<div class="dots"><a href="/docs/manual/screen-1.html">ステップ1</a><a href="/docs/manual/screen-2.html">ステップ2</a><a href="/docs/manual/screen-3.html">ステップ3</a><span>ステップ4</span><a href="/docs/manual/screen-5.html">ステップ5</a><a href="/docs/manual/screen-6.html">ステップ6</a><a href="/docs/manual/screen-7.html">ステップ7</a></div><h1>ステップ4 AIで自動編集する</h1>
+<p><strong>やること:</strong> 一番下の <strong>「AIで自動編集する」</strong> を押すと、AIが動画を見て、切り方・タイトル・字幕・画像・寄り・効果音までまとめて編集します。設定は全部そのままで大丈夫です。</p>
+<div class="note"><p><strong>どれを押せばいい？</strong></p><p>初めてなら <strong>「AIで自動編集する」</strong> 。1回押せば、最後まで作ってくれます。</p><p>編集マニュアルの順番どおりに、1つずつ結果を確かめながら作りたい時は <strong>「工程ごとに編集する」</strong> 。くわしくは<a href="/docs/manual/steps.html">工程ごとの編集のページ</a>を見てください。</p><p>AIを使わずに自分で全部作りたい時は <strong>「AIを使わず自分で編集する」</strong> 。このページの下の方で説明します。</p></div>
+<figure><img src="/docs/manual/img/05.png" alt="自動編集の画面(上)" loading="lazy"><figcaption>自動編集の画面(上)</figcaption></figure>
+<p><strong>待っている間</strong></p>
+<p>押すと「AIが編集中…」に変わり、今どこまで進んだかに印が付いていきます。2〜4分ほどかかります。待っている間は、別のアプリを使ったり、画面を閉じたりしても大丈夫です。やめたい時は <strong>「自動編集をやめる」</strong> を押します。</p>
+<figure><img src="/docs/manual/img/08.png" alt="AIが編集中の画面" loading="lazy"><figcaption>AIが編集中の画面</figcaption></figure>
+<p><strong>結果を見て決める</strong></p>
+<p>終わると、同じ画面の下に、AIがどんな編集をしたかのまとめが出ます。</p>
+<figure><img src="/docs/manual/img/09.png" alt="編集のまとめ" loading="lazy"><figcaption>編集のまとめ</figcaption></figure>
+<div class="tbl"><table><thead><tr><th>やりたいこと</th><th>押す所</th></tr></thead><tbody><tr><td>このまま進む</td><td><strong>「この案を使う」</strong></td></tr><tr><td>一部だけ直してほしい</td><td>「ここを直してほしい」の欄に書いて、 <strong>「この内容で直す」</strong></td></tr><tr><td>まるごと別の編集にしたい</td><td><strong>「別の案を作る」</strong> (もう一度2〜4分かかります)</td></tr><tr><td>冒頭に大きく出す一言を変えたい</td><td>「冒頭の見出し」の候補から選ぶ(「出さない」も選べます)</td></tr></tbody></table></div>
+<figure><img src="/docs/manual/img/10.png" alt="冒頭の見出しと、直したい所の入力欄" loading="lazy"><figcaption>冒頭の見出しと、直したい所の入力欄</figcaption></figure>
+<div class="note"><p>「ここを直してほしい」には、「3位の画像を入れ替えて」「20秒あたりの文字を小さく」のように、直したい所だけを書きます。ほかはそのままで、そこだけ直ります。</p></div>
+<p><strong>設定を変えたい時(どれも空のままでよい)</strong></p>
+<div class="tbl"><table><thead><tr><th>設定</th><th>何を決めるか</th></tr></thead><tbody><tr><td>左上のタイトル</td><td>左上に出す言葉。空なら、AIが話の中身から決めます</td></tr><tr><td>完成動画の長さ</td><td>短くしたい時だけ選ぶ。「AIにまかせる」は、間を詰めるだけです</td></tr><tr><td>動画の型</td><td>ランキング・2択・解説など。「おまかせ」なら、AIが中身を見て決めます</td></tr><tr><td>使う画像</td><td>出したい写真(症例写真・商品写真など)。名前を付けると、取り違えが減ります</td></tr><tr><td>足りない所の画像</td><td>「詳しい設定」の中。画像が足りない所をAIに作らせる枚数。1枚ごとに料金がかかります</td></tr><tr><td>AIへの要望</td><td>「詳しい設定」の中。「強調は黄色多め」など、文章でそのまま書きます。手本より優先されます</td></tr></tbody></table></div>
+<figure><img src="/docs/manual/img/06.png" alt="動画の型と使う画像" loading="lazy"><figcaption>動画の型と使う画像</figcaption></figure>
+<figure><img src="/docs/manual/img/07.png" alt="詳しい設定を開いた所" loading="lazy"><figcaption>詳しい設定を開いた所</figcaption></figure>
+<h3>ステップ4のかわりに: 工程ごとに編集する</h3>
+<p>編集マニュアルの作業(工程1〜14)を、1つずつボタンで進める方法です。まとめてAIに任せるより仕上がりのぶれが小さく、工程ごとに結果を確かめられます。ステップ4の画面の <strong>「工程ごとに編集する」</strong> を押すと開きます。</p>
+<figure><img src="/docs/manual/img/11.png" alt="工程ごとに編集する画面" loading="lazy"><figcaption>工程ごとに編集する画面</figcaption></figure>
+<p>進め方と、工程ごとの説明は、<a href="/docs/manual/steps.html">工程ごとの編集のページ</a>にまとめています。</p><div class="pager"><a href="/docs/manual/screen-3.html">← ステップ3 見た目の手本を選ぶ(なくてもよい)</a><a href="/docs/manual/screen-5.html">ステップ5 強調する字幕を選ぶ(なくてもよい) →</a></div>
+</div></body></html>

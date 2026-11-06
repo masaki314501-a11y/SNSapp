@@ -1,135 +1,53 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clipcraft 使い方マニュアル</title><style>
-:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; }
-@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; color-scheme:dark; } }
+:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; --warm:#FFF6E5; --warm-line:#F0D9A8; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; --warm:#2E2717; --warm-line:#5A4A26; color-scheme:dark; } }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.8; }
-.wrap { max-width:820px; margin:0 auto; padding:20px 16px 64px; }
-nav.top { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:14px; padding-bottom:12px; border-bottom:1px solid var(--line); margin-bottom:20px; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.85; }
+.wrap { max-width:760px; margin:0 auto; padding:16px 16px 72px; }
+nav.top { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:14px; padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:16px; }
 a { color:var(--accent); }
-h1 { font-size:26px; line-height:1.4; margin:8px 0 16px; }
-h2 { font-size:21px; margin:40px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--accent); scroll-margin-top:12px; }
-h3 { font-size:17px; margin:24px 0 8px; }
+h1 { font-size:25px; line-height:1.45; margin:6px 0 14px; }
+h2 { font-size:20px; margin:32px 0 10px; padding-bottom:5px; border-bottom:2px solid var(--accent); }
+h3 { font-size:17px; margin:22px 0 8px; }
 p { margin:0 0 12px; }
-ul, ol { margin:0 0 14px; padding-left:1.5em; } li { margin:3px 0; }
-figure { margin:12px 0 20px; } figure img { display:block; max-width:100%; max-height:640px; height:auto; border:1px solid var(--line); border-radius:10px; }
+ul, ol { margin:0 0 16px; padding-left:1.5em; } li { margin:4px 0; }
+ol.steps { list-style:none; padding:0; counter-reset:n; }
+ol.steps li { counter-increment:n; position:relative; padding:8px 0 8px 40px; border-bottom:1px dashed var(--line); margin:0; }
+ol.steps li::before { content:counter(n); position:absolute; left:0; top:8px; width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--bg); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; line-height:1; }
+figure { margin:12px 0 20px; } figure img { display:block; max-width:min(100%, 360px); height:auto; border:1px solid var(--line); border-radius:12px; }
 figcaption { font-size:13px; color:var(--muted); margin-top:4px; }
 .tbl { overflow-x:auto; margin:0 0 16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
 table { border-collapse:collapse; width:100%; font-size:15px; }
 th, td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--line); }
-th { background:var(--soft); font-size:14px; } tr:last-child td { border-bottom:0; }
-.toc { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:0 0 20px; font-size:15px; }
-.toc ol { margin:4px 0 0; }
-.pager { display:flex; justify-content:space-between; gap:12px; margin-top:32px; padding-top:16px; border-top:1px solid var(--line); font-size:15px; }
-.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; font-size:13px; }
-.dots a, .dots span { display:inline-block; min-width:28px; text-align:center; padding:2px 6px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
+th { background:var(--soft); font-size:14px; white-space:nowrap; } tr:last-child td { border-bottom:0; }
+.note { background:var(--warm); border:1px solid var(--warm-line); border-radius:10px; padding:12px 14px 2px; margin:0 0 16px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; margin:0 0 20px; }
+.cards a { display:block; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-decoration:none; color:var(--fg); }
+.cards a:hover { border-color:var(--accent); }
+.cards small { display:block; color:var(--accent); font-weight:700; font-size:13px; }
+.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; font-size:13px; }
+.dots a, .dots span { display:inline-block; min-width:30px; text-align:center; padding:2px 8px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
 .dots span { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:700; }
+.pager { display:flex; justify-content:space-between; gap:12px; margin-top:36px; padding-top:16px; border-top:1px solid var(--line); }
+.pager a { display:inline-block; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); text-decoration:none; font-weight:700; }
 </style></head>
-<body><div class="wrap"><nav class="top"><a href="/">← アプリのトップへ</a><a href="/docs/manual/index.html">使い方マニュアル</a><a href="/docs/manual/steps.html">工程ごとの編集</a><a href="/docs/edit-steps-summary.html">工程ごとの指示文</a></nav>
+<body><div class="wrap"><nav class="top"><a href="/">← アプリへ戻る</a><a href="/docs/manual/index.html">マニュアルのトップ</a><a href="/docs/manual/trouble.html">困ったとき</a><a href="/docs/manual/glossary.html">用語集</a></nav>
 <h1>Clipcraft 使い方マニュアル</h1>
-<div class="toc"><strong>目次</strong><ol><li><a href="#s1">はじめに</a></li><li><a href="#s2">ステップ1 動画を選ぶ</a></li><li><a href="#s3">ステップ2 使う範囲を選ぶ</a></li><li><a href="#s4">ステップ3 見た目の手本を選ぶ(なくてもよい)</a></li><li><a href="#s5">ステップ4 AIで自動編集する</a></li><li><a href="#s6">ステップ4のかわりに: 工程ごとに編集する</a></li><li><a href="#s7">ステップ5 強調する字幕を選ぶ(なくてもよい)</a></li><li><a href="#s8">ステップ6 編集画面で手直しする(なくてもよい)</a></li><li><a href="#s9">ステップ7 書き出して保存する</a></li><li><a href="#s10">AIを使わず自分で編集する場合</a></li><li><a href="#s11">困ったとき</a></li><li><a href="#s12">用語集</a></li></ol></div>
-<h2 id="s1">はじめに</h2>
-<p>Clipcraft は、撮った縦長の動画を1本選ぶだけで、AIが字幕・文字・効果音・寄り(ズーム)を入れて、SNS用のショート動画に仕上げてくれる道具です。全部で7つの画面を順に進めます。</p>
-<p><strong>用意する物</strong></p>
-<ul><li>縦長(スマホの縦向き)で撮った動画1本(200MBまで)</li><li>スマホかパソコンのブラウザ(Chrome か Safari)</li><li>画面を開く時のIDとパスワード(聞かれた場合だけ。管理している人に聞いてください)</li></ul>
-<p><strong>作業の流れ</strong>(画面の上に「ステップ 1 / 7」のように今どこかが出ます)</p>
-<ol><li>動画を選ぶ</li><li>使う範囲を選ぶ(いらない所を切る)</li><li>見た目の手本を選ぶ(なくてもよい)</li><li>AIで自動編集する(2〜3分待つ)</li><li>強調する字幕を選ぶ(なくてもよい)</li><li>編集画面で手直しする(なくてもよい)</li><li>書き出して保存する</li></ol>
-<p>迷ったら、2・3・5・6は何もせずに「次へ進む」ボタンを押して大丈夫です。動画を選んで、AIに任せて、保存するだけでも1本できあがります。</p>
-<p>このマニュアルは、アプリのトップ画面にある「使い方マニュアルを見る」を押せば、いつでも開けます(別のタブで開くので、編集中の画面はそのままです)。</p>
-<h2 id="s2">ステップ1 動画を選ぶ</h2>
-<p>編集したい動画を1本選びます。</p>
-<ol><li>トップ画面の「動画を作成する」を押す。</li><li>点線の枠の「動画を選ぶ」を押し、スマホやパソコンの中の動画を選ぶ。</li><li>動画と「長さ 〇秒」が出たら、右下の「使う範囲を選ぶへ進む」を押す。</li></ol>
-<figure><img src="/docs/manual/img/01.png" alt="選ぶ前の画面" loading="lazy"><figcaption>選ぶ前の画面</figcaption></figure>
-<figure><img src="/docs/manual/img/02.png" alt="動画を選んだ後の画面" loading="lazy"><figcaption>動画を選んだ後の画面</figcaption></figure>
-<p>間違えた動画を選んだら、左下の「別の動画にする」で選び直せます。iPhoneで撮った動画は、読み込む前に自動で変換されるので、少し(1分の動画で30秒ほど)待つことがあります。</p>
-<h2 id="s3">ステップ2 使う範囲を選ぶ</h2>
-<p>前置き・撮り直し・言い間違えなど、使わない所を先に切ります。細かい間(「えー」など)はAIが詰めるので、ここでは大きくいらない所だけで大丈夫です。全部使うなら、何もせず「見た目の手本へ進む」を押します。</p>
-<figure><img src="/docs/manual/img/03.png" alt="使う範囲を選ぶ画面" loading="lazy"><figcaption>使う範囲を選ぶ画面</figcaption></figure>
-<p><strong>いらない所をまとめて消す(一番かんたん)</strong></p>
-<ol><li>青い「使う範囲」のバーを、消したい所だけ指(マウス)でなぞる。</li><li>出てきた「この範囲を捨てる」を押す。何回も撮った中から1回分だけ使うなら、「ここだけ残す」を押す。</li></ol>
-<p><strong>ボタンの意味</strong></p>
-<div class="tbl"><table><thead><tr><th>ボタン</th><th>できること</th></tr></thead><tbody><tr><td>再生(▶)</td><td>動画を再生・一時停止する</td></tr><tr><td>ここから使う</td><td>赤い縦線の位置より前を捨てる</td></tr><tr><td>ここまで使う</td><td>赤い縦線の位置より後ろを捨てる</td></tr><tr><td>クリップ分割</td><td>赤い縦線の位置で動画を2つに切る</td></tr><tr><td>クリップ削除</td><td>選んだクリップ(切った一切れ)を捨てる</td></tr><tr><td>削除部分を復元</td><td>捨てた所を元に戻す</td></tr><tr><td>↶ ↷(右上の矢印)</td><td>1つ前の操作に戻す・やり直す</td></tr><tr><td>全体・縮小・拡大</td><td>下の帯(タイムライン)の見える幅を変える</td></tr></tbody></table></div>
-<p>赤い縦線は「今見ている位置」です。下の帯を押すと、その時間に移ります。ここで捨てた所は、この後のAIの編集には使われません。</p>
-<h2 id="s4">ステップ3 見た目の手本を選ぶ(なくてもよい)</h2>
-<p>まねしたい投稿があれば、そのスクショか動画を渡します。AIが色・文字の感じ・字幕の位置をその雰囲気に寄せます。特になければ、左下の「手本なしで進む」を押します。</p>
-<figure><img src="/docs/manual/img/04.png" alt="見た目の手本を選ぶ画面" loading="lazy"><figcaption>見た目の手本を選ぶ画面</figcaption></figure>
-<ol><li>「手本の画像・動画を選ぶ」を押し、スクショか動画を選ぶ(10個まで、まとめて選べます)。</li><li>AIが手本を読み取るまで少し待つ。</li><li>「自動編集へ進む」を押す。</li></ol>
-<p>「工程ごとに編集する」で進める時も、ここで選んだ手本は、工程8(タイトル・枠)と工程10(字幕・強調)の見た目を決める時に、一番優先する手本としてAIに見せます。</p>
-<p>コツ: 同じ人の投稿を何枚か入れると、たまたま1枚に写っていた色ではなく、その人のいつもの編集の癖をまねします。</p>
-<h2 id="s5">ステップ4 AIで自動編集する</h2>
-<p>AIが動画を見て、切り方・タイトル・文字・画像・寄り・効果音までまとめて編集します。設定は全部そのままでよく、一番下の「AIで自動編集する」を押すだけで始まります。</p>
-<figure><img src="/docs/manual/img/05.png" alt="自動編集の画面(上)" loading="lazy"><figcaption>自動編集の画面(上)</figcaption></figure>
-<p><strong>選べる設定(どれも空のままでよい)</strong></p>
-<div class="tbl"><table><thead><tr><th>設定</th><th>何を決めるか</th></tr></thead><tbody><tr><td>左上のタイトル</td><td>動画の最初から最後まで左上に出す言葉。空ならAIが話の中身から決める</td></tr><tr><td>完成動画の長さ</td><td>短くしたい時だけ選ぶ。「AIにまかせる」は間を詰めるだけ</td></tr><tr><td>動画の型</td><td>ランキング・2択・解説など。「おまかせ」ならAIが中身を見て決める</td></tr><tr><td>使う画像</td><td>症例写真や商品写真など、出したい画像。名前を付けると取り違えが減る</td></tr><tr><td>足りない所の画像(詳しい設定)</td><td>画像が足りない所をAIに作らせる枚数。1枚ごとに料金がかかる</td></tr><tr><td>AIへの要望(詳しい設定)</td><td>「強調は黄色多め」など、そのまま文章で書く。手本より優先される</td></tr></tbody></table></div>
-<figure><img src="/docs/manual/img/06.png" alt="動画の型と使う画像" loading="lazy"><figcaption>動画の型と使う画像</figcaption></figure>
-<figure><img src="/docs/manual/img/07.png" alt="詳しい設定を開いた所" loading="lazy"><figcaption>詳しい設定を開いた所</figcaption></figure>
-<p>AIを使わずに自分だけで編集したい時は、一番下の「AIを使わず自分で編集する」を押します(このマニュアルの後の方で説明します)。</p>
-<p><strong>待つ間</strong></p>
-<p>押すと「AIが編集中…」に変わり、今どこまで進んだかに印が付いていきます。2〜4分ほどかかります。待っている間は別のアプリを使ったり画面を閉じたりしても大丈夫です。やめたい時は「自動編集をやめる」を押します。</p>
-<figure><img src="/docs/manual/img/08.png" alt="AIが編集中の画面" loading="lazy"><figcaption>AIが編集中の画面</figcaption></figure>
-<p><strong>結果を見て決める</strong></p>
-<p>終わると、同じ画面の下にAIの編集のまとめ(どんな構成にしたか、文字・効果音・寄りの数)が出ます。</p>
-<figure><img src="/docs/manual/img/09.png" alt="編集のまとめ" loading="lazy"><figcaption>編集のまとめ</figcaption></figure>
-<figure><img src="/docs/manual/img/10.png" alt="冒頭の見出しと、直したい所の入力欄" loading="lazy"><figcaption>冒頭の見出しと、直したい所の入力欄</figcaption></figure>
-<div class="tbl"><table><thead><tr><th>やりたいこと</th><th>押す所</th></tr></thead><tbody><tr><td>このまま進む</td><td>「この案を使う」</td></tr><tr><td>冒頭に大きく出す一言を変える</td><td>「冒頭の見出し」の候補から選ぶ(出さないも選べる)</td></tr><tr><td>一部だけ直してほしい</td><td>「ここを直してほしい」に書いて「この内容で直す」</td></tr><tr><td>まるごと別の編集にしたい</td><td>「別の案を作る」(もう一度2〜4分かかります)</td></tr></tbody></table></div>
-<p>「ここを直してほしい」は、「3位の画像を入れ替えて」「20秒あたりの文字を小さく」のように、直したい所だけを書くと、ほかはそのままでそこだけ直します。</p>
-<h2 id="s6">ステップ4のかわりに: 工程ごとに編集する</h2>
-<p>編集マニュアルの工程を、1つずつボタンで進める方法です。まとめてAIに任せるより仕上がりのぶれが小さく、工程ごとに結果を確かめられます。ステップ4の画面の「工程ごとに編集する」を押すと開きます。</p>
-<figure><img src="/docs/manual/img/11.png" alt="工程ごとに編集する画面" loading="lazy"><figcaption>工程ごとに編集する画面</figcaption></figure>
-<p><strong>進め方</strong></p>
-<ol><li>上の「どこに出す動画か」(TikTok投稿か広告か)と「長さの上限」を決める。長さは、お客様の指定が無ければ30秒のままにする。</li><li>工程1から順に「実行」を押す。1つの工程が1ページになっていて、実行すると「何をしたか」が出、上の動画もその時点の状態に変わります。確かめたら「次の工程へ」で次のページへ進みます(「前の工程へ」で戻れます)。</li><li>気に入らない工程は「やり直す」を押す。その工程から作り直し、後ろの工程はやり直しになります。</li><li>工程14のチェックで、自動で確かめる項目がすべて○になり、目で確かめる項目にチェックを付けると、一番下の「生成完了」を押せるようになります。押すとステップ5へ進みます。</li></ol>
-<figure><img src="/docs/manual/img/12.png" alt="工程の結果(工程8)" loading="lazy"><figcaption>工程の結果(工程8)</figcaption></figure>
-<p><strong>工程の一覧</strong>(「AI」の印がある工程は、AIの料金と数十秒の待ち時間がかかります)</p>
-<div class="tbl"><table><thead><tr><th>工程</th><th>やること</th><th>AI</th></tr></thead><tbody><tr><td>1</td><td>使う範囲を、順に並べる</td><td></td></tr><tr><td>2</td><td>話し始める前の不要な部分を削除する</td><td></td></tr><tr><td>3</td><td>言い間違いや言葉に詰まった部分をカットする</td><td>AI</td></tr><tr><td>4</td><td>0.5秒以上の無音を削除する</td><td></td></tr><tr><td>5</td><td>話の流れが自然になるようにつなぐ</td><td></td></tr><tr><td>6</td><td>映像を拡大し、顔が中央より少し高めに来るようにする</td><td>AI</td></tr><tr><td>7</td><td>テロップを演者の顎より少し下に固定する</td><td></td></tr><tr><td>8</td><td>左上のタイトルと、ランキングの枠を作る。見た目も手本に合わせる</td><td>AI</td></tr><tr><td>9</td><td>話している言葉をテロップにする</td><td>AI</td></tr><tr><td>10</td><td>強調したい言葉を強調テロップにする。字幕の見た目も手本に合わせる</td><td>AI</td></tr><tr><td>11</td><td>強調テロップに効果音と、少しの寄りを付ける</td><td></td></tr><tr><td>12</td><td>長さの上限を超えていたら、前置きや繰り返しを外す</td><td>AI</td></tr><tr><td>13</td><td>BGMを入れる(曲を選んだ時だけ)</td><td></td></tr><tr><td>14</td><td>チェック項目を確かめる(光の補正もここで自動)</td><td>AI</td></tr></tbody></table></div>
-<p><strong>各工程のページ</strong>(押すと、その工程の詳しい説明へ飛びます)</p>
-<ul><li><a href="/docs/manual/step-1.html">工程1 メイン映像を配置する</a></li><li><a href="/docs/manual/step-2.html">工程2 話し始める前の不要な部分を削除する</a></li><li><a href="/docs/manual/step-3.html">工程3 言い間違いや言葉に詰まった部分をカットする</a></li><li><a href="/docs/manual/step-4.html">工程4 説明の間にある長い無音部分を削除する</a></li><li><a href="/docs/manual/step-5.html">工程5 話の流れが自然になるように前後の映像をつなぐ</a></li><li><a href="/docs/manual/step-6.html">工程6 映像を拡大し、人物の位置を整える</a></li><li><a href="/docs/manual/step-7.html">工程7 テロップの位置を決める</a></li><li><a href="/docs/manual/step-8.html">工程8 必要なオブジェクトを作成する</a></li><li><a href="/docs/manual/step-9.html">工程9 テロップを入力する</a></li><li><a href="/docs/manual/step-10.html">工程10 強調したい言葉を違うテロップに変換する</a></li><li><a href="/docs/manual/step-11.html">工程11 強調テロップに効果音をつけ、少し人物を拡大する</a></li><li><a href="/docs/manual/step-12.html">工程12 決めた長さに収める(長い時だけ)</a></li><li><a href="/docs/manual/step-13.html">工程13 BGMを入れる(なくてもよい)</a></li><li><a href="/docs/manual/step-14.html">工程14 チェック項目を確かめる</a></li></ul>
-<p><strong>工程14 チェック項目</strong></p>
-<p>編集時チェック項目を確かめ、自動で満たした項目は出さず、「確かめてほしいこと」だけを出します。目で確かめる項目にはチェック欄が、直す必要がある項目には「要修正」と、どの工程をやり直すかが出ます。光の補正は、顔の明るさを測って自動で行います。誤字・脱字は、AIが音声と見比べて候補を出します。</p>
-<figure><img src="/docs/manual/img/13.png" alt="チェック項目の結果" loading="lazy"><figcaption>チェック項目の結果</figcaption></figure>
-<p>目で確かめるのは、企業イメージを損ねていないかと、お客様から受け取った画像を使った時の著作権だけです。工程13のBGMは、「曲を選ぶ」で商用で使ってよい曲を選んでから実行します。</p>
-<h2 id="s7">ステップ5 強調する字幕を選ぶ(なくてもよい)</h2>
-<p>目立たせたい字幕をタップして選びます。選んだ字幕だけ、帯・色・書体が変わり、効果音が鳴ります。何もしないなら「強調せずに編集画面へ」を押します。</p>
-<p>AI(自動編集、または工程ごとの編集の工程10)が強調した字幕は、最初から選ばれた状態で出ます。外したい字幕をタップして「ふつう」に戻せます。</p>
-<ol><li>上の「強調の見た目」で、帯の有無・文字の色・書体・効果音を決める(選んだ字幕全部に使われます)。</li><li>下の字幕の一覧で、強調したい字幕をタップする。右端が「ふつう」から「強調」に変わります。もう一度タップすると戻ります。</li><li>字幕の左の▶を押すと、その場面を上の動画で確かめられます。</li><li>「この内容で編集画面へ」を押す。</li></ol>
-<figure><img src="/docs/manual/img/14.png" alt="強調の見た目を決める所" loading="lazy"><figcaption>強調の見た目を決める所</figcaption></figure>
-<figure><img src="/docs/manual/img/15.png" alt="字幕をタップして強調にした所" loading="lazy"><figcaption>字幕をタップして強調にした所</figcaption></figure>
-<p>「重大ワード」に言葉を入れると、動画のどの字幕に出てきても、その言葉だけ選んだ色で少し大きくなります(例: 治療名)。</p>
-<h2 id="s8">ステップ6 編集画面で手直しする(なくてもよい)</h2>
-<p>AIの編集を見ながら、気になる所だけ直します。直す所がなければ、右下の「編集完了」を押して次へ進みます。</p>
-<figure><img src="/docs/manual/img/16.png" alt="編集画面" loading="lazy"><figcaption>編集画面</figcaption></figure>
-<p><strong>画面の見方</strong></p>
-<ul><li>上: 完成の見本。▶で再生できます。</li><li>真ん中: タイムライン。動画が切れ目ごとの「クリップ」に分かれて並んでいます。赤い縦線が今見ている位置で、タップした所に移ります。</li><li>下: 直したい物ごとのタブ。</li></ul>
-<p><strong>下のタブでできること</strong></p>
-<div class="tbl"><table><thead><tr><th>タブ</th><th>できること</th></tr></thead><tbody><tr><td>カット</td><td>クリップを切る・捨てる・戻す(ステップ2と同じ操作)</td></tr><tr><td>字幕・音声</td><td>字幕の文字を直す、全部まとめて作り直す・消す、字幕の見た目(文字スタイル・フォント・色・位置・大きさ)を変える、AIの声(ナレーション)を付ける</td></tr><tr><td>演出</td><td>寄り(ズーム)を入れる、強調テキストや画像を足す。強調テキストは1つずつフォントも選べる。「動画全体」でタイトルやずっと出す文字も直せる</td></tr><tr><td>効果音</td><td>効果音を足す・変える・消す</td></tr><tr><td>BGM</td><td>背景の音楽を付ける</td></tr><tr><td>編集完了</td><td>書き出しの画面へ進む</td></tr></tbody></table></div>
-<p>字幕・演出のタブは、選んでいるクリップだけが対象です。上の「クリップ 1 / 11」の左右の矢印か、タイムラインのクリップをタップして切り替えます。</p>
-<p><strong>字幕の見た目を変える</strong></p>
-<p>「字幕・音声」タブの「字幕の見た目」で、文字スタイルと「詳しい設定」(配色・見た目・フォント・位置・文字サイズ)を変えられます。変えると、<strong>選んでいるクリップの字幕だけ</strong>が変わります。</p>
-<ol><li>タイムラインで、見た目を変えたいクリップをタップする(複数選ぶと、その全部が変わります)。</li><li>「文字スタイル(選んだクリップ)」を押して、好きなスタイルを選ぶ。</li><li>色やフォントも変えたい時は、「詳しい設定」を開いて選ぶ。文字スタイルを選んだ後でも、フォント・位置・大きさは変えられます。</li><li>全部の字幕を同じ見た目にそろえたい時は、「この字幕の見た目を全クリップに使う」を押す。</li></ol>
-<p>AIは、顔に重ならないようにクリップごとに字幕の位置を変えていることがあります。「全クリップに使う」を押すと、その調整も外れて全部同じ位置になるので、顔にかかっていないか確かめてください。</p>
-<p>工程ごとの編集(工程7)や自動編集で字幕を演者の顎の下に固定した時は、「位置」に「顎の下(固定)」が出ます。上・中央・下を選ぶと、そちらに変わります。</p>
-<p><strong>映像の明るさ(光の補正)</strong></p>
-<p>「演出」タブの「動画全体」で、映像の明るさ・コントラスト・彩度をつまみで変えられます。工程ごとの編集のチェック(工程14)をした時は、顔の明るさを測って自動で決めた値が入っています。「補正を外す」で元の映像に戻せます。</p>
-<figure><img src="/docs/manual/img/17.png" alt="字幕・音声のタブ" loading="lazy"><figcaption>字幕・音声のタブ</figcaption></figure>
-<figure><img src="/docs/manual/img/18.png" alt="演出のタブ" loading="lazy"><figcaption>演出のタブ</figcaption></figure>
-<figure><img src="/docs/manual/img/19.png" alt="効果音のタブ(緑の帯が効果音)" loading="lazy"><figcaption>効果音のタブ(緑の帯が効果音)</figcaption></figure>
-<p><strong>文章でAIに直してもらう</strong></p>
-<p>右上の「AIに頼む」を押し、「3つ目の強調テキストをもっと大きく赤に」のように書いて「頼む」を押すと、AIがそこだけ直します。自分で操作するより早いことが多いです。</p>
-<figure><img src="/docs/manual/img/20.png" alt="AIに頼む" loading="lazy"><figcaption>AIに頼む</figcaption></figure>
-<p>間違えたら、再生ボタンの右の↶で戻せます。編集の中身はこのブラウザに自動で保存されるので、途中で閉じても続きからできます(別のスマホ・パソコンからは開けません)。</p>
-<h2 id="s9">ステップ7 書き出して保存する</h2>
-<p>「編集完了」を押すと、この画面で動画の書き出しが自動で始まります。20秒の動画なら1分ほどです。書き出しは使っているスマホ・パソコンの中で行うので、<strong>終わるまでこの画面を開いたままにしてください</strong>。</p>
-<ol><li>書き出しが終わると、完成した動画が表示される。▶で最後に確かめる。</li><li>「保存するファイルの名前」を好きな名前に直す(そのままでもよい)。</li><li>「ダウンロード」を押す。iPhoneなら、開いた動画の共有ボタンから「ビデオを保存」で写真アプリに入ります。</li></ol>
-<figure><img src="/docs/manual/img/21.png" alt="書き出しが終わった画面" loading="lazy"><figcaption>書き出しが終わった画面</figcaption></figure>
-<p>直したい所が見つかったら、左上の「‹」で編集画面に戻り、直してからもう一度「編集完了」を押します。下の「表紙を作る」では、動画の場面にタイトルを大きく重ねた表紙(サムネイル)画像も作れます。</p>
-<h2 id="s10">AIを使わず自分で編集する場合</h2>
-<p>ステップ4の一番下にある「AIを使わず自分で編集する」を押すと、AIの編集も強調の画面も飛ばして、すぐにステップ6の編集画面に進みます。字幕も文字も空の状態から始まるので、次の順に作ると楽です。</p>
-<ol><li>「字幕・音声」タブの「一括生成」で、話している言葉から字幕をまとめて作る。</li><li>「カット」タブで、間や言い間違えを切って捨てる。</li><li>「演出」タブで、強調テキスト・画像・寄りを足す。</li><li>「効果音」「BGM」タブで音を足す。</li><li>「編集完了」で書き出す(ステップ7)。</li></ol>
-<p>AIの自動編集は1回ごとに料金がかかりますが、このやり方なら字幕を作る分だけで済みます。</p>
-<h2 id="s11">困ったとき</h2>
-<p>ほとんどは、画面に出た知らせのとおりにやり直せば直ります。それでも直らない時は、画面のスクショを撮って管理している人に送ってください。</p>
-<div class="tbl"><table><thead><tr><th>こんな時</th><th>こうする</th></tr></thead><tbody><tr><td>「この動画はこのブラウザでは読み込めない形式です」と出た</td><td>撮影したスマホから(iPhoneならSafariで)動画を選び直す</td></tr><tr><td>「動画の長さを取得できませんでした」と出た</td><td>「長さの取得を再試行」を押す。だめなら別のブラウザで選び直す</td></tr><tr><td>「ファイルサイズが大きすぎます(上限200MB)」と出た</td><td>動画を短くするか、画質を下げて撮り直す</td></tr><tr><td>「サーバーが入れ替わったため、編集の結果を受け取れませんでした」と出た</td><td>もう一度「AIで自動編集する」を押す</td></tr><tr><td>「動画が見つかりません」「元の動画をこのブラウザで読み込めませんでした」と出た</td><td>時間がたって動画が片付けられた可能性があります。ステップ1から同じ動画を選び直す</td></tr><tr><td>「Gemini APIのチャージ残高がなくなりました」と出た</td><td>管理している人に連絡する(料金の支払いが必要です)</td></tr><tr><td>書き出しが進まない・失敗する</td><td>書き出し中は画面を閉じず、スマホをロックしない。失敗したら「もう一度試す」を押す。最新のChromeかSafariを使う</td></tr><tr><td>AIの編集が気に入らない</td><td>結果の画面で「別の案を作る」か、「ここを直してほしい」に書く。編集画面の「AIに頼む」でも直せる</td></tr><tr><td>途中で画面を閉じてしまった</td><td>同じスマホ・パソコンで開き直すと、続きからできます</td></tr><tr><td>画面を開くとIDとパスワードを聞かれた</td><td>管理している人に教わったIDとパスワードを入れる</td></tr></tbody></table></div>
-<p>使われずに7日たった動画は、容量を空けるために自動で片付けられます。久しぶりに開いた編集で動画が出ない時は、動画を選び直してください。</p>
-<h2 id="s12">用語集</h2>
-<div class="tbl"><table><thead><tr><th>言葉</th><th>意味</th></tr></thead><tbody><tr><td>クリップ</td><td>動画を切り目で分けた、一切れずつの部分。タイムラインに横並びで出る</td></tr><tr><td>タイムライン</td><td>編集画面の真ん中の帯。左が動画の始め、右が終わり</td></tr><tr><td>字幕(テロップ)</td><td>話している言葉をそのまま出す文字</td></tr><tr><td>強調した字幕</td><td>帯・色・書体を変えて目立たせた字幕(ステップ5で選ぶ)</td></tr><tr><td>強調テキスト</td><td>字幕とは別に、画面に足す文字(項目名・数字・ツッコミなど)</td></tr><tr><td>左上のタイトル</td><td>動画の最初から最後まで左上に出しておく、何の話かの一言</td></tr><tr><td>冒頭の見出し</td><td>最初の3秒だけ画面の真ん中に大きく出す一言。見る人の手を止めるため</td></tr><tr><td>枠</td><td>ランキングや〇選で、答えを埋めていく四角</td></tr><tr><td>寄り(ズーム)</td><td>話している人の顔にグッと近づく演出</td></tr><tr><td>効果音</td><td>文字が出る時などに鳴らす短い音(ポン、ドンなど)</td></tr><tr><td>BGM</td><td>動画の後ろでずっと流す音楽</td></tr><tr><td>AIナレーション</td><td>AIが読み上げる声。自分で話していない所に付けられる</td></tr><tr><td>見た目の手本</td><td>まねしたい投稿のスクショや動画。AIが色や文字の感じを寄せる</td></tr><tr><td>書き出し</td><td>編集した内容を、1本の動画ファイル(.mp4)にすること</td></tr><tr><td>表紙(サムネイル)</td><td>投稿の一覧で最初に見える絵</td></tr></tbody></table></div>
-<div class="tbl"><table><thead><tr><th>言葉</th><th>意味</th></tr></thead><tbody><tr><td>工程</td><td>編集マニュアルの作業の一つ一つ(1〜14)。工程ごとに編集する画面で、順に進める</td></tr><tr><td>強調テロップ</td><td>強調したい言葉を、白い帯に黒い文字など、ふつうの字幕と違う見た目にした字幕</td></tr><tr><td>セーフティゾーン</td><td>TikTokのボタンや説明文で隠れない、画面の内側の範囲。広告はもう少し狭い</td></tr><tr><td>光の補正</td><td>映像の明るさ・コントラスト・彩度を整えて、人を明るく見せること</td></tr><tr><td>手本</td><td>この編集チームが過去に作った完成動画。AIに見せて、編集の参考にさせる</td></tr><tr><td>クセ帳</td><td>手本の完成動画から、工程ごとの編集のクセ(ジャンルごとの組み立て・タイトルと枠の見た目と動き・書体と強調)をまとめた物。工程8・10でAIに見せる</td></tr></tbody></table></div>
+<div class="note"><p>Clipcraft(クリップクラフト)は、スマホで撮った縦長の動画に、字幕・タイトル・効果音などを入れて、TikTokなどに投稿できるショート動画にする道具です。むずかしい編集はAIがやってくれるので、編集をしたことがない人でも使えます。</p></div>
+<h2>まず1本作ってみる</h2>
+<p>初めての人は、ここだけ読めば1本作れます。途中の設定は、全部そのままで大丈夫です。</p>
+<ol class="steps"><li>アプリのトップ画面で <strong>「動画を作成する」</strong> を押す。</li><li><strong>「動画を選ぶ」</strong> を押して、編集したい動画を選ぶ。動画が出たら、右下の <strong>「使う範囲を選ぶへ進む」</strong> を押す。</li><li>次の画面では何もせずに、下の <strong>「見た目の手本へ進む」</strong> を押す。</li><li>次の画面でも何もせずに、左下の <strong>「手本なしで進む」</strong> を押す。</li><li>一番下の <strong>「AIで自動編集する」</strong> を押して、2〜4分待つ。</li><li>AIの編集が終わったら、 <strong>「この案を使う」</strong> を押す。</li><li>次の画面では何もせずに、一番下の青いボタン( <strong>「強調せずに編集画面へ」</strong> か <strong>「この内容で編集画面へ」</strong> )を押す。</li><li>編集画面が開いたら、右下の <strong>「編集完了」</strong> を押す。</li><li>動画ファイルができるまで、画面を開いたまま1分ほど待つ。</li><li><strong>「ダウンロード」</strong> を押して保存する。</li></ol>
+<div class="note"><p>これで完成です。画面の上には「ステップ 1 / 7」のように、今どこにいるかが出ます。全部で7つの画面を順に進みます。</p></div>
+<div class="note"><p>このマニュアルは、アプリのトップ画面の「使い方マニュアルを見る」から、いつでも開けます。別のタブで開くので、編集中の画面はそのまま残ります。</p></div>
+<h2>用意する物</h2>
+<ul><li>縦長(スマホを縦に持って撮った)の動画1本。200MBまで。</li><li>スマホかパソコンのブラウザ(Chrome か Safari)。</li><li>アプリを開く時のIDとパスワード。聞かれた時だけ必要です。管理している人に聞いてください。</li></ul>
+<h2>最初に知っておく言葉</h2>
+<div class="tbl"><table><thead><tr><th>言葉</th><th>意味</th></tr></thead><tbody><tr><td>字幕(テロップ)</td><td>画面の下の方に出る、話している言葉の文字</td></tr><tr><td>左上のタイトル</td><td>動画の最初から最後まで、左上に出しておく「何の話か」の一言</td></tr><tr><td>強調</td><td>大事な言葉の字幕だけ、色や帯を変えて目立たせること</td></tr><tr><td>クリップ</td><td>動画を切れ目で分けた、一切れずつの部分</td></tr><tr><td>タイムライン</td><td>編集画面の真ん中にある横長の帯。左が動画の始め、右が終わりで、クリップが横に並ぶ</td></tr><tr><td>寄り(ズーム)</td><td>話している人に、グッと近づく演出</td></tr><tr><td>効果音・BGM</td><td>効果音は文字が出る時に鳴る短い音(ポン、など)。BGMは後ろでずっと流れる音楽</td></tr><tr><td>書き出し</td><td>編集した内容を、1本の動画ファイルにすること</td></tr></tbody></table></div>
+<p>ほかの言葉は、一番下の「用語集」にあります。</p>
+<h2>画面ごとの説明</h2>
+<p>アプリは7つの画面を順に進みます。知りたい画面を押してください。</p>
+<div class="cards"><a href="/docs/manual/screen-1.html"><small>ステップ1</small>動画を選ぶ</a><a href="/docs/manual/screen-2.html"><small>ステップ2</small>使う範囲を選ぶ</a><a href="/docs/manual/screen-3.html"><small>ステップ3</small>見た目の手本を選ぶ(なくてもよい)</a><a href="/docs/manual/screen-4.html"><small>ステップ4</small>AIで自動編集する</a><a href="/docs/manual/screen-5.html"><small>ステップ5</small>強調する字幕を選ぶ(なくてもよい)</a><a href="/docs/manual/screen-6.html"><small>ステップ6</small>編集画面で手直しする(なくてもよい)</a><a href="/docs/manual/screen-7.html"><small>ステップ7</small>書き出して保存する</a></div>
+<h2>そのほか</h2>
+<div class="cards"><a href="/docs/manual/steps.html">工程ごとに編集する(ステップ4のかわり)</a><a href="/docs/manual/self.html">AIを使わず自分で編集する</a><a href="/docs/manual/trouble.html">困ったとき</a><a href="/docs/manual/glossary.html">用語集</a></div>
 </div></body></html>

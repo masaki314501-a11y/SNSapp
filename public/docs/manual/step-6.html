@@ -1,36 +1,43 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工程6 映像を拡大し、人物の位置を整える</title><style>
-:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; }
-@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; color-scheme:dark; } }
+:root { --bg:#F6F7F5; --surface:#fff; --fg:#1D2321; --muted:#5C6662; --line:#DCE1DE; --accent:#0F6B5C; --soft:#E3F1ED; --warm:#FFF6E5; --warm-line:#F0D9A8; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141917; --surface:#1C2220; --fg:#E6ECE9; --muted:#A2ADA8; --line:#2F3835; --accent:#6CC9B5; --soft:#1E3A33; --warm:#2E2717; --warm-line:#5A4A26; color-scheme:dark; } }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.8; }
-.wrap { max-width:820px; margin:0 auto; padding:20px 16px 64px; }
-nav.top { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:14px; padding-bottom:12px; border-bottom:1px solid var(--line); margin-bottom:20px; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-size:16px; line-height:1.85; }
+.wrap { max-width:760px; margin:0 auto; padding:16px 16px 72px; }
+nav.top { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:14px; padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:16px; }
 a { color:var(--accent); }
-h1 { font-size:26px; line-height:1.4; margin:8px 0 16px; }
-h2 { font-size:21px; margin:40px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--accent); scroll-margin-top:12px; }
-h3 { font-size:17px; margin:24px 0 8px; }
+h1 { font-size:25px; line-height:1.45; margin:6px 0 14px; }
+h2 { font-size:20px; margin:32px 0 10px; padding-bottom:5px; border-bottom:2px solid var(--accent); }
+h3 { font-size:17px; margin:22px 0 8px; }
 p { margin:0 0 12px; }
-ul, ol { margin:0 0 14px; padding-left:1.5em; } li { margin:3px 0; }
-figure { margin:12px 0 20px; } figure img { display:block; max-width:100%; max-height:640px; height:auto; border:1px solid var(--line); border-radius:10px; }
+ul, ol { margin:0 0 16px; padding-left:1.5em; } li { margin:4px 0; }
+ol.steps { list-style:none; padding:0; counter-reset:n; }
+ol.steps li { counter-increment:n; position:relative; padding:8px 0 8px 40px; border-bottom:1px dashed var(--line); margin:0; }
+ol.steps li::before { content:counter(n); position:absolute; left:0; top:8px; width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--bg); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; line-height:1; }
+figure { margin:12px 0 20px; } figure img { display:block; max-width:min(100%, 360px); height:auto; border:1px solid var(--line); border-radius:12px; }
 figcaption { font-size:13px; color:var(--muted); margin-top:4px; }
 .tbl { overflow-x:auto; margin:0 0 16px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
 table { border-collapse:collapse; width:100%; font-size:15px; }
 th, td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--line); }
-th { background:var(--soft); font-size:14px; } tr:last-child td { border-bottom:0; }
-.toc { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:0 0 20px; font-size:15px; }
-.toc ol { margin:4px 0 0; }
-.pager { display:flex; justify-content:space-between; gap:12px; margin-top:32px; padding-top:16px; border-top:1px solid var(--line); font-size:15px; }
-.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; font-size:13px; }
-.dots a, .dots span { display:inline-block; min-width:28px; text-align:center; padding:2px 6px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
+th { background:var(--soft); font-size:14px; white-space:nowrap; } tr:last-child td { border-bottom:0; }
+.note { background:var(--warm); border:1px solid var(--warm-line); border-radius:10px; padding:12px 14px 2px; margin:0 0 16px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; margin:0 0 20px; }
+.cards a { display:block; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-decoration:none; color:var(--fg); }
+.cards a:hover { border-color:var(--accent); }
+.cards small { display:block; color:var(--accent); font-weight:700; font-size:13px; }
+.dots { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; font-size:13px; }
+.dots a, .dots span { display:inline-block; min-width:30px; text-align:center; padding:2px 8px; border-radius:999px; border:1px solid var(--line); text-decoration:none; }
 .dots span { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:700; }
+.pager { display:flex; justify-content:space-between; gap:12px; margin-top:36px; padding-top:16px; border-top:1px solid var(--line); }
+.pager a { display:inline-block; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); text-decoration:none; font-weight:700; }
 </style></head>
-<body><div class="wrap"><nav class="top"><a href="/">← アプリのトップへ</a><a href="/docs/manual/index.html">使い方マニュアル</a><a href="/docs/manual/steps.html">工程ごとの編集</a><a href="/docs/edit-steps-summary.html">工程ごとの指示文</a></nav>
-<div class="dots"><a href="/docs/manual/step-1.html">1</a><a href="/docs/manual/step-2.html">2</a><a href="/docs/manual/step-3.html">3</a><a href="/docs/manual/step-4.html">4</a><a href="/docs/manual/step-5.html">5</a><span>6</span><a href="/docs/manual/step-7.html">7</a><a href="/docs/manual/step-8.html">8</a><a href="/docs/manual/step-9.html">9</a><a href="/docs/manual/step-10.html">10</a><a href="/docs/manual/step-11.html">11</a><a href="/docs/manual/step-12.html">12</a><a href="/docs/manual/step-13.html">13</a><a href="/docs/manual/step-14.html">14</a></div><h1>工程6 映像を拡大し、人物の位置を整える</h1>
+<body><div class="wrap"><nav class="top"><a href="/">← アプリへ戻る</a><a href="/docs/manual/index.html">マニュアルのトップ</a><a href="/docs/manual/trouble.html">困ったとき</a><a href="/docs/manual/glossary.html">用語集</a></nav>
+<div class="dots"><a href="/docs/manual/steps.html">一覧</a><a href="/docs/manual/step-1.html">1</a><a href="/docs/manual/step-2.html">2</a><a href="/docs/manual/step-3.html">3</a><a href="/docs/manual/step-4.html">4</a><a href="/docs/manual/step-5.html">5</a><span>6</span><a href="/docs/manual/step-7.html">7</a><a href="/docs/manual/step-8.html">8</a><a href="/docs/manual/step-9.html">9</a><a href="/docs/manual/step-10.html">10</a><a href="/docs/manual/step-11.html">11</a><a href="/docs/manual/step-12.html">12</a><a href="/docs/manual/step-13.html">13</a><a href="/docs/manual/step-14.html">14</a></div><h1>工程6 映像を拡大し、人物の位置を整える</h1>
+<p><strong>やること:</strong> このページの <strong>「実行」</strong> を押して、上の動画と結果を見ます。良ければ <strong>「次の工程へ」</strong> を押します。</p>
 <p><strong>AIを使います</strong>(料金と数十秒の待ち時間がかかります)</p>
-<p><strong>何をするか</strong></p>
+<p><strong>何が起きるか</strong></p>
 <p>AIが顔の位置を調べ、顔が画面の中央より少し上に来るよう拡大します。顔がもう十分高い時は拡大しません。</p>
-<p><strong>確かめること</strong></p>
-<p>顔が画面の少し上にあり、頭が切れていないか。</p>
-<p>確かめたら「次の工程へ」を押します。前の工程に戻る時は「前の工程へ」を押します。</p><div class="pager"><a href="/docs/manual/step-5.html">← 工程5</a><a href="/docs/manual/step-7.html">工程7 →</a></div>
+<p><strong>見る所</strong></p>
+<p>顔が画面の少し上にあり、頭が切れていないか。</p><div class="pager"><a href="/docs/manual/step-5.html">← 工程5</a><a href="/docs/manual/step-7.html">工程7 →</a></div>
 </div></body></html>
