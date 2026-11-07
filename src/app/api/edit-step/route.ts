@@ -20,13 +20,17 @@ import {
   removeRanges,
   smoothJoins,
   splitByCaptions,
+  markContinuedCaptions,
   placeFrameFills,
+  replaceCaptions,
+  tooLongCaptions,
   trimBeforeSpeech,
+  withContinuedKeys,
   type FrameFill,
   type StepState,
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
-import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts } from "@/lib/editSteps/ai";
+import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts, shortenCaptions } from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
@@ -219,10 +223,17 @@ export async function POST(request: Request) {
             end: item.startFromSeconds + item.durationInSeconds,
             text: item.caption,
           }));
-          const split = splitByCaptions(segments, phrases, newKey);
+          // カットの切れ目が言葉の途中にあると、同じ字幕が2つのクリップに続くので、2つ目は出し直しの動きをしない
+          const split = markContinuedCaptions(splitByCaptions(segments, phrases, newKey));
+          // 話すのが速くて読み切れない字幕は、意味を変えずに短くする(チェック項目: テロップの表示時間は適切か)
+          const tooLong = tooLongCaptions(split);
+          const shortened = await shortenCaptions(tooLong.map((run) => ({ text: run.text, maxChars: run.maxChars })));
+          const replacements = new Map(tooLong.flatMap((run, index) => (shortened[index] !== run.text ? [[run.text, shortened[index]] as const] : [])));
+          const captioned = replaceCaptions(split, replacements);
           return {
-            state: { ...state, segments: split },
-            note: `テロップを${split.filter((segment) => segment.caption.trim()).length}個入れました(位置は工程7で固定)`,
+            state: { ...state, segments: captioned },
+            note: `テロップを${captioned.filter((segment) => segment.caption.trim()).length}個入れました(位置は工程7で固定)${replacements.size > 0 ? `。話すのが速い所の${replacements.size}個は、読める長さに短くしました` : ""}`,
+            details: [...replacements].map(([before, after]) => `「${before.replace(/\n/g, "")}」→「${after.replace(/\n/g, "")}」`),
           };
         }
         case 10: {
@@ -247,7 +258,8 @@ export async function POST(request: Request) {
             frameCount: state.globalShapes.filter((shape) => shape.kind === "rect").length,
             references: await resolveReferences(),
           });
-          const keys = new Set(picks.map((pick) => withCaption[pick.index].key));
+          // 同じ字幕が続くクリップ(カットの切れ目の後)も、そろえて強調する
+          const keys = withContinuedKeys(segments, new Set(picks.map((pick) => withCaption[pick.index].key)));
           // ランキング・「〇選」の枠に、項目名を入れる(言い始めた時から最後まで出す)
           const frameFills: FrameFill[] = frameItems.map((item) => ({
             frame: item.frame,
@@ -304,7 +316,7 @@ export async function POST(request: Request) {
           const kept = segments.filter((segment) => !removeKeys.has(segment.key));
           return {
             // 場面を外すと後ろの時刻がずれるので、枠の項目名が出る時刻を合わせ直す
-            state: placeFrameFills({ ...state, segments: kept }),
+            state: placeFrameFills({ ...state, segments: markContinuedCaptions(kept) }),
             note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。「やり直す」を押すか、編集画面で短くしてください)` : ""}`,
             details: removals.map((removal) => `「${captioned[removal.index].caption.replace(/\n/g, "")}」 ${removal.reason}`),
           };
@@ -335,8 +347,21 @@ export async function POST(request: Request) {
               .map((text) => ({ kind: "タイトル・枠の文字" as const, text })),
             ...segments.map((segment) => segment.caption).filter((caption) => caption.trim()).map((text) => ({ kind: "字幕" as const, text })),
           ];
-          const typos = await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts });
-          const adjusted: StepState = { ...state, videoAdjust: light.adjust };
+          const found = await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts });
+          // 誤字・脱字は、AIが出した正しい書き方に自動で直す(直した所はチェックの結果に出す)。文字の中に見つからない物だけ残す
+          const fix = (text: string) =>
+            found.reduce((current, typo) => (current === typo.text && current.includes(typo.wrong) ? current.replace(typo.wrong, typo.correct) : current), text);
+          const fixedTypos = found.filter((typo) => typo.text.includes(typo.wrong));
+          const typos = found.filter((typo) => !typo.text.includes(typo.wrong));
+          const fixedSegments = segments.map((segment) => (segment.caption.trim() ? { ...segment, caption: fix(segment.caption) } : segment));
+          const fixedOverlays = state.globalOverlays.map((overlay) => ({ ...overlay, text: fix(String(overlay.text)) }));
+          const adjusted: StepState = {
+            ...state,
+            segments: fixedSegments,
+            globalOverlays: fixedOverlays,
+            frameFills: state.frameFills?.map((fill) => ({ ...fill, label: fix(fill.label) })),
+            videoAdjust: light.adjust,
+          };
           const result = runChecklist({
             state: adjusted,
             spans,
@@ -350,6 +375,7 @@ export async function POST(request: Request) {
             hasBgm: Boolean(state.bgm),
             bgmFade: state.bgm ? { fadeInSeconds: state.bgm.fadeInSeconds, fadeOutSeconds: state.bgm.fadeOutSeconds } : undefined,
             typos,
+            fixedTypos,
             zone: parsed.data.zone,
             targetSeconds: parsed.data.targetSeconds ?? null,
             globalImages: parsed.data.globalImages,

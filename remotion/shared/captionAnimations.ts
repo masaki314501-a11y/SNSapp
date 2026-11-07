@@ -19,6 +19,8 @@ export const getCaptionAnimationStyle = (
   localFrame: number,
   fps: number
 ): AnimationStyle => {
+  // 前のクリップから続いている字幕は、出し直しの動きをせず、最初から出しておく
+  if (pattern === "none") return { transform: "none", opacity: 1 };
   const opacity = interpolate(localFrame, [3, 14], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",

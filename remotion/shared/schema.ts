@@ -160,6 +160,8 @@ export const captionAnimationSchema = z
     "blur-in",
     "slide-side",
     "flip-in",
+    // 前のクリップと同じ字幕が続く時(カットの切れ目が言葉の途中にある時)に、出し直しの動きをせず、そのまま出しておく
+    "none",
   ])
   .default("slide-up")
   .describe("テロップの出現アニメーション");
@@ -179,6 +181,7 @@ export const CAPTION_ANIMATION_OPTIONS: {
   { value: "blur-in", label: "ぼかしからくっきり" },
   { value: "slide-side", label: "横からスライドイン" },
   { value: "flip-in", label: "回転してめくれる" },
+  { value: "none", label: "動きなし(前の字幕の続き)" },
 ];
 
 /**

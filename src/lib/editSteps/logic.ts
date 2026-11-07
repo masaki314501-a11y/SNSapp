@@ -447,6 +447,8 @@ export const emphasisEffects = (segments: ProjectSegment[]): { segments: Project
   let count = 0;
   const result = segments.map((segment) => {
     if (!segment.captionEmphasis) return segment;
+    // 同じ字幕の続き(カットの切れ目の後)は、もう一度効果音を鳴らさない
+    if (segment.captionAnimation === "none") return { ...segment, emphasisSfxPresetId: undefined };
     count++;
     const zoom: ClipZoom = {
       scale: STEP_EMPHASIS_ZOOM,
@@ -511,4 +513,58 @@ export const placeFrameFills = (state: StepState): StepState => {
   }
   return { ...state, globalOverlays: [...base, ...labels] };
 };
+
+/**
+ * 字幕の出ている時間のまとまり。カットの切れ目が言葉の途中にあると、同じ字幕が続けて2つのクリップに入るので、
+ * 続いている同じ字幕は1つにまとめる(見る人には、切れ目をまたいで同じ字幕が出続けて見える)。
+ */
+export const captionRuns = (segments: ProjectSegment[]): { text: string; segments: ProjectSegment[]; durationInSeconds: number }[] => {
+  const runs: { text: string; segments: ProjectSegment[]; durationInSeconds: number }[] = [];
+  for (const [index, segment] of segments.entries()) {
+    const text = segment.caption.trim();
+    const last = runs.at(-1);
+    if (text && last && last.text === text && last.segments.at(-1) === segments[index - 1]) {
+      last.segments.push(segment);
+      last.durationInSeconds += segment.durationInSeconds;
+    } else if (text) {
+      runs.push({ text, segments: [segment], durationInSeconds: segment.durationInSeconds });
+    }
+  }
+  return runs;
+};
+
+/** 前のクリップと同じ字幕が続くクリップは、出し直しの動きをしない(「none」)。続きでなくなったクリップは、元の動きに戻す。 */
+export const markContinuedCaptions = (segments: ProjectSegment[]): ProjectSegment[] =>
+  segments.map((segment, index) => {
+    const continued = index > 0 && segment.caption.trim() !== "" && segment.caption.trim() === segments[index - 1].caption.trim();
+    if (continued) return segment.captionAnimation === "none" ? segment : { ...segment, captionAnimation: "none" };
+    return segment.captionAnimation === "none" ? { ...segment, captionAnimation: "pop" } : segment;
+  });
+
+/** 選んだクリップに、同じ字幕が続くクリップも加える(強調を、切れ目の前後でそろえる)。 */
+export const withContinuedKeys = (segments: ProjectSegment[], keys: Set<string>): Set<string> => {
+  const result = new Set(keys);
+  for (const run of captionRuns(segments)) {
+    if (run.segments.some((segment) => result.has(segment.key))) run.segments.forEach((segment) => result.add(segment.key));
+  }
+  return result;
+};
+
+/** 字幕を読める長さ(1秒に何文字まで)。チェック項目「テロップの表示時間は適切か」と合わせる。 */
+export const READ_CHARS_PER_SECOND = 8;
+/** 字幕を出しておく最短の時間(秒)。 */
+export const MIN_CAPTION_SECONDS = 0.6;
+
+/** 表示時間に対して文字が多すぎる字幕(まとまりごと)と、その時間で読める文字数。 */
+export const tooLongCaptions = (segments: ProjectSegment[]) =>
+  captionRuns(segments)
+    .map((run) => ({ ...run, maxChars: Math.floor(run.durationInSeconds * READ_CHARS_PER_SECOND) }))
+    .filter((run) => run.durationInSeconds >= MIN_CAPTION_SECONDS && [...run.text.replace(/\s/g, "")].length > run.maxChars && run.maxChars >= 3);
+
+/** 字幕の言葉を入れ替える(まとまりの全クリップ)。 */
+export const replaceCaptions = (segments: ProjectSegment[], replacements: Map<string, string>): ProjectSegment[] =>
+  segments.map((segment) => {
+    const next = replacements.get(segment.caption.trim());
+    return next === undefined ? segment : { ...segment, caption: next };
+  });
 

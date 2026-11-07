@@ -13,6 +13,10 @@ import {
   splitByCaptions,
   trimBeforeSpeech,
   placeFrameFills,
+  captionRuns,
+  markContinuedCaptions,
+  tooLongCaptions,
+  withContinuedKeys,
   FACE_TARGET_Y_PERCENT,
   FRAME_FILL_X_PERCENT,
 } from "./logic";
@@ -192,6 +196,33 @@ describe("枠に項目名を入れる(工程10・12)", () => {
   it("言い始めのクリップが外された時は、その後の最初のクリップから出す", () => {
     const placed = labelsOf(placeFrameFills({ ...base, segments: [a, c], frameFills: fills }));
     expect(placed.map((o) => [o.text, o.startOffsetSeconds])).toEqual([["糖尿病", 2], ["静脈注射", 2]]);
+  });
+});
+
+describe("カットの切れ目をまたいで続く字幕", () => {
+  const cap = (start: number, end: number, caption: string, key?: string) => ({ ...seg(start, end, key), caption });
+  const segments = [cap(0, 0.9, "早急に病院に行った方がいいです", "x"), cap(1.5, 2.1, "早急に病院に行った方がいいです", "y"), cap(2.1, 3, "脳梗塞の危険", "z")];
+
+  it("続いている同じ字幕は1つにまとめて、時間を足す", () => {
+    expect(captionRuns(segments).map((run) => [run.text, Math.round(run.durationInSeconds * 10) / 10])).toEqual([
+      ["早急に病院に行った方がいいです", 1.5],
+      ["脳梗塞の危険", 0.9],
+    ]);
+  });
+
+  it("2つ目は出し直しの動きをしない。続きでなくなったら元の動きに戻す", () => {
+    const marked = markContinuedCaptions(segments);
+    expect(marked.map((s) => s.captionAnimation)).toEqual(["pop", "none", "pop"]);
+    expect(markContinuedCaptions([marked[1], marked[2]]).map((s) => s.captionAnimation)).toEqual(["pop", "pop"]);
+  });
+
+  it("強調は、続きのクリップにもそろえる", () => {
+    expect([...withContinuedKeys(segments, new Set(["x"]))].sort()).toEqual(["x", "y"]);
+  });
+
+  it("読み切れない字幕(1秒に8文字を超える)を見つけ、読める文字数を出す", () => {
+    const long = tooLongCaptions(segments);
+    expect(long.map((run) => [run.text, run.maxChars])).toEqual([["早急に病院に行った方がいいです", 12]]);
   });
 });
 

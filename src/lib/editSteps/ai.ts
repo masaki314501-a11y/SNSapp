@@ -638,6 +638,41 @@ export const proofreadTexts = async (input: {
     .map((issue) => ({ text: input.texts[issue.index - 1].text, wrong: issue.wrong, correct: issue.correct, reason: issue.reason }));
 };
 
+/** 工程9(字幕を読める長さにする)の指示文。 */
+export const CAPTION_SHORTEN_PROMPT = (items: { text: string; maxChars: number }[]) => `
+次は、ショート動画の字幕です(番号: 字幕 [この字幕を出しておける時間で読める文字数])。
+話すのが速い所なので、このままでは読み切れません。それぞれを、読める文字数以内に短くしてください。
+${items.map((item, index) => `${index + 1}: ${item.text.replace(/\n/g, "")} [${item.maxChars}文字まで]`).join("\n")}
+
+- 話している言葉の意味は変えない。言っていないことは足さない。
+- 「〜と思います」「〜ですね」などの言い回しや、なくても意味が通じる言葉から削る。
+- 病名・症状・数字・固有名詞(LINEなど)は残す。
+- 効果を言い切る言葉(「絶対治る」など)にはしない。
+
+番号の順に、短くした字幕(texts)を答えてください。
+`.trim();
+
+/** 9. 話すのが速くて読み切れない字幕を、読める文字数に短くする(texts は items と同じ順)。 */
+export const shortenCaptions = async (items: { text: string; maxChars: number }[]): Promise<string[]> => {
+  if (items.length === 0) return [];
+  const result = await askJson({
+    model: STEP_MODEL,
+    label: "字幕を短くする",
+    parts: [{ text: CAPTION_SHORTEN_PROMPT(items) }],
+    schema: {
+      type: Type.OBJECT,
+      properties: { texts: { type: Type.ARRAY, items: { type: Type.STRING } } },
+      required: ["texts"],
+    },
+    parse: z.object({ texts: z.array(z.string()) }),
+  });
+  // 短くなっていない・空になった物は元のまま
+  return items.map((item, index) => {
+    const text = (result.texts[index] ?? "").trim();
+    return text && [...text.replace(/\s/g, "")].length < [...item.text.replace(/\s/g, "")].length ? text : item.text;
+  });
+};
+
 /** 工程12(長さを収める)の指示文。 */
 export const SHORTEN_PROMPT = (captions: { text: string; seconds: number }[], totalSeconds: number, targetSeconds: number) => `
 次は、ショート動画の字幕を順に並べたものです(番号: 字幕 [その字幕の秒数])。今の長さは${totalSeconds.toFixed(1)}秒です。

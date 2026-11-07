@@ -3,7 +3,7 @@ import { estimateOverlayBox } from "@video/shared/textWrap";
 import { findTextStylePreset } from "@video/shared/textStylePresets";
 import type { ProjectSegment } from "@/lib/videoProject";
 import { captionBox } from "@/lib/gemini/autoEditPlan";
-import type { SpeechSpan, StepState } from "./logic";
+import { captionRuns, MIN_CAPTION_SECONDS, READ_CHARS_PER_SECOND, type SpeechSpan, type StepState } from "./logic";
 
 /**
  * 工程12「チェック」: 編集時チェック項目(と、原稿チェックのうち完成動画で確かめられる物)を確かめる。
@@ -45,9 +45,6 @@ export type SafeZoneKind = keyof typeof SAFE_ZONES;
 const MIN_SPOKEN_SECONDS = 0.2;
 /** 画像の棚(AIが作った画像・使ってよい画像を貯めた所)の画像の場所。 */
 const LIBRARY_IMAGE_PREFIX = "images/library/";
-/** 字幕を読むのに要る時間の目安(1秒に読める文字数)と、短すぎる表示時間(秒)。 */
-const READ_CHARS_PER_SECOND = 8;
-const MIN_CAPTION_SECONDS = 0.6;
 /** 同じ画角を続けてよい長さ(秒)。 */
 const MAX_SAME_ANGLE_SECONDS = 5;
 /** 画角を変えるために足す、ゆるい寄り。 */
@@ -115,6 +112,8 @@ export type ChecklistInput = {
   bgmFade?: { fadeInSeconds: number; fadeOutSeconds: number };
   /** AIが見つけた誤字・脱字の候補(nullは確かめていない)。 */
   typos?: { text: string; wrong: string; correct: string; reason: string }[] | null;
+  /** 自動で直した誤字・脱字(結果に出す)。 */
+  fixedTypos?: { text: string; wrong: string; correct: string; reason: string }[];
   /** どこに出す動画か(セーフティゾーンが変わる)。 */
   zone?: SafeZoneKind;
   /** 工程12で決めた長さの上限(秒)。指定が無い時は null(その時は30秒を目安に、超えたら目で確かめてもらう)。 */
@@ -137,13 +136,16 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
 
   // ---- 基本項目 ----
   // 字幕が出ている間に、実際に声が出ているか(音声から確かめる)。字幕が書き起こしのかたまりごとに入っているので、声の無い所に字幕が出ていなければ合っている
-  const silentCaptions = captioned.filter((segment) => {
-    const spoken = input.spans.reduce(
+  // 同じ字幕が続くクリップ(カットの切れ目が言葉の途中にある所)は、1つの字幕として数える
+  const runs = captionRuns(segments);
+  const spokenIn = (segment: ProjectSegment) =>
+    input.spans.reduce(
       (sum, [start, end]) => sum + Math.max(0, Math.min(end, segmentEnd(segment)) - Math.max(start, segment.startFromSeconds)),
       0
     );
-    return spoken < Math.min(MIN_SPOKEN_SECONDS, segment.durationInSeconds / 2);
-  });
+  const silentCaptions = runs
+    .filter((run) => run.segments.reduce((sum, segment) => sum + spokenIn(segment), 0) < Math.min(MIN_SPOKEN_SECONDS, run.durationInSeconds / 2))
+    .map((run) => ({ caption: run.text }));
   add({
     id: "sync",
     group: "基本",
@@ -151,13 +153,13 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     status: silentCaptions.length === 0 ? "ok" : "ng",
     detail:
       silentCaptions.length === 0
-        ? `全${captioned.length}個の字幕が、声が出ている間に出ています`
+        ? `全${runs.length}個の字幕が、声が出ている間に出ています`
         : `声が出ていない所に出ている字幕: ${silentCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」`).join(" / ")}。工程9をやり直してください`,
   });
 
-  const shortCaptions = captioned.filter(
-    (segment) => segment.durationInSeconds < Math.max(MIN_CAPTION_SECONDS, segment.caption.replace(/\s/g, "").length / READ_CHARS_PER_SECOND)
-  );
+  const shortCaptions = runs
+    .filter((run) => run.durationInSeconds < Math.max(MIN_CAPTION_SECONDS, run.text.replace(/\s/g, "").length / READ_CHARS_PER_SECOND))
+    .map((run) => ({ caption: run.text, durationInSeconds: run.durationInSeconds }));
   add({
     id: "caption-time",
     group: "基本",
@@ -165,7 +167,7 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     status: shortCaptions.length === 0 ? "ok" : "ng",
     detail:
       shortCaptions.length === 0
-        ? `全${captioned.length}個とも、読める長さ(1秒に${READ_CHARS_PER_SECOND}文字まで・${MIN_CAPTION_SECONDS}秒以上)出ています`
+        ? `全${runs.length}個とも、読める長さ(1秒に${READ_CHARS_PER_SECOND}文字まで・${MIN_CAPTION_SECONDS}秒以上)出ています`
         : `表示時間が短いテロップ: ${shortCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」${fmt(s.durationInSeconds)}`).join(" / ")}。文字を減らすか、クリップを長くしてください`,
   });
 
@@ -179,7 +181,9 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
       typos === undefined || typos === null
         ? "テロップ・タイトル・枠の文字を読んで確かめてください"
         : typos.length === 0
-          ? "AIが音声と見比べ、誤字・脱字は見つかりませんでした"
+          ? input.fixedTypos?.length
+            ? `AIが音声と見比べ、誤字・脱字を${input.fixedTypos.length}か所直しました: ${input.fixedTypos.map((t) => `「${t.wrong}」→「${t.correct}」`).join(" / ")}`
+            : "AIが音声と見比べ、誤字・脱字は見つかりませんでした"
           : `誤字・脱字の候補: ${typos.map((t) => `「${t.text.replace(/\n/g, "")}」の「${t.wrong}」→「${t.correct}」(${t.reason})`).join(" / ")}。編集画面で直してから、もう一度チェックしてください`,
   });
 
@@ -373,7 +377,8 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   });
 
   const emphasized = segments.filter((segment) => segment.captionEmphasis);
-  const noSfx = emphasized.filter((segment) => !segment.emphasisSfxPresetId);
+  // 同じ字幕の続き(カットの切れ目の後)は、前のクリップで鳴らしているので数えない
+  const noSfx = emphasized.filter((segment) => !segment.emphasisSfxPresetId && segment.captionAnimation !== "none");
   add({
     id: "sfx",
     group: "クオリティ",

@@ -45,7 +45,7 @@ li { margin:1px 0; }
 <tr><td class="n">6</td><td class="who"><span class="tag ai">AI</span></td><td class="t">拡大して人物の位置を整える</td><td>AIが顔の位置を調べ、顔が画面の高さ40%に来るよう拡大する(1.15〜1.4倍)。</td></tr>
 <tr><td class="n">7</td><td class="who"><span class="tag mc">機械</span></td><td class="t">テロップの位置を決める</td><td>顎のすぐ下に、動画全体で固定する。下に入りきらない時は画面の下に置く。</td></tr>
 <tr><td class="n">8</td><td class="who"><span class="tag ai">AI</span></td><td class="t">オブジェクトを作る</td><td>左上のタイトルと、ランキングなら枠の数をAIが決める。<b>タイトルと枠の見た目</b>(書体・色・縁取り・形・出方)も、手本に合わせてAIが決める。位置と大きさは機械で計算し、枠はテロップを避けて並べる。</td></tr>
-<tr><td class="n">9</td><td class="who"><span class="tag ai">AI</span></td><td class="t">テロップを入力</td><td>話している言葉をAIが書き起こし、言葉のまとまりごとにテロップにする。</td></tr>
+<tr><td class="n">9</td><td class="who"><span class="tag ai">AI</span></td><td class="t">テロップを入力</td><td>話している言葉をAIが書き起こし、言葉のまとまりごとにテロップにする。話すのが速くて読み切れない所は、意味を変えずに短くする。</td></tr>
 <tr><td class="n">10</td><td class="who"><span class="tag ai">AI</span></td><td class="t">強調テロップに変える</td><td>強調する言葉をAIが選ぶ。<b>基本テロップと強調テロップの見た目</b>も、手本に合わせてAIが決める。ランキングの枠には、<b>項目名を言った時から順に入れていく</b>。</td></tr>
 <tr><td class="n">11</td><td class="who"><span class="tag mc">機械</span></td><td class="t">効果音と寄り</td><td>強調テロップの頭で効果音を鳴らし、1.1倍に寄る。</td></tr>
 <tr><td class="n">12</td><td class="who"><span class="tag ai">AI</span></td><td class="t">長さを収める(長い時だけ)</td><td>長さの上限を入れた時だけ、超えた分をAIが前置きや繰り返しの場面から選んで外す(空なら動画の長さのまま)。</td></tr>
@@ -67,7 +67,7 @@ li { margin:1px 0; }
 <ul class="two">
 <li>話す言葉とテロップのタイミングが合っている</li>
 <li>テロップが読める長さ出ている(1秒8文字まで、0.6秒以上)</li>
-<li>誤字・脱字がない(AIが音声と見比べる)</li>
+<li>誤字・脱字がない(AIが音声と見比べ、見つけたら自動で直す)</li>
 <li>セーフティゾーンからはみ出していない(TikTok/広告)</li>
 <li>著作権に触れる画像がない(お客様の画像は人が確認)</li>
 <li>冒頭に空白がない(0.3秒以内に話し始める)</li>
