@@ -165,7 +165,8 @@ const exampleUploads = new Map<string, { part: Part; expiresAt: number }>();
 const examplesFor = async (ai: GoogleGenAI, absolutePath: string, mimeType: string): Promise<EditExample[]> => {
   const cached = chosenExamples.get(absolutePath);
   if (cached && cached.expiresAt > Date.now()) return cached.examples;
-  const examples = await selectEditExamples(ai, await videoPart(ai, absolutePath, mimeType));
+  // 工程8・10では完成動画だけを見せるので、編集前の素材が無い手本も候補にする
+  const examples = await selectEditExamples(ai, await videoPart(ai, absolutePath, mimeType), [], { finalOnly: true });
   chosenExamples.set(absolutePath, { examples, expiresAt: Date.now() + UPLOAD_REUSE_MS });
   return examples;
 };
@@ -235,7 +236,7 @@ const seconds = (value: number) => `${(Math.round(value * 10) / 10).toFixed(1)}�
 
 /** 工程3の指示文。 */
 export const MISTAKES_PROMPT = (ranges: { start: number; end: number }[]) => `
-添付した動画は、歯科医院の先生などが話しているショート動画の素材です。
+添付した動画は、人が話しているショート動画の素材です。
 次の範囲(元の動画の秒数)が、今使っている部分です:
 ${ranges.map((range, index) => `${index + 1}. ${seconds(range.start)}〜${seconds(range.end)}`).join("\n")}
 
@@ -333,7 +334,7 @@ export const detectFace = async (input: { absolutePath: string; mimeType: string
 
 /** 工程8の指示文。 */
 export const OBJECTS_PROMPT = `
-添付した動画は、歯科医院などのショート動画の素材です。編集で画面に置く物(左上のタイトルと、ランキングの枠)を決めてください。
+添付した動画は、ショート動画の素材です。編集で画面に置く物(左上のタイトルと、ランキングの枠)を決めてください。
 見た目と出方は、手本とクセ帳の編集チームの物に近づけてください。
 
 1. title: 動画の最初から最後まで、画面の左上に出すタイトル。何の話かが一目でわかる短い言葉(全角16文字以内)。

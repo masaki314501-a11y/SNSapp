@@ -42,12 +42,16 @@ const pickResponseSchema = z.object({
 export const selectEditExamples = async (
   ai: GoogleGenAI,
   userVideoPart: Part,
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
+  options: { finalOnly?: boolean } = {}
 ): Promise<EditExample[]> => {
-  // 真似させる手本は「編集前の素材+完成動画」の組だけ。完成動画だけの手本は、素材のどこをどう編集したかが分からず、
+  // 前の自動編集では、真似させる手本は「編集前の素材+完成動画」の組だけ。完成動画だけの手本は、素材のどこをどう編集したかが分からず、
   // 書き起こしの秒数も素材と合わないため、選ぶと編集が薄くなった(それらはクセ帳 style-guide.md を作る材料にだけ使う)。
+  // 工程ごとの編集(finalOnly)は完成動画だけを見せるので、完成動画だけの手本も候補にする。
   const all = (await listEditExamples()).filter(
-    (example) => !excludeIds.includes(example.id) && Boolean(example.rawMediaFilename && example.rawMimeType)
+    (example) =>
+      !excludeIds.includes(example.id) &&
+      (options.finalOnly ? Boolean(example.correctMediaFilename) : Boolean(example.rawMediaFilename && example.rawMimeType))
   );
   const newest = all.slice(-MAX_EDIT_FEW_SHOT_EXAMPLES).reverse();
   if (all.length === 0) return [];
