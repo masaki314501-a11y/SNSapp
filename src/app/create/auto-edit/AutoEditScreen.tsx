@@ -6,6 +6,7 @@ import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject"
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { EDIT_STEPS } from "@/lib/editSteps/steps";
+import { useWakeLock } from "../useWakeLock";
 import { CHECK_STEP, MAX_AUTO_RETRIES, resumeStepOf, runAllSteps, runStepsFrom, type AutoRunProgress } from "@/lib/editSteps/client";
 
 const EmptyState: React.FC = () => (
@@ -51,6 +52,8 @@ export const AutoEditScreen: React.FC = () => {
 
   // 流している間に画面を閉じると止まるので、閉じようとしたら確かめる
   const running = run.status === "running";
+  // 待っている間にスマホの画面が消えて止まらないよう、流している間は画面を消さない
+  useWakeLock(running);
   useEffect(() => {
     if (!running) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -150,7 +153,7 @@ export const AutoEditScreen: React.FC = () => {
               })}
             </ol>
             <span className="text-xs font-semibold" style={{ color: "var(--warning-text, #9a6700)" }}>
-              終わるまで、この画面を開いたままにしてください(閉じると止まります)。
+              終わるまで、この画面を開いたままにしてください(閉じたり、別のアプリに切り替えたりすると止まります)。この間は、画面が自動で消えないようにしています。
             </span>
           </div>
         ) : null}

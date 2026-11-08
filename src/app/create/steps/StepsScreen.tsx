@@ -23,6 +23,7 @@ import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
 import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
 import { EDIT_STEPS } from "@/lib/editSteps/steps";
+import { useWakeLock } from "../useWakeLock";
 
 /** 広告で使えないことがある言葉を、その場で言い換える欄。 */
 const RewordField: React.FC<{ finding: AdRiskFinding; disabled: boolean; onApply: (to: string) => void }> = ({
@@ -78,6 +79,8 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
   const [bgmUploading, setBgmUploading] = useState(false);
   /** 工程14から、引っかかった所を直すために後ろの工程を自動で流している時の進み具合。 */
   const [fixing, setFixing] = useState<AutoRunProgress | null>(null);
+  // 工程を実行している間(とくに工程14から自動でやり直している間)は、スマホの画面を消さない
+  useWakeLock(running !== null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
