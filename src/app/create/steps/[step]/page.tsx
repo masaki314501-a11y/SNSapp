@@ -8,7 +8,7 @@ export default async function CreateStepPage({ params }: { params: Promise<{ ste
   const number = Math.min(EDIT_STEPS.length, Math.max(1, Math.round(Number(step)) || 1));
   return (
     <div className="flow-page">
-      <AppTopBar backHref="/create/auto-edit" title={`工程${number} / ${EDIT_STEPS.length}`} step={{ current: 4, total: 7 }} />
+      <AppTopBar backHref="/create/auto-edit" title={`AIで編集(工程${number} / ${EDIT_STEPS.length})`} step={{ current: 4, total: 6 }} />
       <StepsScreen step={number} />
     </div>
   );

@@ -72,7 +72,7 @@ export const prepareVideoFile = async (
       codec: "avc",
       bitrate: mb.QUALITY_HIGH,
       forceTranscode: true,
-      // 既定の5秒間隔だと、クリップの途中から再生するたびに最大5秒分を読み直すことになり、
+      // 既定の5秒間隔だと、場面の途中から再生するたびに最大5秒分を読み直すことになり、
       // 細かく切った動画のプレビューが重くなる。1秒ごとにして頭出しを軽くする(ファイルは少し大きくなる)。
       keyFrameInterval: 1,
       ...(scale < 1 ? { width: toEven(width), height: toEven(height), fit: "fill" as const } : {}),

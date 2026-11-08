@@ -14,10 +14,10 @@ type ReviseState =
   | { status: "error"; message: string };
 
 type Props = {
-  /** 送信時点の編集内容。クリップ・効果音のidは今の並び順の番号。 */
+  /** 送信時点の編集内容。場面・効果音のidは今の並び順の番号。 */
   buildState: () => EditableState;
   videoDurationInSeconds: number;
-  /** 選択中クリップの番号(0始まり)と、その字幕の一部(依頼欄に表示する)。 */
+  /** 選択中場面の番号(0始まり)と、その字幕の一部(依頼欄に表示する)。 */
   selectedClip: { id: number; label: string } | null;
   onApply: (result: ReviseEditResult) => void;
   canUndo: boolean;
@@ -25,7 +25,7 @@ type Props = {
 };
 
 /**
- * 編集画面の「AIに修正を頼む」欄。「3つ目の強調テキストをもっと大きく」「冒頭をもっと煽って」の
+ * 編集画面の「AIに修正を頼む」欄。「3つ目の画面に出す文字をもっと大きく」「冒頭をもっと煽って」の
  * ような文章の依頼をGeminiに渡し、直した編集内容と変更点の一覧を受け取る。勝手に書き換えず、
  * 変更点を見てから「反映する」を押した時だけ反映する(反映後も1回ぶん元に戻せる)。
  */
@@ -102,7 +102,7 @@ export const AiRevisePanel: React.FC<Props> = ({
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         rows={2}
-        placeholder="例: 2つ目のクリップに「ここ重要!」って大きく出して / 3つ目の強調テキストをもっと大きく赤に / 冒頭の見出しをもっと煽って / 効果音を半分に減らして"
+        placeholder="例: 2つ目の場面に「ここ重要!」って大きく出して / 3つ目の画面に出す文字をもっと大きく赤に / 冒頭の見出しをもっと煽って / 効果音を半分に減らして"
         className="w-full rounded-lg p-2 text-sm"
         style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-elevated-2)" }}
       />
@@ -110,7 +110,7 @@ export const AiRevisePanel: React.FC<Props> = ({
         {selectedClip ? (
           <label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
             <input type="checkbox" checked={aboutSelected} onChange={(e) => setAboutSelected(e.target.checked)} />
-            選択中のクリップ{selectedClip.id + 1}({selectedClip.label})についての依頼として送る
+            選択中の場面{selectedClip.id + 1}({selectedClip.label})についての依頼として送る
           </label>
         ) : null}
         <button

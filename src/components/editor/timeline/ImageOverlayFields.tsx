@@ -8,9 +8,9 @@ import { TimeRangeField } from "./TimeRangeField";
 
 type Props = {
   image: ImageOverlay;
-  /** 表示タイミングの基準の説明(「クリップの先頭から」「動画の先頭から」)。 */
+  /** 表示タイミングの基準の説明(「場面の先頭から」「動画の先頭から」)。 */
   timeBaseLabel: string;
-  /** 表示時間を選べる範囲(クリップ内ならクリップの長さ、動画全体なら動画の長さ)。 */
+  /** 表示時間を選べる範囲(場面内なら場面の長さ、動画全体なら動画の長さ)。 */
   rangeSeconds: number;
   /** 何枚目かの見出し(畳んだ時に出す)。 */
   label: string;
@@ -22,7 +22,7 @@ type Props = {
 
 /**
  * 差し込んだ画像1枚ぶんの編集欄。位置・大きさ・傾き・角の丸み・表示タイミング・出現演出を直せる。
- * 強調テキストと同じく、普段は畳んでおき押すと開く。
+ * 画面に出す文字と同じく、普段は畳んでおき押すと開く。
  */
 export const ImageOverlayFields: React.FC<Props> = ({
   image,

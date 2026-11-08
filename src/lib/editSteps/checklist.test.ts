@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectSegment } from "@/lib/videoProject";
-import { breakLongSameAngle, isWhiteOrBlack, runChecklist } from "./checklist";
+import { breakLongSameAngle, isSmallTypoFix, isWhiteOrBlack, runChecklist } from "./checklist";
 import type { StepState } from "./logic";
 
 let counter = 0;
@@ -58,13 +58,13 @@ describe("工程12 チェック", () => {
     expect(item(items, "typo").status).toBe("review");
   });
 
-  it("読めないほど短いテロップ・30秒を超える長さ・広告の言葉を見つける", () => {
+  it("読めないほど短い字幕・広告の言葉を見つける(長さは上限を決めていなければ確かめない)", () => {
     const segments = [seg(0.4, { caption: "とても長い字幕の文がここにある" }), seg(31, { caption: "最高の治療法で効果あり" })];
     const { items } = runChecklist({ state: state(segments), spans: [[0, 31.4]], look, hasBgm: false });
     expect(item(items, "caption-time").status).toBe("ng");
-    expect(item(items, "length").status).toBe("review");
+    expect(item(items, "length").status).toBe("ok");
     expect(item(items, "ad-law").status).toBe("review");
-    expect(item(items, "ad-law").detail).toContain("景品表示法");
+    expect(item(items, "ad-law").findings?.map((finding) => finding.law)).toContain("景品表示法");
   });
 
   it("下の端に出る字幕はセーフティゾーン外として×にする", () => {
@@ -135,11 +135,20 @@ describe("色の数(白・黒は数えない)", () => {
 describe("長さ(工程12で長さを指定した時だけ、その長さで確かめる)", () => {
   const base = { spans: [[0, 40]] as [number, number][], look, hasBgm: false };
   const long = state([seg(20, { caption: "前半" }), seg(20, { caption: "後半" })]);
-  it("指定が無い時は、30秒を超えたら目で確かめる項目にする", () => {
-    expect(item(runChecklist({ ...base, state: long }).items, "length").status).toBe("review");
+  it("上限を決めていない時は、長くても確かめない", () => {
+    expect(item(runChecklist({ ...base, state: long }).items, "length").status).toBe("ok");
   });
   it("指定した長さを超えていたら要修正、収まっていれば○", () => {
     expect(item(runChecklist({ ...base, state: long, targetSeconds: 30 }).items, "length").status).toBe("ng");
     expect(item(runChecklist({ ...base, state: long, targetSeconds: 45 }).items, "length").status).toBe("ok");
+  });
+});
+
+describe("誤字・脱字の自動修正", () => {
+  it("一部だけの小さな直しは自動で直し、ほとんど書き換える物は候補に残す", () => {
+    expect(isSmallTypoFix({ text: "できるの", wrong: "できるの", correct: "できるので" })).toBe(true);
+    expect(isSmallTypoFix({ text: "病院に行ったほがいい", wrong: "ほが", correct: "方が" })).toBe(true);
+    expect(isSmallTypoFix({ text: "よくなる人も\nいます", wrong: "よくなる人もいます", correct: "この症状は病院に行った方がいい？" })).toBe(false);
+    expect(isSmallTypoFix({ text: "胸の痛み", wrong: "腕", correct: "胸" })).toBe(false);
   });
 });

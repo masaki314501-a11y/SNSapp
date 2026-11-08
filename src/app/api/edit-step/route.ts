@@ -32,7 +32,7 @@ import {
 import { captionBandHeight } from "@/lib/editSteps/logic";
 import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts, shortenCaptions } from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
-import { isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
+import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
 
 export const runtime = "nodejs";
@@ -174,7 +174,7 @@ export async function POST(request: Request) {
           const y = face ? chinCaptionY(face, state.framing, captionLook) : null;
           return {
             state: { ...state, captionYPercent: y, segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })) },
-            note: y !== null ? `テロップを演者の顎の少し下(画面の上から${y}%)に固定しました` : "顎の下にテロップが収まらないため、画面の下に固定しました",
+            note: y !== null ? `字幕を演者の顎の少し下(画面の上から${y}%)に固定しました` : "顎の下に字幕が収まらないため、画面の下に固定しました",
           };
         }
         case 8: {
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
           const captioned = replaceCaptions(split, replacements);
           return {
             state: { ...state, segments: captioned },
-            note: `テロップを${captioned.filter((segment) => segment.caption.trim()).length}個入れました(位置は工程7で固定)${replacements.size > 0 ? `。話すのが速い所の${replacements.size}個は、読める長さに短くしました` : ""}`,
+            note: `字幕を${captioned.filter((segment) => segment.caption.trim()).length}個入れました(位置は工程7で固定)${replacements.size > 0 ? `。話すのが速い所の${replacements.size}個は、読める長さに短くしました` : ""}`,
             details: [...replacements].map(([before, after]) => `「${before.replace(/\n/g, "")}」→「${after.replace(/\n/g, "")}」`),
           };
         }
@@ -275,13 +275,13 @@ export async function POST(request: Request) {
               captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
               frameFills,
             }),
-            note: `${picks.length}個のテロップを強調テロップにしました${frameFills.length > 0 ? `。枠${frameFills.length}個に項目名を入れました` : ""}`,
+            note: `${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${frameFills.length}個に項目名を入れました` : ""}`,
             details: [
               ...(frameFills.length > 0
                 ? [`枠に入れた項目: ${[...frameFills].sort((a, b) => a.frame - b.frame).map((fill) => `${fill.frame}「${fill.label}」`).join("・")}`]
                 : []),
-              `基本テロップの見た目: 書体「${fontLabel(chosen.base.fontFamily)}」・${chosen.base.style === "outline" ? "縁取り" : "帯"}${chosen.base.accentColor}`,
-              `強調テロップの見た目: 書体「${fontLabel(chosen.emphasis.fontFamily)}」・文字${chosen.emphasis.textColor}・帯${chosen.emphasis.bandColor ?? "なし"}`,
+              `ふつうの字幕の見た目: 書体「${fontLabel(chosen.base.fontFamily)}」・${chosen.base.style === "outline" ? "縁取り" : "帯"}${chosen.base.accentColor}`,
+              `強調した字幕の見た目: 書体「${fontLabel(chosen.emphasis.fontFamily)}」・文字${chosen.emphasis.textColor}・帯${chosen.emphasis.bandColor ?? "なし"}`,
               lookReason,
               ...picks.map((pick) => `「${withCaption[pick.index].caption.replace(/\n/g, "")}」 ${pick.reason}`),
             ],
@@ -291,7 +291,7 @@ export async function POST(request: Request) {
           const result = emphasisEffects(segments);
           return {
             state: { ...state, segments: result.segments },
-            note: `強調テロップ${result.count}個に効果音を付け、少し人物を拡大しました`,
+            note: `強調した字幕${result.count}個に効果音を付け、少し人物を拡大しました`,
           };
         }
         case 12: {
@@ -348,11 +348,12 @@ export async function POST(request: Request) {
             ...segments.map((segment) => segment.caption).filter((caption) => caption.trim()).map((text) => ({ kind: "字幕" as const, text })),
           ];
           const found = await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts });
-          // 誤字・脱字は、AIが出した正しい書き方に自動で直す(直した所はチェックの結果に出す)。文字の中に見つからない物だけ残す
+          // 誤字・脱字は、AIが出した正しい書き方に自動で直す(直した所はチェックの結果に出す)。
+          // 直すのは一部だけの小さな物だけ。文字のほとんどを書き換える物や、文字の中に見つからない物は、候補として残す
+          const fixedTypos = found.filter(isSmallTypoFix);
+          const typos = found.filter((typo) => !isSmallTypoFix(typo));
           const fix = (text: string) =>
-            found.reduce((current, typo) => (current === typo.text && current.includes(typo.wrong) ? current.replace(typo.wrong, typo.correct) : current), text);
-          const fixedTypos = found.filter((typo) => typo.text.includes(typo.wrong));
-          const typos = found.filter((typo) => !typo.text.includes(typo.wrong));
+            fixedTypos.reduce((current, typo) => (current === typo.text ? current.replace(typo.wrong, typo.correct) : current), text);
           const fixedSegments = segments.map((segment) => (segment.caption.trim() ? { ...segment, caption: fix(segment.caption) } : segment));
           const fixedOverlays = state.globalOverlays.map((overlay) => ({ ...overlay, text: fix(String(overlay.text)) }));
           const adjusted: StepState = {

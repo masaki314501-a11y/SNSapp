@@ -76,7 +76,7 @@ export const useExtractStyleJob = (options?: { onDone?: (style: ExtractedStyle) 
 
   /**
    * 参考動画(アップロード済み・videoPathで参照)からスタイルを抽出する。動画は静止画と違い
-   * テロップの出現演出まで観察できるため、captionAnimationの精度が上がる。
+   * 字幕の出現演出まで観察できるため、captionAnimationの精度が上がる。
    */
   const handleExtractStyleFromVideo = async (videoPath: string) => {
     setExtractStyleState({ status: "processing" });

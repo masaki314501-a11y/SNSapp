@@ -25,7 +25,7 @@ type VideoClipBlockProps = {
 };
 
 /**
- * 動画トラック上の1クリップ。再生順で左から詰めて並ぶ(位置=leftSeconds)。
+ * 動画トラック上の1場面。再生順で左から詰めて並ぶ(位置=leftSeconds)。
  * segment.startFromSecondsは「元動画の何秒目を使うか」であって画面上の位置ではないため、
  * サムネイル抽出の基準時刻としてのみ使う(位置には使わない)。
  */
@@ -92,7 +92,7 @@ const VideoClipBlock: React.FC<VideoClipBlockProps> = memo(function VideoClipBlo
         zIndex: dragDeltaPx !== null ? 20 : undefined,
       }}
       onPointerDown={handleBodyPointerDown}
-      title={segment.caption || `クリップ${index + 1}`}
+      title={segment.caption || `場面${index + 1}`}
     >
       <div className="editor-clip-thumbs">
         {thumbnails.map((thumb, i) =>

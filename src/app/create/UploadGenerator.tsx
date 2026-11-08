@@ -188,7 +188,7 @@ export const UploadGenerator: React.FC = () => {
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-bold">前回の編集内容が残っています</span>
               <span className="break-anywhere text-xs" style={{ color: "var(--muted)" }}>
-                {existingProject.videoFileName ?? "動画"}・クリップ{existingProject.segments.length}個・
+                {existingProject.videoFileName ?? "動画"}・場面{existingProject.segments.length}個・
                 {existingProject.videoDurationInSeconds.toFixed(1)}秒
               </span>
             </div>

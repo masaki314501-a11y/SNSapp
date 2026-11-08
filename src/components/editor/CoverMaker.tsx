@@ -29,7 +29,7 @@ const defaultTitle = (project: VideoProject): string =>
   project.hook?.headline ||
   "";
 
-/** 完成動画の秒数を、元の動画の秒数に直す(クリップは元の動画の好きな所を切り出して並べているため)。 */
+/** 完成動画の秒数を、元の動画の秒数に直す(場面は元の動画の好きな所を切り出して並べているため)。 */
 const toSourceSeconds = (project: VideoProject, outputSeconds: number): number => {
   let start = 0;
   for (const segment of project.segments) {
@@ -61,7 +61,7 @@ const saveImage = async (blob: Blob, fileName: string) => {
 
 /**
  * 投稿の表紙(サムネイル)を作る欄。動画の場面を選び、タイトルを大きく重ねて画像で保存する。
- * 動画と同じ部品で描くので、文字のスタイルは字幕・強調テキストと同じ170種類から選べる。画像にするのはブラウザの中なので、
+ * 動画と同じ部品で描くので、文字のスタイルは字幕・画面に出す文字と同じ170種類から選べる。画像にするのはブラウザの中なので、
  * サーバーには負担をかけない。
  */
 export const CoverMaker: React.FC<Props> = ({ project }) => {

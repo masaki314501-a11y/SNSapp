@@ -22,7 +22,7 @@ import { PlusIcon, UploadIcon } from "@/components/icons";
 /**
  * ラフカット(/create/cut)で絞り込んだ「使う範囲」に対して、参考画像/参考動画からスタイルを
  * 抽出する画面(/create/style)。参考は複数枚渡せ、画像は全部をまとめて見せて共通する癖を抽出する
- * (1枚だけだと、その1枚にたまたま映っていた色や配置まで真似てしまうため)。参考が動画の場合はテロップの出現演出も読み取れるため、
+ * (1枚だけだと、その1枚にたまたま映っていた色や配置まで真似てしまうため)。参考が動画の場合は字幕の出現演出も読み取れるため、
  * captionAnimationにも反映する。渡した参考はサーバーに残し、次の自動編集(/create/auto-edit)が
  * 最優先の手本として直接見る。字幕は以前ここで生成していたが、付けるかどうかを編集画面で
  * 決められるよう、編集画面の「字幕を一括生成」に移した。
@@ -104,7 +104,7 @@ export const StyleAndTranscribe: React.FC = () => {
 
   /**
    * 画像は今ある画像と合わせて全部でスタイルを抽出し直す。画像が1枚も無く動画だけのときは、
-   * 新しく選んだ動画から抽出する(動画はテロップの動きまで読めるため)。
+   * 新しく選んだ動画から抽出する(動画は字幕の動きまで読めるため)。
    */
   const handleAddReferenceFiles = async (selected: File[]) => {
     if (selected.length === 0) return;
@@ -182,7 +182,7 @@ export const StyleAndTranscribe: React.FC = () => {
     }
   };
 
-  /** カット画面で選んだ「使う範囲」(=カット結果の再生順)。まだテロップは持たない。 */
+  /** カット画面で選んだ「使う範囲」(=カット結果の再生順)。まだ字幕は持たない。 */
   const keepRanges = project?.segments ?? [];
 
   const goToAutoEdit = () => {

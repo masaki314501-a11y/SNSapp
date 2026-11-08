@@ -8,12 +8,60 @@ import { getStandardVideoDurationInFrames } from "@video/templates/standard/dura
 import { VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH } from "@video/shared/constants";
 import { buildStandardVideoProps, loadProject, saveProject, type VideoProject } from "@/lib/videoProject";
 import type { EditStepsRecord } from "@/lib/editSteps/logic";
-import { CHECK_STEP, MAX_AUTO_RETRIES, RETRY_STEP_BY_CHECK, runEditStep, runStepsFrom, stepToRetry, type AutoRunProgress } from "@/lib/editSteps/client";
+import {
+  CHECK_STEP,
+  MAX_AUTO_RETRIES,
+  RETRY_STEP_BY_CHECK,
+  rewordAndRecheck,
+  runEditStep,
+  runStepsFrom,
+  stepToRetry,
+  type AutoRunProgress,
+} from "@/lib/editSteps/client";
+import type { AdRiskFinding } from "@/lib/editSteps/checklist";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { ChevronRightIcon } from "@/components/icons";
 import { uploadAudioFile } from "@/components/editor/uploadAudioFile";
 import { EDIT_STEPS } from "@/lib/editSteps/steps";
 
+/** 広告で使えないことがある言葉を、その場で言い換える欄。 */
+const RewordField: React.FC<{ finding: AdRiskFinding; disabled: boolean; onApply: (to: string) => void }> = ({
+  finding,
+  disabled,
+  onApply,
+}) => {
+  const [value, setValue] = useState(finding.text);
+  const at = finding.text.indexOf(finding.word);
+  const next = value.trim();
+  return (
+    <div className="flex flex-col gap-1 rounded-md p-2" style={{ border: "1px solid var(--border)" }}>
+      <span className="font-semibold">
+        「{finding.text.slice(0, at)}
+        <span style={{ color: "var(--danger-text, crimson)", textDecoration: "underline" }}>{finding.word}</span>
+        {finding.text.slice(at + finding.word.length)}」({finding.law})
+      </span>
+      <span style={{ color: "var(--muted)" }}>{finding.why}</span>
+      <span className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          className="field-input text-xs"
+          style={{ flex: 1, minWidth: 160 }}
+          value={value}
+          aria-label={`「${finding.text}」の言い換え`}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn-outline px-2 py-0.5 text-xs"
+          disabled={disabled || !next || next === finding.text}
+          onClick={() => onApply(next)}
+        >
+          この言葉に直す
+        </button>
+      </span>
+    </div>
+  );
+};
 
 /**
  * 「工程ごとに編集」画面。編集マニュアルの工程を、1工程=1ページで1つずつ進める(/create/steps/<工程の番号>)。
@@ -132,6 +180,21 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
     }
   };
 
+  /** 引っかかった言葉を言い換えて、工程14をやり直す(チェックし直す)。 */
+  const reword = async (from: string, to: string) => {
+    setRunning(CHECK_STEP);
+    setError(null);
+    try {
+      const next = await rewordAndRecheck(project, from, to);
+      setProject(next);
+      saveProject(next);
+    } catch (caught) {
+      setError({ step: CHECK_STEP, message: toFriendlyErrorMessage(caught, "直せませんでした") });
+    } finally {
+      setRunning(null);
+    }
+  };
+
   const checks = record.results[CHECK_STEP]?.checks ?? [];
   const reviewed = record.reviewed ?? {};
   // 要修正の項目も、目で見て問題なければ「このままでよい」にチェックすれば進める
@@ -177,7 +240,7 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
       {/* 工程の進み具合。終わった工程・今の工程の点を押すと、そのページへ移る */}
       <div className="flex flex-col gap-2">
         <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
-          工程 {step} / {EDIT_STEPS.length}(完了 {doneCount})
+          ステップ4「AIで編集」の中の作業: 工程 {step} / {EDIT_STEPS.length}(終わった工程 {doneCount})
         </span>
         <div className="flex gap-1" role="list" aria-label="工程の進み具合">
           {EDIT_STEPS.map((item) => {
@@ -277,7 +340,7 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
         ) : null}
         {step === CHECK_STEP ? (
           <label className="editor-field">
-            <span>どこに出す動画か(セーフティゾーンが変わります)</span>
+            <span>どこに出す動画か(文字が隠れない範囲が変わります)</span>
             <select
               value={project.publishZone ?? "tiktok"}
               onChange={(e) => updateSettings({ publishZone: e.target.value as "tiktok" | "ad" })}
@@ -342,6 +405,14 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
                       {item.label}
                     </span>
                     <span style={{ color: "var(--muted)" }}>{item.detail}</span>
+                    {item.findings?.map((finding) => (
+                      <RewordField
+                        key={`${finding.text}|${finding.word}`}
+                        finding={finding}
+                        disabled={running !== null}
+                        onApply={(to) => void reword(finding.text, to)}
+                      />
+                    ))}
                     {item.status === "ng" ? (
                       <span className="flex flex-wrap items-center gap-2">
                         {retryStep ? (
@@ -372,8 +443,8 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
             <span className="text-xs text-center" style={{ color: "var(--muted)" }}>
               {finishHint}
             </span>
-            <button type="button" className="btn-primary" disabled={!canFinish} onClick={() => router.push("/create/emphasis")}>
-              生成完了(強調する字幕を確かめる)
+            <button type="button" className="btn-primary" disabled={!canFinish} onClick={() => router.push("/edit")}>
+              生成完了(編集画面へ)
               <ChevronRightIcon size={18} />
             </button>
           </>

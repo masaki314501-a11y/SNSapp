@@ -94,9 +94,9 @@ export const ExportScreen: React.FC = () => {
   if (!canRender) {
     return (
       <div className="panel flex flex-col items-center gap-3 p-10 text-center">
-        <p className="text-sm font-medium">クリップの数が書き出せる範囲外です</p>
+        <p className="text-sm font-medium">場面の数が書き出せる範囲外です</p>
         <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-          編集画面でクリップの数を{MIN_CLIPS}〜{MAX_CLIPS}個に調整してください
+          編集画面で場面の数を{MIN_CLIPS}〜{MAX_CLIPS}個に調整してください
         </p>
         <a href="/edit" className="btn-primary px-4 py-1.5 text-sm">
           ← 編集に戻る
@@ -110,7 +110,7 @@ export const ExportScreen: React.FC = () => {
       <div className="panel flex flex-col gap-1 p-4">
         <p className="break-anywhere text-sm font-bold">{project.videoFileName ?? "動画"}を書き出しています</p>
         <p className="text-xs" style={{ color: "var(--muted)" }}>
-          クリップ {project.segments.length}個・このブラウザの中で書き出します。終わるまでこの画面を開いたままにしてください
+          場面 {project.segments.length}個・このブラウザの中で書き出します。終わるまでこの画面を開いたままにしてください
         </p>
       </div>
       <RenderPanel

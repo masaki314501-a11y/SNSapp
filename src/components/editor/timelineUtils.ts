@@ -1,6 +1,6 @@
 /**
- * タイムライン上のクリップ(=元動画から切り出す区間)の位置・尺を編集する際の
- * 共通ロジック(隣接クリップとの重なり防止・動画範囲内へのクランプ)。
+ * タイムライン上の場面(=元動画から切り出す区間)の位置・尺を編集する際の
+ * 共通ロジック(隣接場面との重なり防止・動画範囲内へのクランプ)。
  */
 
 // キャプションとして読める尺の目安。トリミング(カット)の粒度もこれに従う。
@@ -16,7 +16,7 @@ export type TimelineSegment = {
 const TIME_EPSILON_SECONDS = 0.01;
 
 /**
- * 再生順で隣り合う2クリップ(segments[index]とsegments[index + 1])が、
+ * 再生順で隣り合う2場面(segments[index]とsegments[index + 1])が、
  * 元動画上でも時刻的に連続しているか(=splitSegmentの逆操作として結合できるか)を判定する。
  * 結合後の尺がMAX_SEGMENT_DURATION_IN_SECONDSを超える場合も不可とする。
  */
@@ -59,7 +59,7 @@ export const mergeWithNext = <T extends TimelineSegment & { caption: string }>(
     durationInSeconds: current.durationInSeconds + next.durationInSeconds,
     caption: [current.caption, next.caption].filter((text) => text.trim().length > 0).join(" "),
   };
-  // 後ろのクリップの強調テキスト・画像も、前のクリップの尺だけ時刻をずらして引き継ぐ(捨てると
+  // 後ろの場面の画面に出す文字・画像も、前の場面の尺だけ時刻をずらして引き継ぐ(捨てると
   // 結合しただけで演出が消えてしまう)。書き起こしの下書きはつなげる。
   const currentExtras = current as T & SplittableExtras;
   const nextExtras = next as T & SplittableExtras;
@@ -82,7 +82,7 @@ export const mergeWithNext = <T extends TimelineSegment & { caption: string }>(
 };
 
 /**
- * 再生ヘッドがsegments[index]内の何秒目(クリップ先頭からのオフセット)にあるかを受け取り、
+ * 再生ヘッドがsegments[index]内の何秒目(場面先頭からのオフセット)にあるかを受け取り、
  * そこで分割できるか(分割後の前後どちらの尺もMIN_SEGMENT_DURATION_IN_SECONDS以上になるか)を判定する。
  */
 export const canSplitSegment = (
@@ -97,9 +97,9 @@ export const canSplitSegment = (
 };
 
 /**
- * segments[index]を、クリップ先頭からoffsetInSegmentSeconds秒の位置で前後2クリップに分割する
- * (mergeWithNextの逆操作)。前半は元のキー・テロップを引き継ぎ、後半は新しいキー(newKey)を持ち、
- * テロップは空にする(mergeWithNextが非空側のみを連結する挙動と対になるようにするため)。
+ * segments[index]を、場面先頭からoffsetInSegmentSeconds秒の位置で前後2場面に分割する
+ * (mergeWithNextの逆操作)。前半は元のキー・字幕を引き継ぎ、後半は新しいキー(newKey)を持ち、
+ * 字幕は空にする(mergeWithNextが非空側のみを連結する挙動と対になるようにするため)。
  * 呼び出し前に canSplitSegment で確認すること。
  */
 export const splitSegment = <T extends TimelineSegment & { caption: string; key: string }>(
@@ -121,7 +121,7 @@ export const splitSegment = <T extends TimelineSegment & { caption: string; key:
   for (const field of TIMED_ITEM_FIELDS) {
     const items = extras[field];
     if (!items) continue;
-    // 強調テキスト・画像は出す時刻(クリップ先頭からの秒)で前後に振り分ける。そのままコピーすると、
+    // 画面に出す文字・画像は出す時刻(場面先頭からの秒)で前後に振り分ける。そのままコピーすると、
     // 後半に出るはずのものが前半の終わりに一瞬出たり、後半で時刻がずれたりする。
     const before = items
       .filter((o) => o.startOffsetSeconds < offsetInSegmentSeconds)
@@ -139,7 +139,7 @@ export const splitSegment = <T extends TimelineSegment & { caption: string; key:
     (second as T & SplittableExtras)[field] = after.length > 0 ? after : undefined;
   }
   if (extras.speechText !== undefined) {
-    // 自動編集の書き起こしはクリップ全体に対するものなので、分割すると前後どちらとも合わなくなる。
+    // 自動編集の書き起こしは場面全体に対するものなので、分割すると前後どちらとも合わなくなる。
     // 捨てておけば「字幕を一括生成」は文字起こしし直す方に回る(clipEditorのhandleGenerateCaptionsForAll)。
     (first as T & SplittableExtras).speechText = undefined;
     (second as T & SplittableExtras).speechText = undefined;
@@ -148,9 +148,9 @@ export const splitSegment = <T extends TimelineSegment & { caption: string; key:
 };
 
 /**
- * 元動画上の区間[rangeStart, rangeEnd)を、全クリップから取り除く。区間がクリップの
- * 真ん中にかかる場合は前後2つに分かれる(splitSegmentと同じく、後半はテロップを持たない
- * 新しいキーのクリップになる)。取り除いた結果、最小尺を下回った断片は捨てる。
+ * 元動画上の区間[rangeStart, rangeEnd)を、全場面から取り除く。区間が場面の
+ * 真ん中にかかる場合は前後2つに分かれる(splitSegmentと同じく、後半は字幕を持たない
+ * 新しいキーの場面になる)。取り除いた結果、最小尺を下回った断片は捨てる。
  * ラフカット画面で「元動画のこのあたりは丸ごと要らない」を1操作で行うために使う。
  */
 export const subtractSourceRange = <T extends TimelineSegment & { caption: string; key: string }>(
@@ -204,9 +204,9 @@ export const keepOnlySourceRange = <T extends TimelineSegment>(
   }, []);
 
 /**
- * 与えられたクリップ群(元動画上の時刻順にソート済みであること)から、
- * まだどのクリップにも使われていない最大の空き区間を探す。
- * 「+ 字幕を追加」で新規クリップを配置する位置に使う。
+ * 与えられた場面群(元動画上の時刻順にソート済みであること)から、
+ * まだどの場面にも使われていない最大の空き区間を探す。
+ * 「+ 字幕を追加」で新規場面を配置する位置に使う。
  */
 export const findLargestGap = (
   segments: TimelineSegment[],
@@ -232,8 +232,8 @@ export const findLargestGap = (
 const MIN_RENDERABLE_DURATION_IN_SECONDS = 0.3;
 
 /**
- * 短すぎるクリップ(keepRangeの境界などで発話区切りが細切れになったもの)を、
- * 同じkeepRange内で隣接するクリップに吸収してテキストを引き継ぐ(mergeWithNextと
+ * 短すぎる場面(keepRangeの境界などで発話区切りが細切れになったもの)を、
+ * 同じkeepRange内で隣接する場面に吸収してテキストを引き継ぐ(mergeWithNextと
  * 同様、空でない側のテキストのみ連結)。吸収先が無い(range内に1件だけ)場合は、
  * range内に収まる範囲で尺そのものを底上げする。
  */
@@ -278,11 +278,11 @@ const mergeTooShortSegments = <T extends TimelineSegment & { caption: string }>(
 };
 
 /**
- * 文字起こし結果(動画全体を対象に生成された時系列順のクリップ)を、ラフカット画面で選んだ
- * 「使う範囲(keepRanges、再生順)」だけに絞り込む。範囲境界をまたぐクリップは境界で切り詰め、
+ * 文字起こし結果(動画全体を対象に生成された時系列順の場面)を、ラフカット画面で選んだ
+ * 「使う範囲(keepRanges、再生順)」だけに絞り込む。範囲境界をまたぐ場面は境界で切り詰め、
  * 各keepRangeの内部では時系列順(=文字起こし結果の並び)を保つ。keepRangesの並び順が
- * そのまま出力の再生順になる。切り詰めで下限(0.3秒)を下回ったクリップは同じrange内の
- * 隣接クリップに吸収する(range境界をまたいで吸収すると、カットで捨てた範囲を
+ * そのまま出力の再生順になる。切り詰めで下限(0.3秒)を下回った場面は同じrange内の
+ * 隣接場面に吸収する(range境界をまたいで吸収すると、カットで捨てた範囲を
  * 誤って含めてしまうため、吸収はrange内に限定する)。
  */
 export const clipTranscribedToKeepRanges = <T extends TimelineSegment & { caption: string }>(
@@ -313,8 +313,8 @@ export const clipTranscribedToKeepRanges = <T extends TimelineSegment & { captio
 };
 
 /**
- * クリップ左端をドラッグ(トリムイン)した時の新しいstart/durationを、
- * 「前のクリップの終端」〜「自分の終端 - 最小尺」の範囲にクランプして返す。
+ * 場面左端をドラッグ(トリムイン)した時の新しいstart/durationを、
+ * 「前の場面の終端」〜「自分の終端 - 最小尺」の範囲にクランプして返す。
  */
 export const clampTrimStart = (
   index: number,
@@ -331,8 +331,8 @@ export const clampTrimStart = (
 };
 
 /**
- * クリップ右端をドラッグ(トリムアウト)した時の新しいdurationを、
- * 「最小尺」〜「次のクリップの開始(無ければ動画終端)まで」の範囲にクランプして返す。
+ * 場面右端をドラッグ(トリムアウト)した時の新しいdurationを、
+ * 「最小尺」〜「次の場面の開始(無ければ動画終端)まで」の範囲にクランプして返す。
  */
 export const clampTrimEnd = (
   index: number,
@@ -352,10 +352,10 @@ export const clampTrimEnd = (
 
 
 /**
- * 動画全体の文字起こし結果を、今あるクリップ(元動画上の区間)に字幕として割り当てる。
- * clipTranscribedToKeepRangesと違い、クリップの切り方は一切変えない(自動編集で付けた寄り・
- * 強調テキスト等をクリップごとに持っているため、分割し直すと失われる)。文字起こしの1区切りは
- * 最も長く重なるクリップ1つにだけ割り当て、同じ発話が2つのクリップに重複して出ないようにする。
+ * 動画全体の文字起こし結果を、今ある場面(元動画上の区間)に字幕として割り当てる。
+ * clipTranscribedToKeepRangesと違い、場面の切り方は一切変えない(自動編集で付けた寄り・
+ * 画面に出す文字等を場面ごとに持っているため、分割し直すと失われる)。文字起こしの1区切りは
+ * 最も長く重なる場面1つにだけ割り当て、同じ発話が2つの場面に重複して出ないようにする。
  */
 export const assignTranscriptToSegments = <T extends TimelineSegment>(
   transcribed: (TimelineSegment & { caption: string })[],

@@ -29,7 +29,7 @@ const isVisibleAt = (item: { startOffsetSeconds: number; durationInSeconds?: num
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value * 10) / 10));
 
 /**
- * プレビューの上に重ねる、強調テキスト・画像をドラッグで動かすための透明な層。
+ * プレビューの上に重ねる、画面に出す文字・画像をドラッグで動かすための透明な層。
  * 自動編集が置いた文字の位置を「演出」タブの数値でしか直せず、直感的に動かしたいという要望に応えたもの。
  *
  * 実際の文字はRemotionの動画の中に描かれていてつかめないため、同じ大きさ・同じ位置に見えない枠を重ね、

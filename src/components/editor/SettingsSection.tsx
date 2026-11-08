@@ -19,7 +19,7 @@ export const SettingsSection: React.FC<{
 );
 
 /**
- * 押すと開く折りたたみ。強調テキスト・画像などを1つずつ畳んで並べ、見出しには中身(文言等)を出す。
+ * 押すと開く折りたたみ。画面に出す文字・画像などを1つずつ畳んで並べ、見出しには中身(文言等)を出す。
  * 基本は閉じておき、追加した直後など開いて見せたい時だけ defaultOpen にする。
  */
 export const Collapsible: React.FC<{

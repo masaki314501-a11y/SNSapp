@@ -119,10 +119,11 @@ const buildPrompt = (input: ReviseEditInput): string => `
 
 ## 修正依頼
 ${input.instruction}
-${input.selectedClipId !== null ? `\n(利用者は今 clips の id=${input.selectedClipId} のクリップを選択しています。「このクリップ」「ここ」はこのクリップを指します)` : ""}
+${input.selectedClipId !== null ? `\n(利用者は今 clips の id=${input.selectedClipId} のクリップを選択しています。「この場面」「このクリップ」「ここ」はこのクリップを指します)` : ""}
 
 ## 守ること
 - **依頼に関係ない部分は1文字も変えない**(数値の丸めもしない)。依頼が曖昧なら、一番自然な解釈で最小限だけ直す
+- 利用者の画面では、clips(クリップ)を「場面」、overlays / globalOverlays を「画面に出す文字」(以前の名前は「強調テキスト」)、字幕を「字幕」と呼んでいる
 - clips は再生順。並べ替え・削除・尺(startFromSeconds / durationInSeconds、元動画上の秒)の変更はしてよいが、
   新しいクリップは作らない(id は元のものだけを使う)。startFromSecondsは0〜${input.videoDurationInSeconds.toFixed(2)}秒、
   durationInSecondsは0.3秒以上

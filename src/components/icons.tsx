@@ -86,7 +86,7 @@ export const FitWidthIcon: React.FC<IconProps> = (p) => (
     <path d="M14.5 9.5L17 12l-2.5 2.5" />
   </Svg>
 );
-/** 「削除部分を復元」用。フィルム(クリップ)に、元へ戻る丸い矢印を重ねる(元に戻すの↶と見分けられるように)。 */
+/** 「削除部分を復元」用。フィルム(場面)に、元へ戻る丸い矢印を重ねる(元に戻すの↶と見分けられるように)。 */
 export const RestoreClipIcon: React.FC<IconProps> = (p) => (
   <Svg {...p}>
     <path d="M3 8V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-6" />

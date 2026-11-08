@@ -12,7 +12,7 @@ import type {
   VideoFraming,
 } from "@video/shared/schema";
 import type { ProjectBgm, ProjectSegment } from "@/lib/videoProject";
-import { captionBox, faceOnScreen } from "@/lib/gemini/autoEditPlan";
+import { captionBox, faceOnScreen } from "./screenBoxes";
 import type { CheckItem } from "./checklist";
 
 /**

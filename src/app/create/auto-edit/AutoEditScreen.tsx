@@ -6,7 +6,7 @@ import { loadProject, saveProject, type VideoProject } from "@/lib/videoProject"
 import { ChevronRightIcon, EditIcon, InfoIcon, SparkleIcon } from "@/components/icons";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { EDIT_STEPS } from "@/lib/editSteps/steps";
-import { CHECK_STEP, MAX_AUTO_RETRIES, runAllSteps, type AutoRunProgress } from "@/lib/editSteps/client";
+import { CHECK_STEP, MAX_AUTO_RETRIES, resumeStepOf, runAllSteps, runStepsFrom, type AutoRunProgress } from "@/lib/editSteps/client";
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -69,24 +69,31 @@ export const AutoEditScreen: React.FC = () => {
     saveProject(next);
   };
 
-  const start = async () => {
+  // 前回の自動編集が途中で止まっている時(画面を閉じた・通信が切れた等)は、続きの工程から進められる
+  const resumeFrom = resumeStepOf(project);
+
+  /** from を渡すと、その工程から続きを進める(渡さなければ工程1から作り直す)。 */
+  const start = async (from?: number) => {
+    if (!from && project.editSteps?.results[1] && !window.confirm("今までの工程の結果を消して、工程1から作り直しますか?")) return;
     const controller = new AbortController();
     abortRef.current = controller;
-    setRun({ status: "running", progress: { step: 1, title: EDIT_STEPS[0].title, attempt: 0 } });
+    const first = from ?? 1;
+    setRun({ status: "running", progress: { step: first, title: EDIT_STEPS[first - 1].title, attempt: 0 } });
     let lastStep: number | null = null;
     try {
-      await runAllSteps(project, {
+      const options = {
         signal: controller.signal,
-        onProgress: (progress) => {
+        onProgress: (progress: AutoRunProgress) => {
           lastStep = progress.step;
           setRun({ status: "running", progress });
         },
         // 1工程ごとに保存する(途中で止まっても、工程ごとの編集の画面から続きができる)
-        onStep: (next) => {
+        onStep: (next: VideoProject) => {
           setProject(next);
           saveProject(next);
         },
-      });
+      };
+      await (from ? runStepsFrom(project, from, options) : runAllSteps(project, options));
       setRun({ status: "idle" });
       router.push(`/create/steps/${CHECK_STEP}`);
     } catch (caught) {
@@ -156,7 +163,7 @@ export const AutoEditScreen: React.FC = () => {
             </p>
             {run.step && run.step > 1 ? (
               <span className="text-xs" style={{ color: "var(--muted)" }}>
-                終わった工程は残っています。「工程ごとに編集する」から、止まった工程の続きを進めることもできます。
+                終わった工程は残っています。下の「続きから自動で進める」で、止まった工程から進められます。
               </span>
             ) : null}
           </div>
@@ -164,6 +171,18 @@ export const AutoEditScreen: React.FC = () => {
 
         {progress ? null : (
           <>
+            {resumeFrom ? (
+              <div className="panel flex flex-col gap-2 p-4" style={{ border: "2px solid var(--accent)" }}>
+                <span className="text-sm font-bold">前回の自動編集は、工程{resumeFrom - 1}まで終わっています</span>
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  途中で止まった所から、続きを自動で進められます。終わった工程はやり直さないので、早く終わります。
+                </span>
+                <button type="button" className="btn-primary self-start px-4 py-2 text-sm" onClick={() => void start(resumeFrom)}>
+                  続きから自動で進める(工程{resumeFrom}から)
+                </button>
+              </div>
+            ) : null}
+
             {referenceCount > 0 ? (
               <span className="badge-pill success w-fit">見た目の手本({referenceCount}個)を最優先の手本にします</span>
             ) : (
@@ -198,7 +217,7 @@ export const AutoEditScreen: React.FC = () => {
                 value={project.autoEditTitle ?? ""}
                 onChange={(e) => update({ autoEditTitle: e.target.value })}
                 maxLength={MAX_TITLE_LENGTH}
-                placeholder="例: 矯正した方がいい歯並びTOP5"
+                placeholder="例: 知っておきたい〇〇5選"
                 className="field-input w-full text-sm"
               />
             </div>
@@ -263,7 +282,7 @@ export const AutoEditScreen: React.FC = () => {
           <>
             <button type="button" onClick={() => void start()} className="btn-primary">
               <SparkleIcon size={18} />
-              {run.status === "error" ? "もう一度自動編集する" : "AIで自動編集する"}
+              {resumeFrom ? "はじめから自動編集する" : run.status === "error" ? "もう一度自動編集する" : "AIで自動編集する"}
             </button>
             <button type="button" onClick={() => router.push("/edit")} className="btn-outline">
               <EditIcon size={18} />

@@ -5,7 +5,7 @@ import "./globals.css";
 
 /**
  * 画面の文字。デジタル庁デザインシステムの指定どおりNoto Sans JP(本文400・見出しや強調700)。
- * テロップ用に同梱している書体(public/fonts)を使い、Googleから別に読み込まない。
+ * 字幕用に同梱している書体(public/fonts)を使い、Googleから別に読み込まない。
  */
 const notoSansJp = localFont({
   variable: "--font-noto-sans-jp",
@@ -25,7 +25,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Clipcraft | 縦型ショート動画エディター",
   description:
-    "動画をアップロードして字幕を自動生成、タイムラインでトリム・並べ替え・SE/BGM追加までできる縦型ショート動画編集ツール",
+    "動画をアップロードして字幕を自動生成、タイムラインでトリム・並べ替え・効果音・BGMの追加までできる縦型ショート動画編集ツール",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

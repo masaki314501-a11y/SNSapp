@@ -1,7 +1,7 @@
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
 
 export type ClipNav = {
-  /** 例: 「クリップ2 / 5」「クリップ未選択」 */
+  /** 例: 「場面2 / 5」「場面を選んでいません」 */
   label: string;
   onPrev: () => void;
   onNext: () => void;
@@ -11,9 +11,9 @@ export type ClipNav = {
 
 type SettingsPanelProps = {
   title: string;
-  /** 対象のクリップ等(例: 「クリップ2」)。clipNavを渡した時は使わない。 */
+  /** 対象の場面等(例: 「場面2」)。clipNavを渡した時は使わない。 */
   subtitle?: string;
-  /** クリップごとの設定(カット・字幕・演出)で、パネルを閉じずに前後のクリップへ移るための切り替え。 */
+  /** 場面ごとの設定(カット・字幕・演出)で、パネルを閉じずに前後の場面へ移るための切り替え。 */
   clipNav?: ClipNav;
   onClose: () => void;
   children: React.ReactNode;
@@ -42,11 +42,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       </div>
       {clipNav ? (
         <div className="clip-nav">
-          <button type="button" onClick={clipNav.onPrev} disabled={!clipNav.canPrev} aria-label="前のクリップ">
+          <button type="button" onClick={clipNav.onPrev} disabled={!clipNav.canPrev} aria-label="前の場面">
             <ChevronLeftIcon size={18} />
           </button>
           <span>{clipNav.label}</span>
-          <button type="button" onClick={clipNav.onNext} disabled={!clipNav.canNext} aria-label="次のクリップ">
+          <button type="button" onClick={clipNav.onNext} disabled={!clipNav.canNext} aria-label="次の場面">
             <ChevronRightIcon size={18} />
           </button>
         </div>

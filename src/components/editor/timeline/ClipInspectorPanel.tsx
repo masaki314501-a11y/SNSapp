@@ -19,8 +19,8 @@ type Props = {
 };
 
 /**
- * 「動画カット」タブの右側パネル。選択中クリップの尺・音量など、動画そのものの
- * 切り出しに関わるプロパティのみを扱う(テロップ・演出は「字幕」タブ、
+ * 「動画カット」タブの右側パネル。選択中場面の尺・音量など、動画そのものの
+ * 切り出しに関わるプロパティのみを扱う(字幕・演出は「字幕」タブ、
  * SE/BGM/AIナレーションは各専用タブが担当)。
  */
 export const ClipInspectorPanel: React.FC<Props> = ({
@@ -41,16 +41,16 @@ export const ClipInspectorPanel: React.FC<Props> = ({
       <div className="editor-inspector-body">
         {selectedCount > 1 ? (
           <div className="editor-inspector-empty">
-            <p>{selectedCount}件のクリップを選択中</p>
+            <p>{selectedCount}件の場面を選択中</p>
             <button type="button" className="editor-toolbar-btn danger" onClick={onDeleteSelected}>
               <TrashIcon size={14} />
-              選択した{selectedCount}件のクリップを削除
+              選択した{selectedCount}件の場面を削除
             </button>
           </div>
         ) : selectedSegment ? (
           <div className="editor-inspector-fields">
             <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-              {selectedSegment.caption || "(テロップ無し)"}
+              {selectedSegment.caption || "(字幕無し)"}
             </p>
             <div className="editor-field-row">
               <label className="editor-field">
@@ -96,32 +96,32 @@ export const ClipInspectorPanel: React.FC<Props> = ({
               <span className="field-label">元の音声をミュート(ナレーションやBGMだけにする)</span>
             </label>
             <div className="editor-inspector-actions">
-              {/* どのクリップが対象か分かるよう、ボタンにクリップの番号を書く */}
+              {/* どの場面が対象か分かるよう、ボタンに場面の番号を書く */}
               <button type="button" className="editor-toolbar-btn" onClick={() => onDuplicate(selectedSegment.key)}>
                 <CopyIcon size={14} />
-                クリップ{selectedIndex + 1}を複製
+                場面{selectedIndex + 1}を複製
               </button>
               <button
                 type="button"
                 className="editor-toolbar-btn"
                 disabled={!canMergeWithNext(segments, selectedIndex)}
                 onClick={() => onMergeWithNext(selectedSegment.key)}
-                title="次のクリップと結合します(元動画上で連続している場合のみ)"
+                title="次の場面と結合します(元動画上で連続している場合のみ)"
               >
                 <MergeIcon size={14} />
                 {selectedIndex + 1 < segments.length
-                  ? `クリップ${selectedIndex + 1}と${selectedIndex + 2}を結合`
-                  : "次のクリップと結合"}
+                  ? `場面${selectedIndex + 1}と${selectedIndex + 2}を結合`
+                  : "次の場面と結合"}
               </button>
               <button type="button" className="editor-toolbar-btn danger" onClick={() => onRemove(selectedSegment.key)}>
                 <TrashIcon size={14} />
-                クリップ{selectedIndex + 1}を削除
+                場面{selectedIndex + 1}を削除
               </button>
             </div>
           </div>
         ) : (
           <div className="editor-inspector-empty">
-            <p>クリップを選択すると、ここで細かく設定できます</p>
+            <p>場面を選択すると、ここで細かく設定できます</p>
           </div>
         )}
       </div>

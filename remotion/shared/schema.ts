@@ -412,7 +412,7 @@ export const mediaItemBaseSchema = z.object({
 
 export const sfxClipSchema = z.object({
   src: z.string().describe("効果音ファイルのパス(public/配下)またはURL"),
-  label: z.string().default("SE").describe("表示用のラベル(元ファイル名など)"),
+  label: z.string().default("効果音").describe("表示用のラベル(元ファイル名など)"),
   startFromSeconds: z
     .number()
     .min(0)

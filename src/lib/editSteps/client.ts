@@ -157,3 +157,41 @@ export const runStepsFrom = async (
 /** 工程1〜14を自動で順に流す(「AIで自動編集する」)。工程ごとの編集と同じ工程・同じチェック項目を使う。 */
 export const runAllSteps = (project: VideoProject, options: RunOptions = {}) =>
   runStepsFrom({ ...project, editSteps: { results: {}, snapshots: {}, reviewed: {} } }, 1, options);
+
+/** 画面に出す文字(字幕・ずっと出す文字・場面ごとの文字)のうち、from と同じ物を to に書き換える(改行は無視して比べる)。 */
+export const replaceShownText = (state: StepState, from: string, to: string): StepState => {
+  const same = (text: string) => text.replace(/\n/g, "") === from;
+  return {
+    ...state,
+    segments: state.segments.map((segment) => ({
+      ...segment,
+      caption: same(segment.caption) ? to : segment.caption,
+      ...(segment.overlays
+        ? { overlays: segment.overlays.map((overlay) => (same(overlay.text) ? { ...overlay, text: to } : overlay)) }
+        : {}),
+    })),
+    globalOverlays: state.globalOverlays.map((overlay) => (same(overlay.text) ? { ...overlay, text: to } : overlay)),
+  };
+};
+
+/**
+ * 工程14で引っかかった言葉(広告で使えないことがある言葉など)を言い換えて、工程14をやり直す。
+ * 工程14は工程13の結果から作り直すので、工程13の結果の方を書き換える。
+ */
+export const rewordAndRecheck = async (project: VideoProject, from: string, to: string, signal?: AbortSignal): Promise<VideoProject> => {
+  const record = project.editSteps;
+  const base = record?.snapshots[CHECK_STEP - 1];
+  if (!record || !base) throw new Error(`工程${CHECK_STEP - 1}がまだ終わっていません`);
+  const next: VideoProject = {
+    ...project,
+    editSteps: { ...record, snapshots: { ...record.snapshots, [CHECK_STEP - 1]: replaceShownText(base, from, to) } },
+  };
+  return runEditStep(next, CHECK_STEP, signal);
+};
+
+/** 途中まで終わっている時の、次に進める工程(まだ何もしていない・全部終わっている時は null)。 */
+export const resumeStepOf = (project: VideoProject): number | null => {
+  const results = project.editSteps?.results ?? {};
+  if (!results[1]) return null;
+  return EDIT_STEPS.find(({ step }) => !results[step])?.step ?? null;
+};

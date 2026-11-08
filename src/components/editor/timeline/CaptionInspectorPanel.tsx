@@ -33,9 +33,9 @@ type Props = {
       >
     >
   ) => void;
-  /** 選んでいるクリップの字幕の文字スタイル(クリップを選んでいない時は全体の既定)と、全クリップ共通の重大ワード。 */
+  /** 選んでいる場面の字幕の文字スタイル(場面を選んでいない時は全体の既定)と、全場面共通の重大ワード。 */
   captionTextStyleId: string | undefined;
-  /** 文字スタイル・詳しい設定を変える範囲。clip=選んだクリップ、clips=選んだ複数のクリップ、all=全クリップの既定。 */
+  /** 文字スタイル・詳しい設定を変える範囲。clip=選んだ場面、clips=選んだ複数の場面、all=全場面の既定。 */
   textStyleScope: "clip" | "clips" | "all";
   onPickTextStyle: (id: string | undefined) => void;
   onApplyTextStyleToAll: () => void;
@@ -59,18 +59,18 @@ type Props = {
   transcribeSeconds: number;
   onClearCaptions: () => void;
   hasAnyCaption: boolean;
-  /** AIナレーションの一括生成(NarrationBulkGenerate)。「全クリップの字幕」欄に、字幕の一括操作と段を分けて置く。 */
+  /** AIナレーションの一括生成(NarrationBulkGenerate)。「全場面の字幕」欄に、字幕の一括操作と段を分けて置く。 */
   narrationBulkAction: React.ReactNode;
-  /** クリップごとのAIナレーションの欄(NarrationInspectorPanel)。字幕の見た目の次に置く。 */
+  /** 場面ごとのAIナレーションの欄(NarrationInspectorPanel)。字幕の見た目の次に置く。 */
   narrationSection: React.ReactNode;
   /** 字幕の見た目の詳しい設定(配色・見た目・フォント・位置・大きさ。ClipEditor側で組み立て、文字スタイルと同じ範囲に使う)。 */
   lookSettings: React.ReactNode;
 };
 
 /**
- * 「字幕」タブのパネル。上から順に、全クリップへの一括操作(字幕とAIナレーションの一括生成) →
- * 選んだクリップの字幕 → このクリップの強調 → 重大ワード → 字幕の見た目(文字スタイルと、旧「見た目」タブの設定) →
- * クリップごとのAIナレーション(旧「AI音声」タブ) → 出現演出、と並べる。
+ * 「字幕」タブのパネル。上から順に、全場面への一括操作(字幕とAIナレーションの一括生成) →
+ * 選んだ場面の字幕 → この場面の強調 → 重大ワード → 字幕の見た目(文字スタイルと、旧「見た目」タブの設定) →
+ * 場面ごとのAIナレーション(旧「AI音声」タブ) → 出現演出、と並べる。
  */
 export const CaptionInspectorPanel: React.FC<Props> = ({
   segments,
@@ -105,12 +105,12 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   const multiSelectedNote =
     selectedCount > 1 ? (
       <div className="editor-inspector-empty">
-        <p>{selectedCount}件のクリップを選択中です。複数クリップの字幕は一括編集をお使いください</p>
+        <p>{selectedCount}件の場面を選択中です。複数場面の字幕は一括編集をお使いください</p>
       </div>
     ) : null;
   const noSelectionNote = (
     <div className="editor-inspector-empty">
-      <p>クリップを選択すると、ここで字幕を編集できます</p>
+      <p>場面を選択すると、ここで字幕を編集できます</p>
     </div>
   );
   const target = selectedCount > 1 ? null : selectedSegment;
@@ -118,8 +118,8 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
   return (
     <div className="editor-inspector">
       <div className="editor-inspector-body">
-        {/* 全クリップへの操作。クリップを選んでいなくても使うため一番上に置く(小見出しで字幕の操作と分かるので、ボタンに「字幕を」は付けない) */}
-        <SettingsSection title="全クリップの字幕" icon={<CaptionIcon size={16} />}>
+        {/* 全場面への操作。場面を選んでいなくても使うため一番上に置く(小見出しで字幕の操作と分かるので、ボタンに「字幕を」は付けない) */}
+        <SettingsSection title="全場面の字幕" icon={<CaptionIcon size={16} />}>
           {captionsError ? <p className="badge-pill danger w-fit">{captionsError}</p> : null}
           <div className="flex flex-wrap gap-2">
             <button
@@ -127,7 +127,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
               className="editor-toolbar-btn"
               onClick={onGenerateCaptionsForAll}
               disabled={!canOpenBulkEdit || captionsGenerating}
-              title="全クリップに、話している内容を字幕として付けます(今ある字幕は上書きされます)"
+              title="全場面に、話している内容を字幕として付けます(今ある字幕は上書きされます)"
             >
               <SparkleIcon size={14} />
               {captionsGenerating ? "生成中..." : "一括生成"}
@@ -137,7 +137,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
               className="editor-toolbar-btn"
               onClick={onOpenBulkEdit}
               disabled={!canOpenBulkEdit}
-              title="全クリップの字幕を、まとめて文章で編集します"
+              title="全場面の字幕を、まとめて文章で編集します"
             >
               <EditIcon size={14} />
               一括編集
@@ -147,7 +147,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
               className="editor-toolbar-btn danger"
               onClick={onClearCaptions}
               disabled={!hasAnyCaption}
-              title="全クリップの字幕を削除します(確認してから削除します)"
+              title="全場面の字幕を削除します(確認してから削除します)"
             >
               <TrashIcon size={14} />
               一括削除
@@ -163,11 +163,11 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           </div>
         </SettingsSection>
 
-        <SettingsSection title="クリップの字幕" icon={<EditIcon size={16} />}>
+        <SettingsSection title="場面の字幕" icon={<EditIcon size={16} />}>
           {multiSelectedNote ??
             (target ? (
               <label className="editor-field">
-                <span>テロップ</span>
+                <span>字幕</span>
                 <textarea
                   value={target.caption}
                   placeholder="(無音・字幕なし)"
@@ -177,10 +177,10 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
             ) : (
               noSelectionNote
             ))}
-          {/* 自動編集は、全体の位置だと顔に重なるクリップだけテロップの位置を変えている。ここで戻せる */}
+          {/* 自動編集は、全体の位置だと顔に重なる場面だけ字幕の位置を変えている。ここで戻せる */}
           {!multiSelectedNote && target ? (
             <label className="editor-field">
-              <span>このクリップのテロップの位置</span>
+              <span>この場面の字幕の位置</span>
               <select
                 value={target.clipCaptionPosition ?? ""}
                 onChange={(e) =>
@@ -201,7 +201,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
         </SettingsSection>
 
         {/* 字幕の強調はAIに任せず、ここで本人が選ぶ(帯・書体・色・効果音) */}
-        <SettingsSection title="このクリップの字幕の強調" icon={<SparkleIcon size={16} />}>
+        <SettingsSection title="この場面の字幕の強調" icon={<SparkleIcon size={16} />}>
           {multiSelectedNote ??
             (target ? (
               <CaptionEmphasisFields segment={target} onChange={(patch) => onUpdateEmphasis(target.key, patch)} />
@@ -210,7 +210,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
             ))}
         </SettingsSection>
 
-        <SettingsSection title="重大ワード(全クリップ)" icon={<HighlightIcon size={16} />}>
+        <SettingsSection title="重大ワード(全場面)" icon={<HighlightIcon size={16} />}>
           <span className="text-xs" style={{ color: "var(--muted-2)" }}>
             ここに入れた言葉は、すべての字幕で選んだ色・少し大きい文字になります
           </span>
@@ -250,10 +250,10 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           <TextStylePicker
             label={
               textStyleScope === "clip"
-                ? "文字スタイル(選んだクリップ)"
+                ? "文字スタイル(選んだ場面)"
                 : textStyleScope === "clips"
-                  ? "文字スタイル(選んだクリップすべて)"
-                  : "文字スタイル(全クリップ)"
+                  ? "文字スタイル(選んだ場面すべて)"
+                  : "文字スタイル(全場面)"
             }
             value={captionTextStyleId}
             onChange={onPickTextStyle}
@@ -262,12 +262,12 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
           />
           {textStyleScope !== "all" ? (
             <button type="button" className="editor-toolbar-btn self-start" onClick={onApplyTextStyleToAll}>
-              この字幕の見た目を全クリップに使う
+              この字幕の見た目を全場面に使う
             </button>
           ) : null}
           <Collapsible summary="詳しい設定(配色・フォント・位置・大きさ)">
             <span className="text-xs" style={{ color: "var(--muted-2)" }}>
-              {textStyleScope === "all" ? "全クリップの字幕に使います" : "選んだクリップの字幕だけに使います"}
+              {textStyleScope === "all" ? "全場面の字幕に使います" : "選んだ場面の字幕だけに使います"}
               {captionTextStyleId
                 ? "。文字スタイルを選んでいる間は、配色・見た目は文字スタイルのものになります(フォント・位置・大きさは効きます)"
                 : ""}
@@ -302,7 +302,7 @@ export const CaptionInspectorPanel: React.FC<Props> = ({
                   className="editor-toolbar-btn self-start"
                   onClick={() => onApplyAnimationToAll(target.captionAnimation)}
                 >
-                  この出現演出を全クリップに適用
+                  この出現演出を全場面に適用
                 </button>
               </>
             ) : (

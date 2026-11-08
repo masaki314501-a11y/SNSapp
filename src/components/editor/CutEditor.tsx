@@ -46,7 +46,7 @@ import { ToolGrid, type ToolItem } from "./ToolButtons";
  * アップロード直後の動画から、実際に使う範囲だけを粗く選ぶラフカット画面(/create/cut)。
  * ここで捨てた範囲は以降(自動編集・字幕の一括生成)の対象にならないため、
  * 不要な前置き・言い淀み・撮り直し部分などを先に切り捨てておくと後工程が速く・安く済む。
- * テロップ・SE/BGM・スタイルはまだ持たず、クリップの分割・トリム・並べ替え・削除のみを扱う。
+ * 字幕・SE/BGM・スタイルはまだ持たず、場面の分割・トリム・並べ替え・削除のみを扱う。
  */
 const applyTrimPatch = (
   segments: ProjectSegment[],
@@ -73,7 +73,7 @@ const applyTrimPatch = (
 
 const EmptyState: React.FC = () => (
   <div className="flow-page">
-    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 7 }} />
+    <AppTopBar backHref="/create" title="使う範囲を選ぶ" step={{ current: 2, total: 6 }} />
     <main className="flow-main">
       <div className="panel flex flex-col items-center gap-3 p-10 text-center">
         <p className="text-sm font-medium">カットする動画がありません</p>
@@ -105,9 +105,13 @@ export const CutEditor: React.FC = () => {
 
   const videoDurationInSeconds = project?.videoDurationInSeconds ?? 0;
 
+  /** 開いた時の並び。これと違えば、この画面で使う範囲を変えたことになる。 */
+  const loadedSegmentsRef = useRef<ProjectSegment[] | null>(null);
+
   useEffect(() => {
     const loaded = loadProject();
     if (loaded) {
+      loadedSegmentsRef.current = loaded.segments;
       // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageからの一度きりの初期ハイドレーション
       setProject(loaded);
       setSegments(loaded.segments);
@@ -115,13 +119,23 @@ export const CutEditor: React.FC = () => {
     setHasCheckedProject(true);
   }, []);
 
+  /**
+   * 今の並びを保存する。使う範囲を変えた時は、前に覚えた範囲(cutKeepRanges)と工程ごとの編集の結果を消す
+   * (残すと、工程1が前の範囲のまま並べ直したり、「続きから自動で進める」が前の範囲の結果から続けたりするため)。
+   */
+  const persist = (current: VideoProject) =>
+    saveProject(
+      segments === loadedSegmentsRef.current
+        ? { ...current, segments }
+        : { ...current, segments, cutKeepRanges: null, editSteps: undefined }
+    );
+
   // 自動保存(カット結果は/create/styleへ渡す前提の一時状態だが、リロードしても続けられるようにする)。
   useEffect(() => {
     if (!project) return;
-    const timer = setTimeout(() => {
-      saveProject({ ...project, segments });
-    }, 500);
+    const timer = setTimeout(() => persist(project), 500);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persistは毎回作り直すが、中で使うのはproject・segmentsだけ
   }, [project, segments]);
 
   const props = useMemo(
@@ -196,7 +210,7 @@ export const CutEditor: React.FC = () => {
   /**
    * 元動画のどこを残し、どこを捨てたかを可視化するための、元動画全体を基準にした
    * 「使う範囲」の一覧(再生順ではなく元動画上の時刻順にマージ)。
-   * クリップ一覧(VideoTrack)は再生順に詰めて表示するため、元動画のどこを切ったかは
+   * 場面一覧(VideoTrack)は再生順に詰めて表示するため、元動画のどこを切ったかは
    * ここで別に見せないと分からない。
    */
   const sourceCoverage = useMemo(() => {
@@ -217,7 +231,7 @@ export const CutEditor: React.FC = () => {
     return { ranges: merged, keptSeconds };
   }, [segments, videoDurationInSeconds]);
 
-  /** 再生ヘッドが今どのクリップの何秒目かを、元動画上の時刻に変換する(上のバーの再生位置表示用)。 */
+  /** 再生ヘッドが今どの場面の何秒目かを、元動画上の時刻に変換する(上のバーの再生位置表示用)。 */
   const activeSourceSeconds = useMemo(() => {
     if (!activeProgramSegment) return null;
     const segment = segments.find((s) => s.key === activeProgramSegment.key);
@@ -357,7 +371,7 @@ export const CutEditor: React.FC = () => {
 
   /**
    * 元動画上の時刻を、プレビュー(再生順に詰めた尺)上のフレームに直してシークする。
-   * 捨てた範囲を指した場合はその直後に残っているクリップの先頭へ寄せる。
+   * 捨てた範囲を指した場合はその直後に残っている場面の先頭へ寄せる。
    */
   const seekToSourceSeconds = (sourceSeconds: number) => {
     let elapsed = 0;
@@ -411,7 +425,7 @@ export const CutEditor: React.FC = () => {
         ? subtractSourceRange(segments, sourceRange.start, sourceRange.end, () => crypto.randomUUID())
         : keepOnlySourceRange(segments, sourceRange.start, sourceRange.end);
     if (next.length === 0) {
-      alert("その範囲を適用すると使うクリップが無くなってしまうため、実行できません");
+      alert("その範囲を適用すると使う場面が無くなってしまうため、実行できません");
       return;
     }
     pushHistory();
@@ -444,9 +458,9 @@ export const CutEditor: React.FC = () => {
       return;
     }
     selectOnly(key);
-    // 分割・イン/アウト点は再生ヘッドの位置にあるクリップに対して働くため、クリックした
-    // クリップと再生ヘッドがずれたままだと「選んだのに違うクリップが編集される」ことになる。
-    // クリック時に再生ヘッドをそのクリップの先頭へ合わせ、選択=編集対象を一致させる。
+    // 分割・イン/アウト点は再生ヘッドの位置にある場面に対して働くため、クリックした
+    // 場面と再生ヘッドがずれたままだと「選んだのに違う場面が編集される」ことになる。
+    // クリック時に再生ヘッドをその場面の先頭へ合わせ、選択=編集対象を一致させる。
     const range = segmentFrameRanges.find((r) => r.key === key);
     if (range) playerRef.current?.seekTo(range.startFrame);
   }, [selectedSegmentKey, segments, segmentFrameRanges, selectOnly]);
@@ -521,13 +535,13 @@ export const CutEditor: React.FC = () => {
 
   /** 上部バーの戻る。自動保存は少し待ってから書き込むため、離れる前に同期的に書き戻す。 */
   const handleBackToUpload = () => {
-    if (project) saveProject({ ...project, segments });
+    if (project) persist(project);
     router.push("/create");
   };
 
   const handleGoToStyle = () => {
     if (!project || segments.length === 0) return;
-    saveProject({ ...project, segments });
+    persist(project);
     router.push("/create/style");
   };
 
@@ -535,7 +549,7 @@ export const CutEditor: React.FC = () => {
   if (!project) return <EmptyState />;
 
   const cutTools: ToolItem[] = [
-    { key: "split", label: "クリップ分割", icon: <ScissorsIcon />, onClick: splitAtPlayhead, disabled: !canSplitAtPlayhead },
+    { key: "split", label: "場面を分ける", icon: <ScissorsIcon />, onClick: splitAtPlayhead, disabled: !canSplitAtPlayhead },
     {
       key: "trim-start",
       label: "ここから使う",
@@ -553,7 +567,7 @@ export const CutEditor: React.FC = () => {
     {
       key: "add",
       label: "削除部分を復元",
-      // 選んだクリップの複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
+      // 選んだ場面の複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
       title: "削除した部分のうち一番長い所から、最大5秒を動画の最後に戻します",
       icon: <RestoreClipIcon />,
       onClick: addSegment,
@@ -561,7 +575,7 @@ export const CutEditor: React.FC = () => {
     },
     {
       key: "discard",
-      label: "クリップ削除",
+      label: "場面を消す",
       icon: <TrashIcon />,
       onClick: () => removeSegments(selectedKeys),
       disabled: selectedKeys.size === 0,
@@ -576,7 +590,7 @@ export const CutEditor: React.FC = () => {
         backHref="/create"
         onBack={handleBackToUpload}
         title="使う範囲を選ぶ"
-        step={{ current: 2, total: 7 }}
+        step={{ current: 2, total: 6 }}
         actions={
           <button type="button" className="btn-outline topbar-outline inline-flex" onClick={handleStartOver}>
             <RestartIcon size={16} />
@@ -722,7 +736,7 @@ export const CutEditor: React.FC = () => {
           <ToolGrid items={cutTools} />
         </div>
         <p className="keyboard-hint hidden text-xs lg:block" style={{ color: "var(--muted-2)" }}>
-          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=クリップ分割・I=ここから使う・O=ここまで使う・Delete=選んだクリップを削除
+          キーボード操作: Space=再生/一時停止・←→=1コマ送り(Shift+←→=1秒)・S=場面を分ける・I=ここから使う・O=ここまで使う・Delete=選んだ場面を削除
         </p>
 
         <div className="editor-area-action">

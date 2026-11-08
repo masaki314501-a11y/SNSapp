@@ -5,7 +5,7 @@ import { DEFAULT_CAPTION_EMPHASIS, type ProjectSegment } from "@/lib/videoProjec
 import { SFX_PRESETS } from "../audioPresets";
 import { TextStylePicker } from "./TextStylePicker";
 
-/** 強調をONにした時の初期値。白い帯に黒い文字(シェイプテロップ)。 */
+/** 強調をONにした時の初期値。白い帯に黒い文字(シェイプ字幕)。 */
 export const DEFAULT_EMPHASIS: CaptionEmphasis = DEFAULT_CAPTION_EMPHASIS;
 
 type StyleProps = {
@@ -16,7 +16,7 @@ type StyleProps = {
 
 /**
  * 強調した字幕の見た目(帯・色・書体・文字スタイル)と効果音を選ぶ欄。強調を選ぶ画面(全部の強調にまとめて使う)と、
- * 編集画面の字幕タブ(クリップごと)の両方で使う。選んだ内容はAIを使わず、決まった形でそのまま描く。
+ * 編集画面の字幕タブ(場面ごと)の両方で使う。選んだ内容はAIを使わず、決まった形でそのまま描く。
  */
 export const EmphasisStyleFields: React.FC<StyleProps> = ({ emphasis, sfxPresetId, onChange }) => {
   const update = (patch: Partial<CaptionEmphasis>) => onChange({ emphasis: { ...emphasis, ...patch } });
@@ -26,7 +26,7 @@ export const EmphasisStyleFields: React.FC<StyleProps> = ({ emphasis, sfxPresetI
         <div className="color-option">
           <label className="color-option-toggle">
             <input type="checkbox" checked={emphasis.band} onChange={(e) => update({ band: e.target.checked })} />
-            帯を敷く(シェイプテロップ)
+            帯を敷く(シェイプ字幕)
           </label>
           <input
             type="color"
@@ -83,7 +83,7 @@ type Props = {
   onChange: (patch: Partial<Pick<ProjectSegment, "captionEmphasis" | "emphasisSfxPresetId">>) => void;
 };
 
-/** 選んだクリップの字幕を強調する欄(編集画面の字幕タブ)。 */
+/** 選んだ場面の字幕を強調する欄(編集画面の字幕タブ)。 */
 export const CaptionEmphasisFields: React.FC<Props> = ({ segment, onChange }) => {
   const emphasis = segment.captionEmphasis;
   return (
@@ -100,7 +100,7 @@ export const CaptionEmphasisFields: React.FC<Props> = ({ segment, onChange }) =>
             )
           }
         />
-        このクリップの字幕を強調する
+        この場面の字幕を強調する
       </label>
       {emphasis ? (
         <EmphasisStyleFields
@@ -128,7 +128,7 @@ const DEFAULT_KEYWORD_COLOR = "#FF2D2D";
 /** 重大ワードの数の上限。描画側のスキーマ(themeSchemaのkeywordHighlights)と合わせる。 */
 const MAX_KEYWORDS = 30;
 
-/** 重大ワードの欄。ここに入れた言葉は、全クリップの字幕で指定の色・少し大きい文字になる。 */
+/** 重大ワードの欄。ここに入れた言葉は、全場面の字幕で指定の色・少し大きい文字になる。 */
 export const KeywordHighlightFields: React.FC<KeywordProps> = ({ keywords, onChange }) => (
   <div className="flex flex-col gap-2">
     {keywords.map((keyword, index) => (

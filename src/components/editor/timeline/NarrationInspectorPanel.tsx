@@ -23,13 +23,13 @@ type Props = {
   onChangeNarrationVoice: (voiceName: string) => void;
   muteOriginalUnderNarration: boolean;
   onChangeMuteOriginalUnderNarration: (value: boolean) => void;
-  /** 選んだクリップだけ本人の声を消す/戻す(クリップ自体の音量を0/1にする)。 */
+  /** 選んだ場面だけ本人の声を消す/戻す(場面自体の音量を0/1にする)。 */
   onChangeSegmentVolume: (key: string, volume: number) => void;
   /** AIナレーション生成中の進捗(単発生成もtotal=1として同じ状態を使う)。nullなら非実行中。 */
   narrationGenerating: { current: number; total: number } | null;
   onGenerateNarrationForSegment: (key: string) => void;
   onGenerateNarrationForAll: () => void;
-  /** 実行中の一括生成を、今のクリップが終わった時点で止める。 */
+  /** 実行中の一括生成を、今の場面が終わった時点で止める。 */
   onCancelNarrationGeneration: () => void;
 };
 
@@ -42,7 +42,7 @@ const countNarration = (segments: ProjectSegment[], narrationClips: ProjectSfxCl
     narrationClips.map((clip) => clip.narrationSegmentKey).filter((key): key is string => Boolean(key))
   );
   const captionedSegments = segments.filter((segment) => segment.caption.trim().length > 0);
-  // 未作成のクリップ番号(1始まり)。字幕の無いクリップは作れないので含めない。
+  // 未作成の場面番号(1始まり)。字幕の無い場面は作れないので含めない。
   const pendingNumbers = segments
     .map((segment, index) => ({ segment, number: index + 1 }))
     .filter(({ segment }) => segment.caption.trim().length > 0 && !generatedSegmentKeys.has(segment.key))
@@ -60,7 +60,7 @@ const countNarration = (segments: ProjectSegment[], narrationClips: ProjectSfxCl
   };
 };
 
-/** 読み上げる声の選択。一括生成とクリップごとの生成の両方の横に置く(どちらも同じ声の設定を使う)。 */
+/** 読み上げる声の選択。一括生成と場面ごとの生成の両方の横に置く(どちらも同じ声の設定を使う)。 */
 const VoiceSelect: React.FC<Pick<Props, "voiceOptions" | "narrationVoice" | "onChangeNarrationVoice" | "narrationGenerating">> = ({
   voiceOptions,
   narrationVoice,
@@ -83,13 +83,13 @@ const VoiceSelect: React.FC<Pick<Props, "voiceOptions" | "narrationVoice" | "onC
 );
 
 /**
- * AIナレーションの一括生成。全クリップへの操作なので、字幕タブの「全クリップの字幕」欄に
- * 字幕の一括操作と段を分けて置く。声の選択と横に並べ、どのクリップが未作成かを下に出す。
+ * AIナレーションの一括生成。全場面への操作なので、字幕タブの「全場面の字幕」欄に
+ * 字幕の一括操作と段を分けて置く。声の選択と横に並べ、どの場面が未作成かを下に出す。
  * 生成中は中断ボタンに変わる(1件だけの生成中も同じ)。
  */
 export const NarrationBulkGenerate: React.FC<Props> = (props) => {
   const { segments, narrationClips, totalSfxCount, maxSfxClips, narrationGenerating, narrationVoice } = props;
-  // 「あと何件ぶんAPIを使うのか」は、未作成のクリップ番号として下に出す。
+  // 「あと何件ぶんAPIを使うのか」は、未作成の場面番号として下に出す。
   const { captionedCount, missingCount, mismatchedCount, pendingCount, pendingNumbers } = countNarration(
     segments,
     narrationClips,
@@ -117,7 +117,7 @@ export const NarrationBulkGenerate: React.FC<Props> = (props) => {
                 : pendingCount === 0
                   ? captionedCount === 0
                     ? "字幕を入れると生成できます"
-                    : "字幕のあるクリップは全て生成済みです"
+                    : "字幕のある場面は全て生成済みです"
                   : "まだ無い分を作り、違う声で作ってある分は今の声で作り直して、声をそろえます"
             }
           >
@@ -137,9 +137,9 @@ export const NarrationBulkGenerate: React.FC<Props> = (props) => {
         progress={narrationGenerating ? (narrationGenerating.current - 1) / narrationGenerating.total : null}
       />
       {missingCount > 0 ? (
-        <p className="settings-hint">未作成: {pendingNumbers.map((n) => `クリップ${n}`).join("、")}</p>
+        <p className="settings-hint">未作成: {pendingNumbers.map((n) => `場面${n}`).join("、")}</p>
       ) : captionedCount > 0 && mismatchedCount === 0 ? (
-        <p className="settings-hint">字幕のあるクリップは、すべて作成済みです</p>
+        <p className="settings-hint">字幕のある場面は、すべて作成済みです</p>
       ) : null}
       {mismatchedCount > 0 && !narrationGenerating ? (
         <p className="settings-hint">
@@ -153,15 +153,15 @@ export const NarrationBulkGenerate: React.FC<Props> = (props) => {
           checked={props.muteOriginalUnderNarration}
           onChange={(e) => props.onChangeMuteOriginalUnderNarration(e.target.checked)}
         />
-        ナレーションを入れたクリップは、元の音(話し声など)を消す
+        ナレーションを入れた場面は、元の音(話し声など)を消す
       </label>
     </>
   );
 };
 
 /**
- * 字幕タブの「AIナレーション」欄(旧「AI音声」タブ)。選んだクリップだけの生成・作り直し(声の選択と横並び)と、
- * 生成済みナレーションの開始秒・音量・削除を扱う。全クリップ分の一括生成は「全クリップの字幕」欄
+ * 字幕タブの「AIナレーション」欄(旧「AI音声」タブ)。選んだ場面だけの生成・作り直し(声の選択と横並び)と、
+ * 生成済みナレーションの開始秒・音量・削除を扱う。全場面分の一括生成は「全場面の字幕」欄
  * (NarrationBulkGenerate)に置く。字幕の見た目の次に置くため、パネルの枠は持たず小見出し付きのまとまりだけを返す。
  */
 export const NarrationInspectorPanel: React.FC<Props> = (props) => {
@@ -184,7 +184,7 @@ export const NarrationInspectorPanel: React.FC<Props> = (props) => {
     ? segments.findIndex((segment) => segment.key === selectedSegmentKey)
     : -1;
   const selectedSegment = selectedSegmentIndex >= 0 ? segments[selectedSegmentIndex] : null;
-  // タイムラインのAI音声の段で選んだナレーション。段を選んでいなくても、選んだクリップに生成済みの
+  // タイムラインのAI音声の段で選んだナレーション。段を選んでいなくても、選んだ場面に生成済みの
   // ナレーションがあればそれを編集できるようにする(生成した後に、すぐ音量や削除を触れるように)。
   const selected =
     (audioSelection?.kind === "sfx" ? narrationClips.find((c) => c.key === audioSelection.key) : undefined) ??
@@ -198,7 +198,7 @@ export const NarrationInspectorPanel: React.FC<Props> = (props) => {
   return (
     <SettingsSection title="AIナレーション(字幕の読み上げ)" icon={<MicIcon size={16} />}>
       <p className="settings-hint">字幕の文章を、AIの声で読み上げた音声にして動画に付けます</p>
-      {/* 声の選択と、選んだクリップだけの生成・作り直しを横に並べる */}
+      {/* 声の選択と、選んだ場面だけの生成・作り直しを横に並べる */}
       <div className="flex flex-wrap gap-2">
         <VoiceSelect {...props} />
         {selectedSegment ? (
@@ -215,18 +215,18 @@ export const NarrationInspectorPanel: React.FC<Props> = (props) => {
               !selectedHasNarration && atLimit
                 ? `効果音/ナレーションの上限(${maxSfxClips}件)に達しています`
                 : selectedHasNarration
-                  ? "このクリップのナレーションを作り直して差し替えます"
-                  : "このテロップをAIナレーション(読み上げ音声)に変換して追加します"
+                  ? "この場面のナレーションを作り直して差し替えます"
+                  : "この字幕をAIナレーション(読み上げ音声)に変換して追加します"
             }
           >
             <MicIcon size={14} />
             {selectedHasNarration
-              ? `クリップ${selectedSegmentIndex + 1}だけ作り直す`
-              : `クリップ${selectedSegmentIndex + 1}だけ生成`}
+              ? `場面${selectedSegmentIndex + 1}だけ作り直す`
+              : `場面${selectedSegmentIndex + 1}だけ生成`}
           </button>
         ) : null}
       </div>
-      {/* 全体のスイッチ(全クリップの字幕の欄)とは別に、このクリップだけ話し声を消したい時のため。生成した場所ですぐ切り替えられるようにする */}
+      {/* 全体のスイッチ(全場面の字幕の欄)とは別に、この場面だけ話し声を消したい時のため。生成した場所ですぐ切り替えられるようにする */}
       {selectedSegment ? (
         <>
           <label className="flex items-center gap-2">
@@ -236,11 +236,11 @@ export const NarrationInspectorPanel: React.FC<Props> = (props) => {
               disabled={muteOriginalUnderNarration && selectedHasNarration}
               onChange={(e) => onChangeSegmentVolume(selectedSegment.key, e.target.checked ? 0 : 1)}
             />
-            <span className="field-label">クリップ{selectedSegmentIndex + 1}の話し声を消す</span>
+            <span className="field-label">場面{selectedSegmentIndex + 1}の話し声を消す</span>
           </label>
           {muteOriginalUnderNarration && selectedHasNarration ? (
             <p className="settings-hint">
-              「ナレーションを入れたクリップは、元の音を消す」がONなので、このクリップの話し声は消えています
+              「ナレーションを入れた場面は、元の音を消す」がONなので、この場面の話し声は消えています
             </p>
           ) : null}
         </>

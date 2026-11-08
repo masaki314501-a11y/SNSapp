@@ -31,7 +31,7 @@ export type ProjectEffectsPatch = Partial<
 export type EffectsScope = "clip" | "global";
 
 type Props = {
-  /** 「クリップごと」の演出か、「動画全体」の演出か(パネル上部の切り替え)。 */
+  /** 「場面ごと」の演出か、「動画全体」の演出か(パネル上部の切り替え)。 */
   scope: EffectsScope;
   onChangeScope: (scope: EffectsScope) => void;
   segments: ProjectSegment[];
@@ -49,18 +49,18 @@ type Props = {
   totalSeconds: number;
   onUpdateSegmentEffects: (key: string, patch: SegmentEffectsPatch) => void;
   onUpdateProjectEffects: (patch: ProjectEffectsPatch) => void;
-  /** 表示時間を動かした時に、その時刻を動画で見せる(クリップ内の秒数 / 動画全体の秒数)。 */
+  /** 表示時間を動かした時に、その時刻を動画で見せる(場面内の秒数 / 動画全体の秒数)。 */
   onPreviewInClip: (segmentKey: string, offsetSeconds: number) => void;
   onPreviewInProgram: (seconds: number) => void;
   /** 今のカメラワークのルール(cameraRules.tsのid)。 */
   cameraRuleId: string | undefined;
-  /** 全クリップの寄りを、ルールで付け直す。 */
+  /** 全場面の寄りを、ルールで付け直す。 */
   onApplyCameraRule: (ruleId: CameraRuleId) => void;
 };
 
 /**
  * 「演出」タブのパネル。自動編集(Gemini)が決めた演出を、ここですべて手で直せるようにする。
- * 上部の切り替えで、選択中クリップの演出(寄り・強調テキスト・画像)と、動画全体の演出
+ * 上部の切り替えで、選択中場面の演出(寄り・画面に出す文字・画像)と、動画全体の演出
  * (冒頭の見出し・締めの一言・ずっと出す文字・画像・全体のフェード)を分けて表示する
  * (以前は縦に続けて並べていて、どちらを編集しているのか見分けにくかった)。
  * 字幕の強調(強調する単語・色)は字幕に関わる設定なので、字幕タブ(CaptionInspectorPanel)に置く。
@@ -135,7 +135,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
             className={scope === "clip" ? "active" : undefined}
             onClick={() => onChangeScope("clip")}
           >
-            クリップごと
+            場面ごと
           </button>
           <button
             type="button"
@@ -151,7 +151,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
         {scope === "clip" ? (
           selectedCount > 1 ? (
             <div className="editor-inspector-empty">
-              <p>{selectedCount}件のクリップを選択中です。演出は1クリップずつ編集してください</p>
+              <p>{selectedCount}件の場面を選択中です。演出は1場面ずつ編集してください</p>
             </div>
           ) : selected ? (
             <div className="editor-inspector-fields">
@@ -236,12 +236,12 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                 ) : null}
               </SettingsSection>
 
-              <SettingsSection title="強調テキスト" icon={<TextIcon size={16} />}>
+              <SettingsSection title="画面に出す文字" icon={<TextIcon size={16} />}>
                 {overlays.map((overlay, i) => (
                   <TextOverlayFields
                     key={i}
                     overlay={overlay}
-                    timeBaseLabel="クリップの先頭から"
+                    timeBaseLabel="場面の先頭から"
                     rangeSeconds={selected.durationInSeconds}
                     defaultOpen={isJustAdded(`overlays-${selected.key}`, i)}
                     onChange={(patch) => setOverlays(overlays.map((o, j) => (j === i ? { ...o, ...patch } : o)))}
@@ -259,7 +259,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                   }}
                 >
                   <PlusIcon size={14} />
-                  強調テキストを追加
+                  文字を追加
                 </button>
               </SettingsSection>
 
@@ -269,7 +269,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
                     key={i}
                     image={image}
                     label={`画像${i + 1}`}
-                    timeBaseLabel="クリップの先頭から"
+                    timeBaseLabel="場面の先頭から"
                     rangeSeconds={selected.durationInSeconds}
                     defaultOpen={isJustAdded(`images-${selected.key}`, i)}
                     onChange={(patch) => setImages(images.map((o, j) => (j === i ? { ...o, ...patch } : o)))}
@@ -300,7 +300,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
             </div>
           ) : (
             <div className="editor-inspector-empty">
-              <p>クリップを選択すると、そのクリップの寄り・強調テキスト・画像を編集できます</p>
+              <p>場面を選択すると、その場面の寄り・画面に出す文字・画像を編集できます</p>
             </div>
           )
         ) : (
@@ -429,7 +429,7 @@ export const EffectsInspectorPanel: React.FC<Props> = ({
               </label>
               <span className="text-xs" style={{ color: "var(--muted-2)" }}>
                 {CAMERA_RULES.find((rule) => rule.id === cameraRuleId)?.description}
-                。全クリップの寄りを、このルールで付け直します(手で直した寄りも置き換わります)。
+                。全場面の寄りを、このルールで付け直します(手で直した寄りも置き換わります)。
               </span>
               <button
                 type="button"

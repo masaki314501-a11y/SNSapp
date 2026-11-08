@@ -2,7 +2,7 @@ import type { CaptionFontFamily, CaptionFontSize, CaptionStyle, ClipZoom, ImageO
 import { estimateOverlayBox } from "@video/shared/textWrap";
 import { findTextStylePreset } from "@video/shared/textStylePresets";
 import type { ProjectSegment } from "@/lib/videoProject";
-import { captionBox } from "@/lib/gemini/autoEditPlan";
+import { captionBox } from "./screenBoxes";
 import { captionRuns, MIN_CAPTION_SECONDS, READ_CHARS_PER_SECOND, type SpeechSpan, type StepState } from "./logic";
 
 /**
@@ -25,6 +25,24 @@ export const isWhiteOrBlack = (color: string): boolean => {
   return max - min <= 0x18 && (max <= 0x33 || min >= 0xe6);
 };
 
+/**
+ * AIが見つけた誤字・脱字を、自動で直してよいか。直すのは、数文字だけを直す小さな物だけ
+ * (「できるの」→「できるので」・「ほが」→「方が」など)。
+ * 文字のほとんどを書き換える物は、言い換え(利用者が直したタイトル等)を戻してしまうことがあるので、
+ * 自動では直さず、候補として人に見せる。
+ */
+export const isSmallTypoFix = (typo: { text: string; wrong: string; correct: string }): boolean => {
+  if (!typo.wrong || !typo.text.includes(typo.wrong)) return false;
+  const a = [...typo.wrong];
+  const b = [...typo.correct];
+  let prefix = 0;
+  while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < a.length - prefix && suffix < b.length - prefix && a[a.length - 1 - suffix] === b[b.length - 1 - suffix]) suffix++;
+  const changed = Math.max(a.length - prefix - suffix, b.length - prefix - suffix);
+  return changed <= Math.max(3, Math.floor([...typo.text.replace(/\s/g, "")].length / 3));
+};
+
 export type CheckStatus = "ok" | "ng" | "review";
 export type CheckItem = {
   id: string;
@@ -33,6 +51,18 @@ export type CheckItem = {
   status: CheckStatus;
   /** 確かめた結果・直した内容・見る所。 */
   detail: string;
+  /** 広告の表現で引っかかった文字(画面で、その場で言い換えられるようにする)。 */
+  findings?: AdRiskFinding[];
+};
+
+export type AdRiskFinding = {
+  /** 引っかかった字幕・文字(改行は除く)。 */
+  text: string;
+  /** 引っかかった言葉。 */
+  word: string;
+  law: string;
+  /** なぜ確かめてほしいか(はじめての人向けの説明)。 */
+  why: string;
 };
 
 /** セーフティゾーンの目安(画面に対する%)。上は検索欄、右はボタン、下は説明文で隠れる。広告は「広告」の表示やボタンが増えるので狭い。 */
@@ -51,16 +81,26 @@ const MAX_SAME_ANGLE_SECONDS = 5;
 const ANGLE_CHANGE_ZOOM = 1.08;
 /** カットの遅れとみなす、話し終えてから切れるまでの間(秒)。工程4で残す余白(0.12秒)は遅れに含めない。 */
 const MAX_CUT_DELAY_SECONDS = 0.2 + 0.12;
-/** 完成動画の長さの上限(秒)。お客様の指定があれば変えてよい。 */
-const MAX_VIDEO_SECONDS = 30;
 /** 指定した長さを、これだけ超えていても収まったとみなす(秒)。場面ごとにしか外せないため。 */
 const LENGTH_TOLERANCE_SECONDS = 0.5;
 
 /** 広告として問題になりやすい表現(薬機法・景品表示法・比較広告)。見つかったら人が確かめる。 */
-const AD_RISK_PATTERNS: { pattern: RegExp; law: string }[] = [
-  { pattern: /効果あり|効果がある|若返|治る|完治/, law: "薬機法" },
-  { pattern: /最[高強安大新上]|業界初|日本初|世界初|地域初|No\.?\s?1|NO\.?\s?1|ナンバーワン|大人気|一番人気/i, law: "景品表示法" },
-  { pattern: /\d+(\.\d+)?\s?倍|\d+(\.\d+)?\s?[%％]|\d+\s?分の\s?\d+/, law: "比較広告" },
+const AD_RISK_PATTERNS: { pattern: RegExp; law: string; why: string }[] = [
+  {
+    pattern: /効果あり|効果がある|若返|治る|完治/,
+    law: "薬機法",
+    why: "効き目を言い切る言葉は、薬機法で使えないことがあります。「〜が期待できます」「〜の人もいます」のように言い換えると安全です",
+  },
+  {
+    pattern: /最[高強安大新上]|業界初|日本初|世界初|地域初|No\.?\s?1|NO\.?\s?1|ナンバーワン|大人気|一番人気/i,
+    law: "景品表示法",
+    why: "「一番」「初」のような言葉は、はっきりした根拠が無いと景品表示法で使えないことがあります",
+  },
+  {
+    pattern: /\d+(\.\d+)?\s?倍|\d+(\.\d+)?\s?[%％]|\d+\s?分の\s?\d+/,
+    law: "比較広告",
+    why: "「〇倍」「〇%」のような数字は、何と比べたか・どこから出た数字かの根拠が要ります。根拠があれば、そのままで大丈夫です",
+  },
 ];
 
 const segmentEnd = (segment: ProjectSegment) => segment.startFromSeconds + segment.durationInSeconds;
@@ -116,7 +156,7 @@ export type ChecklistInput = {
   fixedTypos?: { text: string; wrong: string; correct: string; reason: string }[];
   /** どこに出す動画か(セーフティゾーンが変わる)。 */
   zone?: SafeZoneKind;
-  /** 工程12で決めた長さの上限(秒)。指定が無い時は null(その時は30秒を目安に、超えたら目で確かめてもらう)。 */
+  /** 工程12で決めた長さの上限(秒)。指定が無い時は null(その時は長さを確かめない)。 */
   targetSeconds?: number | null;
   /** 動画全体に出す画像(編集画面で足した物)。 */
   globalImages?: ImageOverlay[];
@@ -154,7 +194,7 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     detail:
       silentCaptions.length === 0
         ? `全${runs.length}個の字幕が、声が出ている間に出ています`
-        : `声が出ていない所に出ている字幕: ${silentCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」`).join(" / ")}。工程9をやり直してください`,
+        : `声が出ていない所に出ている字幕: ${silentCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」`).join(" / ")}。下の「工程9からやり直す」を押すと、字幕を入れ直します`,
   });
 
   const shortCaptions = runs
@@ -163,12 +203,12 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "caption-time",
     group: "基本",
-    label: "テロップの表示時間は適切か(きちんと読めるか)",
+    label: "字幕が読める長さ出ているか",
     status: shortCaptions.length === 0 ? "ok" : "ng",
     detail:
       shortCaptions.length === 0
         ? `全${runs.length}個とも、読める長さ(1秒に${READ_CHARS_PER_SECOND}文字まで・${MIN_CAPTION_SECONDS}秒以上)出ています`
-        : `表示時間が短いテロップ: ${shortCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」${fmt(s.durationInSeconds)}`).join(" / ")}。文字を減らすか、クリップを長くしてください`,
+        : `出ている時間が短くて読み切れない字幕: ${shortCaptions.map((s) => `「${s.caption.replace(/\n/g, "")}」${fmt(s.durationInSeconds)}`).join(" / ")}。下の「工程9からやり直す」を押すと、AIが字幕を短くします`,
   });
 
   const typos = input.typos;
@@ -179,12 +219,12 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     status: typos === undefined || typos === null ? "review" : typos.length === 0 ? "ok" : "ng",
     detail:
       typos === undefined || typos === null
-        ? "テロップ・タイトル・枠の文字を読んで確かめてください"
+        ? "字幕・タイトル・枠の文字を読んで確かめてください"
         : typos.length === 0
           ? input.fixedTypos?.length
             ? `AIが音声と見比べ、誤字・脱字を${input.fixedTypos.length}か所直しました: ${input.fixedTypos.map((t) => `「${t.wrong}」→「${t.correct}」`).join(" / ")}`
             : "AIが音声と見比べ、誤字・脱字は見つかりませんでした"
-          : `誤字・脱字の候補: ${typos.map((t) => `「${t.text.replace(/\n/g, "")}」の「${t.wrong}」→「${t.correct}」(${t.reason})`).join(" / ")}。編集画面で直してから、もう一度チェックしてください`,
+          : `誤字・脱字の候補: ${typos.map((t) => `「${t.text.replace(/\n/g, "")}」の「${t.wrong}」→「${t.correct}」(${t.reason})`).join(" / ")}。字幕の誤りは、下の「工程9からやり直す」を押すか、編集画面の「字幕・音声」で直してください。タイトル・枠の文字の誤りは、編集画面の「演出」で直してください`,
   });
 
   // セーフティゾーン: 字幕・文字・枠が画面の端(アプリのボタンや説明文で隠れる所)に出ていないか
@@ -199,7 +239,7 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
         ? { ...band, top: state.captionYPercent, bottom: state.captionYPercent + (band.bottom - band.top) }
         : band;
     if (!inZone(box)) {
-      outside.push(`テロップ「${segment.caption.replace(/\n/g, "").slice(0, 12)}」`);
+      outside.push(`字幕「${segment.caption.replace(/\n/g, "").slice(0, 12)}」`);
       break;
     }
   }
@@ -221,12 +261,12 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "safe-zone",
     group: "基本",
-    label: `セーフティゾーンからはみ出していないか(${zone.label})`,
+    label: `文字が、アプリのボタンや説明で隠れる所に出ていないか(${zone.label})`,
     status: outside.length === 0 ? "ok" : "ng",
     detail:
       outside.length === 0
         ? `字幕・文字・枠は、すべて画面の上${zone.top}%・下${100 - zone.bottom}%・左${zone.left}%・右${100 - zone.right}%を避けています`
-        : `はみ出している物: ${outside.join(" / ")}。編集画面で位置を内側へ動かしてください`,
+        : `隠れる所に出ている物: ${outside.join(" / ")}。下の「工程8からやり直す」を押すか、編集画面で位置を内側へ動かしてください`,
   });
 
   // 画像の出どころ: 画像の棚の物(AIが作った・使ってよいと確かめて貯めた物)は○。お客様から受け取って入れた画像は、使ってよい物か人が確かめる
@@ -253,9 +293,9 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "no-blank-start",
     group: "クオリティ",
-    label: "冒頭空白がないか",
+    label: "最初に間が空いていないか",
     status: leadingGap <= 0.3 ? "ok" : "ng",
-    detail: leadingGap <= 0.3 ? `話し始めるまで${fmt(leadingGap)}です` : `話し始めるまで${fmt(leadingGap)}空いています。工程2をやり直してください`,
+    detail: leadingGap <= 0.3 ? `話し始めるまで${fmt(leadingGap)}です` : `話し始めるまで${fmt(leadingGap)}空いています。このままでも出せますが、最初に間があると見る人が離れやすくなります。詰める時は、編集画面の「カット」で、最初の場面の頭を後ろへずらしてください`,
   });
 
   let elapsed = 0;
@@ -268,23 +308,23 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "first-5s",
     group: "クオリティ",
-    label: "冒頭5秒内の変化はつけているか(3カット以上)",
+    label: "最初の5秒に、3回以上の切り替わりがあるか",
     status: cutsInFirst5 + 1 >= 3 ? "ok" : "ng",
     detail:
       cutsInFirst5 + 1 >= 3
         ? `冒頭5秒に${cutsInFirst5 + 1}カット入っています`
-        : `冒頭5秒が${cutsInFirst5 + 1}カット(変化${changesInFirst5}回)しかありません。冒頭の話を区切るか、寄りを足してください`,
+        : `最初の5秒が${cutsInFirst5 + 1}カット(変化${changesInFirst5}回)しかありません。このままでも出せますが、最初に変化が少ないと見る人が離れやすくなります。足す時は、編集画面の「演出」で、最初の場面に「寄り(ズーム)」を入れてください`,
   });
 
   const longest = longestSameAngle(segments);
   add({
     id: "same-angle",
     group: "クオリティ",
-    label: "同じ画角が5秒以内か",
+    label: "同じ映り方が、5秒より長く続いていないか",
     status: longest <= MAX_SAME_ANGLE_SECONDS + 0.05 ? "ok" : "ng",
     detail: [
-      angleFix.fixed > 0 ? `5秒を超えて同じ画角が続く所に、ゆるい寄りを${angleFix.fixed}か所足しました。` : "",
-      longest <= MAX_SAME_ANGLE_SECONDS + 0.05 ? `同じ画角は長くて${fmt(longest)}です` : `同じ画角が${fmt(longest)}続く所があります(1つのクリップが長すぎます)`,
+      angleFix.fixed > 0 ? `5秒を超えて同じ映り方が続く所に、ゆるい寄りを${angleFix.fixed}か所足しました。` : "",
+      longest <= MAX_SAME_ANGLE_SECONDS + 0.05 ? `同じ映り方は長くて${fmt(longest)}です` : `同じ映り方が${fmt(longest)}続く所があります(1つの場面が長いため)。このままでも出せます。変える時は、編集画面の「カット」でその場面を2つに分け、「演出」で片方に「寄り(ズーム)」を入れてください`,
     ].join(""),
   });
 
@@ -299,22 +339,22 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "cut-delay",
     group: "クオリティ",
-    label: "0.2秒以上カットが遅れていないか",
+    label: "話し終えてから、0.2秒以内に切れているか",
     status: lateCuts.length === 0 ? "ok" : "ng",
-    detail: lateCuts.length === 0 ? "話し終えてから0.2秒以内に切れています" : `話し終えてから0.2秒より後に切れているクリップが${lateCuts.length}個あります。工程4・5をやり直してください`,
+    detail: lateCuts.length === 0 ? "話し終えてから0.2秒以内に切れています" : `話し終えてから切れるまでに、少し間がある場面が${lateCuts.length}個あります。このままでも出せます。詰める時は、編集画面の「カット」で、その場面の終わりを前へずらしてください`,
   });
 
   add({
     id: "bgm",
     group: "クオリティ",
-    label: "BGMのタイミングが0.2秒以上ズレていないか",
+    label: "BGMの終わりが、動画の終わりと合っているか",
     // BGMは動画の頭から鳴り、終わりに合わせて下げる。入り・終わりの音量の変化が0.2秒以上あれば、映像とずれて聞こえない
     status: !input.hasBgm || (input.bgmFade && input.bgmFade.fadeOutSeconds >= 0.2) ? "ok" : "ng",
     detail: !input.hasBgm
       ? "BGMは入っていません"
       : input.bgmFade && input.bgmFade.fadeOutSeconds >= 0.2
         ? `BGMは動画の頭から鳴り、最後の${fmt(input.bgmFade.fadeOutSeconds)}で音量を下げて、動画の終わりと一緒に終わります`
-        : "BGMが動画の終わりで急に切れます。編集画面のBGMで、終わりのフェードアウトを付けてください",
+        : "BGMが動画の終わりで急に切れます。編集画面の「BGM」で、終わりで音をだんだん小さくする設定(フェードアウト)を付けてください",
   });
 
   const colors = new Set<string>();
@@ -342,9 +382,9 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "colors",
     group: "クオリティ",
-    label: "4色以上色が混在していないか",
+    label: "色が多すぎないか(白・黒のほかに3色まで)",
     status: colors.size <= 3 ? "ok" : "ng",
-    detail: `白・黒のほかに使っている色は${colors.size}色です${colors.size ? `(${[...colors].join("・")})` : ""}${colors.size <= 3 ? "" : "。色をそろえてください"}${captionPreset ? "。文字スタイルの色は数えていないので、目でも確かめてください" : ""}`,
+    detail: `白・黒のほかに使っている色は${colors.size}色です${colors.size ? `(${[...colors].join("・")})` : ""}${colors.size <= 3 ? "" : "。下の「工程8からやり直す」を押すと、AIが色を選び直します"}${captionPreset ? "。文字スタイルの色は数えていないので、目でも確かめてください" : ""}`,
   });
 
   const fonts = new Set<string>([input.look.fontFamily]);
@@ -360,16 +400,16 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "fonts",
     group: "クオリティ",
-    label: "フォントは3つ以上混在していないか",
+    label: "書体(フォント)が多すぎないか(2つまで)",
     status: fonts.size <= 2 ? "ok" : "ng",
-    detail: `使っているフォントは${fonts.size}つです(${[...fonts].join("・")})${fonts.size <= 2 ? "" : "。フォントをそろえてください"}`,
+    detail: `使っている書体は${fonts.size}つです(${[...fonts].join("・")})${fonts.size <= 2 ? "" : "。下の「工程8からやり直す」を押すと、AIが書体を選び直します"}`,
   });
 
   const light = input.lightAdjusted;
   add({
     id: "light",
     group: "クオリティ",
-    label: "人間が美しく見えるよう光が補正されているか",
+    label: "人がきれいに見える明るさになっているか",
     status: light ? "ok" : "review",
     detail: light
       ? `映像の明るさを測って補正しました(明るさ${Math.round(light.brightness * 100)}%・コントラスト${Math.round(light.contrast * 100)}%・彩度${Math.round(light.saturation * 100)}%)。編集画面の「演出」→「動画全体」で手でも直せます`
@@ -382,36 +422,29 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   add({
     id: "sfx",
     group: "クオリティ",
-    label: "シーンごとにSE・効果音が入っているか",
+    label: "強調した字幕に、効果音が入っているか",
     status: emphasized.length > 0 && noSfx.length === 0 ? "ok" : "ng",
     detail:
       emphasized.length === 0
-        ? "効果音が入っていません。工程10・11をやり直してください"
+        ? "強調した字幕が無いので、効果音が入っていません。下の「工程10からやり直す」を押してください"
         : noSfx.length === 0
-          ? `強調テロップ${emphasized.length}か所すべてに効果音が入っています`
-          : `効果音の無い強調テロップが${noSfx.length}か所あります。工程11をやり直してください`,
+          ? `強調した字幕${emphasized.length}か所すべてに効果音が入っています`
+          : `効果音の無い強調した字幕が${noSfx.length}か所あります。下の「工程10からやり直す」を押してください`,
   });
 
   // ---- 原稿チェック項目のうち、完成動画で確かめられる物 ----
+  // 長さは、工程12で上限を入れた時だけ確かめる(入れていない時は、動画の長さのままでよい)
+  const target = input.targetSeconds;
   add({
     id: "length",
     group: "原稿",
-    label: "30秒以内の動画になっているか(お客様の指定があれば変更OK)",
-    // 長さを指定した時は、その長さに収まっているか。指定が無い時は30秒を目安にし、超えたら目で確かめてもらう
-    status: input.targetSeconds
-      ? totalSeconds <= input.targetSeconds + LENGTH_TOLERANCE_SECONDS
-        ? "ok"
-        : "ng"
-      : totalSeconds <= MAX_VIDEO_SECONDS
-        ? "ok"
-        : "review",
-    detail: input.targetSeconds
-      ? totalSeconds <= input.targetSeconds + LENGTH_TOLERANCE_SECONDS
-        ? `完成の長さは${fmt(totalSeconds)}で、指定した${input.targetSeconds}秒以内です`
-        : `完成の長さが${fmt(totalSeconds)}で、指定した${input.targetSeconds}秒を超えています。工程12をやり直してください`
-      : totalSeconds <= MAX_VIDEO_SECONDS
-        ? `完成の長さは${fmt(totalSeconds)}です`
-        : `完成の長さが${fmt(totalSeconds)}あります(長さは指定していません)。このままでよければチェックしてください。短くする時は、工程12で長さの上限を入れてやり直してください`,
+    label: "決めた長さに収まっているか",
+    status: !target || totalSeconds <= target + LENGTH_TOLERANCE_SECONDS ? "ok" : "ng",
+    detail: !target
+      ? `長さの上限は決めていません(完成の長さは${fmt(totalSeconds)})`
+      : totalSeconds <= target + LENGTH_TOLERANCE_SECONDS
+        ? `完成の長さは${fmt(totalSeconds)}で、決めた${target}秒以内です`
+        : `完成の長さが${fmt(totalSeconds)}で、決めた${target}秒を超えています。下の「工程12からやり直す」を押してください`,
   });
 
   const texts = [
@@ -419,21 +452,33 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
     ...segments.flatMap((segment) => (segment.overlays ?? []).map((overlay) => overlay.text)),
     ...captioned.map((segment) => segment.caption),
   ].map((text) => text.replace(/\n/g, ""));
-  const risky = AD_RISK_PATTERNS.flatMap(({ pattern, law }) =>
-    texts.filter((text) => pattern.test(text)).map((text) => `${law}:「${text}」`)
-  );
+  const findings: AdRiskFinding[] = [];
+  for (const { pattern, law, why } of AD_RISK_PATTERNS) {
+    for (const text of new Set(texts)) {
+      const word = pattern.exec(text)?.[0];
+      if (word) findings.push({ text, word, law, why });
+    }
+  }
   add({
     id: "ad-law",
     group: "原稿",
-    label: "薬機法・景品表示法・比較広告に触れる表現はないか",
-    status: risky.length === 0 ? "ok" : "review",
+    label: "広告で使えない言葉がないか(薬機法・景品表示法・比較広告)",
+    status: findings.length === 0 ? "ok" : "review",
     detail:
-      risky.length === 0
-        ? "「効果あり」「最〇」「No.1」「〇倍」「〇%」などの表現は見つかりませんでした"
-        : `確かめてほしい表現: ${[...new Set(risky)].join(" / ")}`,
+      findings.length === 0
+        ? "「治る」「最〇」「No.1」「〇倍」「〇%」のような言葉は見つかりませんでした"
+        : "次の言葉が、広告では使えないことがあります。言い換えるか、根拠があって問題なければ「このままでよい」にチェックしてください",
+    ...(findings.length > 0 ? { findings } : {}),
   });
 
-  add({ id: "brand", group: "原稿", label: "企業イメージを損ねる内容ではないか", status: "review", detail: "完成動画を見て確かめてください" });
+  add({
+    id: "brand",
+    group: "原稿",
+    label: "会社やお店のイメージを悪くする所がないか",
+    status: "review",
+    detail:
+      "上の動画を最後まで見て、次のような所が無いか確かめてください: 人やほかの会社を悪く言っている・ふざけすぎている・写ってはいけない物(ほかの人の顔・書類・パソコンの画面など)が写っている",
+  });
 
   return { state, items };
 };

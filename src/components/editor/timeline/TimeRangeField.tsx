@@ -5,9 +5,9 @@ import { fromOverlayTiming, toOverlayTiming } from "./timeRange";
 type Props = {
   startOffsetSeconds: number;
   durationInSeconds?: number;
-  /** 選べる範囲の長さ(クリップ内の文字ならクリップの長さ、動画全体の文字なら動画の長さ)。 */
+  /** 選べる範囲の長さ(場面内の文字なら場面の長さ、動画全体の文字なら動画の長さ)。 */
   rangeSeconds: number;
-  /** 範囲の説明(「クリップの先頭から」「動画の先頭から」)。 */
+  /** 範囲の説明(「場面の先頭から」「動画の先頭から」)。 */
   baseLabel: string;
   onChange: (timing: { startOffsetSeconds: number; durationInSeconds: number | undefined }) => void;
   /** つまみ・入力欄を動かした時、その時刻(範囲の先頭からの秒数)を動画で見せる。 */
@@ -15,7 +15,7 @@ type Props = {
 };
 
 /**
- * 強調テキスト・画像の「出現開始〜出現終了」の指定欄。つまみが2つある範囲スライダーと数値入力欄を
+ * 画面に出す文字・画像の「出現開始〜出現終了」の指定欄。つまみが2つある範囲スライダーと数値入力欄を
  * 連動させ、どちらを動かしても動画をその時刻へ移動して確かめられるようにする。
  * 出現終了を右端まで動かすと「最後まで」(表示秒数なし)になる。
  */

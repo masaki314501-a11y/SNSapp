@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 
 /**
- * クリップのフィルムストリップ用サムネイルを、隠しvideo要素+canvasでクライアント側生成する。
+ * 場面のフィルムストリップ用サムネイルを、隠しvideo要素+canvasでクライアント側生成する。
  * サーバー側にffmpeg等の動画処理基盤が無いため(public/videos/配下の静的URLをブラウザで
  * 直接デコードする構成)、この方式が最も既存構成に馴染む。
  *
- * - 動画1本につき共有のvideo/canvas要素を1組だけ使い回す(クリップごとに専用デコーダを
+ * - 動画1本につき共有のvideo/canvas要素を1組だけ使い回す(場面ごとに専用デコーダを
  *   作ると数十デコーダが同時に走ってしまうため)。
  * - 生成ジョブは直列キューで1本ずつ処理する(要素を共有しているため並列にはできない)。
  * - 結果はモジュールスコープのMapにdataURLとしてキャッシュする。キーは動画パス+時刻なので、
- *   あるクリップをトリムしても、他クリップが参照していた時刻のキャッシュは無効化されない。
+ *   ある場面をトリムしても、他場面が参照していた時刻のキャッシュは無効化されない。
  */
 
 const cache = new Map<string, string>();
@@ -115,7 +115,7 @@ const processQueue = async (videoUrl: string) => {
   processing = false;
 };
 
-/** widthPxに応じて、フィルムストリップに並べるサムネイル枚数を決める(狭いクリップは1枚)。 */
+/** widthPxに応じて、フィルムストリップに並べるサムネイル枚数を決める(狭い場面は1枚)。 */
 const thumbnailCountForWidth = (widthPx: number): number => Math.min(12, Math.max(1, Math.round(widthPx / 72)));
 
 export const useClipThumbnails = (

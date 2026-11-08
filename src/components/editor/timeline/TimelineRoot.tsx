@@ -86,8 +86,8 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 最初は動画全体が見える幅に収める。利用者が拡大縮小した後は、その倍率を尊重して勝手に戻さない。
-  // クリップの追加・削除等で長さが変わった時も合わせ直すが、指やマウスで操作している最中は
-  // 合わせ直さない(トリムのドラッグ中に倍率が変わると、クリップが指から逃げるため)。離した時にまとめて行う。
+  // 場面の追加・削除等で長さが変わった時も合わせ直すが、指やマウスで操作している最中は
+  // 合わせ直さない(トリムのドラッグ中に倍率が変わると、場面が指から逃げるため)。離した時にまとめて行う。
   const userZoomedRef = useRef(false);
   const durationRef = useRef(totalDurationSeconds);
   const activePointersRef = useRef(new Set<number>());
@@ -134,8 +134,8 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
     fitToWidth();
   };
 
-  // 2本指のピンチで拡大縮小する。指の位置は子要素(クリップ等)に届いたイベントも含めて
-  // 捕捉段階で拾う(クリップ側がsetPointerCaptureしていても、親には伝わってくる)。
+  // 2本指のピンチで拡大縮小する。指の位置は子要素(場面等)に届いたイベントも含めて
+  // 捕捉段階で拾う(場面側がsetPointerCaptureしていても、親には伝わってくる)。
   const touchPointsRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ startDistance: number; startPixelsPerSecond: number } | null>(null);
   const pointDistance = () => {
@@ -147,7 +147,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
     if (e.pointerType !== "touch") return;
     touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (touchPointsRef.current.size >= 2) {
-      // 2本目以降の指ではクリップ等のドラッグを始めさせず、1本目で始まっていたドラッグ
+      // 2本目以降の指では場面等のドラッグを始めさせず、1本目で始まっていたドラッグ
       // (並べ替え・トリム・再生位置の移動)は確定させずに元へ戻す。ピンチは拡大縮小だけにする。
       e.stopPropagation();
       cancelActivePointerDrags();
@@ -183,7 +183,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
   }, [totalDurationSeconds, rulerStepSeconds]);
 
   // ルーラーと再生位置の線は、各トラックの左端にあるトラック名の列(.editor-track-label)の分だけ
-  // 右にずらして、クリップと同じ位置に揃える(以前は列の幅だけクリップより左にずれていた)。
+  // 右にずらして、場面と同じ位置に揃える(以前は列の幅だけ場面より左にずれていた)。
   const playheadLeftPx = secondsToPixels(currentSeconds, pixelsPerSecond);
   const rulerRef = useRef<HTMLDivElement>(null);
 
@@ -281,7 +281,7 @@ export const TimelineRoot: React.FC<TimelineRootProps> = ({
 
       {/*
         タイムラインの表示幅(拡大・縮小)。他の動画編集ツールと同じく、虫眼鏡のアイコンと「全体を表示」を並べる
-        (以前の「−」「＋」は、クリップの削除・追加と見分けにくかった)。
+        (以前の「−」「＋」は、場面の削除・追加と見分けにくかった)。
       */}
       <div className="editor-timeline-zoom">
         <span className="editor-timeline-zoom-label">

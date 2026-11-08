@@ -88,7 +88,7 @@ import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 
 /**
  * /create でアップロード・字幕生成された動画を、再生しながらトリム・並べ替え・
- * 文言修正・SE/BGM追加をして書き出す編集画面。/create からのlocalStorage経由の受け渡し
+ * 文言修正・効果音・BGMの追加をして書き出す編集画面。/create からのlocalStorage経由の受け渡し
  * (videoProject.ts)を前提にしており、直接このページを開いてプロジェクトが無い場合は
  * /create への導線を表示する。
  */
@@ -99,8 +99,8 @@ type FormState = {
 };
 
 /**
- * クリップの位置(startFromSeconds)またはduration編集を、隣接クリップとの重なり防止・
- * 動画範囲内へのクランプを適用した上で反映する。クランプの基準(隣接クリップ)は元動画上の
+ * 場面の位置(startFromSeconds)またはduration編集を、隣接場面との重なり防止・
+ * 動画範囲内へのクランプを適用した上で反映する。クランプの基準(隣接場面)は元動画上の
  * 時刻順で求めるが、返す配列自体の並び順(=再生順)は変更前の並びをそのまま保つ
  * (トリム操作で再生順が勝手に入れ替わらないようにするため)。
  */
@@ -187,7 +187,7 @@ export const ClipEditor: React.FC = () => {
    */
   const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  /** タイムラインでSE/BGMブロックが選択されている場合の選択状態(クリップ選択とは排他)。 */
+  /** タイムラインでSE/BGMブロックが選択されている場合の選択状態(場面選択とは排他)。 */
   const [audioSelection, setAudioSelection] = useState<AudioSelection>(null);
   const [primaryColor, setPrimaryColor] = useState(project?.primaryColor ?? "#FF3366");
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(project?.captionStyle ?? "pill");
@@ -216,7 +216,7 @@ export const ClipEditor: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   // 設定パネルに出すもの。「AIに頼む」を押した時だけAIの依頼欄にする。
   const [settingsView, setSettingsView] = useState<"tab" | "ai">("tab");
-  // 演出タブで「クリップごと」と「動画全体」のどちらを編集しているか。
+  // 演出タブで「場面ごと」と「動画全体」のどちらを編集しているか。
   const [effectsScope, setEffectsScope] = useState<EffectsScope>("clip");
   // Remotion標準のコントロールをやめたので、音のオン/オフは再生バーのボタンで切り替える。
   const [isMuted, setIsMuted] = useState(false);
@@ -246,7 +246,7 @@ export const ClipEditor: React.FC = () => {
       setBgm(loaded.bgm);
       if (loaded.narrationVoice && isKnownVoiceName(loaded.narrationVoice)) setNarrationVoice(loaded.narrationVoice);
       setMuteOriginalUnderNarration(loaded.muteOriginalUnderNarration ?? false);
-      // 最初はクリップ1を選んだ状態にする(「クリップ未選択」から始めると、設定を開いても何も編集できないため)
+      // 最初は場面1を選んだ状態にする(「場面を選んでいません」から始めると、設定を開いても何も編集できないため)
       const first = loaded.segments[0];
       if (first) {
         setSelectedSegmentKey(first.key);
@@ -267,7 +267,7 @@ export const ClipEditor: React.FC = () => {
     }
   }, []);
 
-  // 編集内容(クリップ構成・スタイル・SE・BGM)を自動保存する(操作のたびに書き込まないよう
+  // 編集内容(場面構成・スタイル・SE・BGM)を自動保存する(操作のたびに書き込まないよう
   // 少し待ってからまとめて保存する)。リロード/再訪問時にこの画面からそのまま再開できる。
   useEffect(() => {
     if (!project) return;
@@ -304,7 +304,7 @@ export const ClipEditor: React.FC = () => {
   ]);
 
   useEffect(() => {
-    // テロップ更新などでプレビューのプレイヤーが再描画されると、内部の<video>要素が
+    // 字幕更新などでプレビューのプレイヤーが再描画されると、内部の<video>要素が
     // 再生中に中断され AbortError("The operation was aborted.") が未処理の
     // Promise rejectionとして発生することがある。動画再生では無害な競合だが、
     // 開発モードのエラーオーバーレイが誤って壊れたように表示してしまうため抑制する。
@@ -383,7 +383,7 @@ export const ClipEditor: React.FC = () => {
   );
   const durationInFrames = useMemo(() => getStandardVideoDurationInFrames(props), [props]);
 
-  /** 選択中クリップの、書き出し後の動画(=プレビュー)上での開始フレーム。 */
+  /** 選択中場面の、書き出し後の動画(=プレビュー)上での開始フレーム。 */
   const selectedClipStartFrame = useMemo(() => {
     if (!selectedSegmentKey) return null;
     const index = form.segments.findIndex((segment) => segment.key === selectedSegmentKey);
@@ -397,7 +397,7 @@ export const ClipEditor: React.FC = () => {
     selectedClipStartFrameRef.current = selectedClipStartFrame;
   });
 
-  // クリップの選択が切り替わった時だけプレビューをその位置までシークする
+  // 場面の選択が切り替わった時だけプレビューをその位置までシークする
   // (トリム値の入力中などに毎回シークし直して邪魔にならないよう、選択切り替え時のみ発火させる)。
   useEffect(() => {
     if (selectedClipStartFrameRef.current === null) return;
@@ -405,10 +405,10 @@ export const ClipEditor: React.FC = () => {
   }, [selectedSegmentKey]);
 
   /**
-   * プログラムモニター(Player)の現在フレーム。再生中はクリップ一覧のハイライトを
+   * プログラムモニター(Player)の現在フレーム。再生中は場面一覧のハイライトを
    * これに追従させる。
-   * Playerはクリップが1件も無い間は描画されない(playerRef.currentがnull)ため、
-   * クリップの有無が切り替わるタイミングで購読し直す。
+   * Playerは場面が1件も無い間は描画されない(playerRef.currentがnull)ため、
+   * 場面の有無が切り替わるタイミングで購読し直す。
    */
   const [previewFrame, setPreviewFrame] = useState(0);
   /** 再生中はドラッグ用の枠を出さない(動いている文字はつかめず、見るのに邪魔なため)。 */
@@ -445,7 +445,7 @@ export const ClipEditor: React.FC = () => {
     };
   }, [hasClips]);
 
-  /** 今プレビューが再生しているクリップ(再生順)と、そのクリップ内での経過秒数。 */
+  /** 今プレビューが再生している場面(再生順)と、その場面内での経過秒数。 */
   const segmentFrameRanges = useMemo(
     () =>
       form.segments.reduce<{ key: string; startFrame: number; endFrame: number }[]>((acc, segment) => {
@@ -473,11 +473,11 @@ export const ClipEditor: React.FC = () => {
   const canAddSegment = form.segments.length < MAX_CLIPS && largestGap !== null;
   const canRemoveSegment = form.segments.length > 0;
 
-  // 発話が無い区間はテロップが空文字列のまま正しい(無音区間として字幕なしで表示する)ため、
-  // 全セグメントにテロップが入っていることは書き出しの条件にしない。
+  // 発話が無い区間は字幕が空文字列のまま正しい(無音区間として字幕なしで表示する)ため、
+  // 全セグメントに字幕が入っていることは書き出しの条件にしない。
   const canRender = form.segments.length >= MIN_CLIPS && form.segments.length <= MAX_CLIPS;
 
-  /** ヘッダーに出す簡易統計(総尺・クリップ数・文字数)。 */
+  /** ヘッダーに出す簡易統計(全体の長さ・場面数・文字数)。 */
   const stats = useMemo(
     () => ({
       totalSeconds: durationInFrames / VIDEO_FPS,
@@ -489,7 +489,7 @@ export const ClipEditor: React.FC = () => {
 
   // sfxClips配列にはSEとAIナレーションが同じ形で混在している(appendNarrationClip参照)。
   // データモデルは変えず、narrationSegmentKeyの有無で表示上だけ区別する
-  // (「SE」「AI音声」タブそれぞれに、関係あるクリップだけを見せるため)。
+  // (「SE」「AI音声」タブそれぞれに、関係ある場面だけを見せるため)。
   // narrationSegmentKeyを持たない古い保存データは、当時ラベルの頭に付けていた「🎙」で見分ける。
   const isNarrationClip = (clip: ProjectSfxClip) =>
     clip.narrationSegmentKey !== undefined || clip.label.startsWith("🎙");
@@ -508,7 +508,7 @@ export const ClipEditor: React.FC = () => {
     }));
   };
 
-  /** 自動編集が決めた演出(寄り・強調テキスト・強調単語)をクリップ単位で直す。 */
+  /** 自動編集が決めた演出(寄り・画面に出す文字・強調単語)を場面単位で直す。 */
   const updateSegmentEffects = (key: string, patch: SegmentEffectsPatch) => {
     setForm((prev) => ({
       ...prev,
@@ -516,7 +516,7 @@ export const ClipEditor: React.FC = () => {
     }));
   };
 
-  /** 全クリップの寄りを、カメラワークのルールで付け直す(顔の位置・山場の印は自動編集が書いた物を使う)。 */
+  /** 全場面の寄りを、カメラワークのルールで付け直す(顔の位置・山場の印は自動編集が書いた物を使う)。 */
   const applyCameraRuleToAll = (ruleId: CameraRuleId) => {
     pushHistory();
     setForm((prev) => {
@@ -531,7 +531,7 @@ export const ClipEditor: React.FC = () => {
     setProject((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
-  /** プレビュー上でドラッグした強調テキスト・画像の位置を反映する(PreviewDragLayer.tsx)。 */
+  /** プレビュー上でドラッグした画面に出す文字・画像の位置を反映する(PreviewDragLayer.tsx)。 */
   const moveOverlayOnPreview = (target: DragTarget, xPercent: number, yPercent: number) => {
     const move = <T extends { xPercent: number; yPercent: number }, L extends T[] | null | undefined>(items: L): L =>
       (items?.map((item, index) => (index === target.index ? { ...item, xPercent, yPercent } : item)) ?? items) as L;
@@ -558,7 +558,7 @@ export const ClipEditor: React.FC = () => {
   };
 
   /**
-   * 「AIに頼む」に渡す今の編集内容。クリップと効果音は今の並び順の番号をidにし、AIの返事を
+   * 「AIに頼む」に渡す今の編集内容。場面と効果音は今の並び順の番号をidにし、AIの返事を
    * 元の要素に対応づける(keyや音声ファイルのパスはAIに触らせない)。
    */
   const buildAiEditableState = (): EditableState => ({
@@ -679,14 +679,14 @@ export const ClipEditor: React.FC = () => {
     setAudioSelection(null);
   };
 
-  /** タイムライン上でSEブロックを選択する(クリップ選択とは排他)。 */
+  /** タイムライン上でSEブロックを選択する(場面選択とは排他)。 */
   const selectSfx = (key: string) => {
     setSelectedSegmentKey(null);
     setSelectedKeys(new Set());
     setAudioSelection({ kind: "sfx", key });
   };
 
-  /** タイムライン上でBGMブロックを選択する(クリップ選択とは排他)。 */
+  /** タイムライン上でBGMブロックを選択する(場面選択とは排他)。 */
   const selectBgm = () => {
     setSelectedSegmentKey(null);
     setSelectedKeys(new Set());
@@ -796,7 +796,7 @@ export const ClipEditor: React.FC = () => {
       volume: DEFAULT_CLIP_VOLUME,
     };
     pushHistory();
-    // 新規クリップは常に再生順の末尾に追加する(元動画上のどこから切り出すかとは無関係)。
+    // 新規場面は常に再生順の末尾に追加する(元動画上のどこから切り出すかとは無関係)。
     setForm((prev) => ({
       ...prev,
       segments: [...prev.segments, newSegment],
@@ -804,7 +804,7 @@ export const ClipEditor: React.FC = () => {
     selectOnly(newSegment.key);
   };
 
-  /** 指定した(複数の)クリップをまとめて削除する。単発削除・一括削除の両方から使う。 */
+  /** 指定した(複数の)場面をまとめて削除する。単発削除・一括削除の両方から使う。 */
   const removeSegments = (keys: Set<string>) => {
     if (keys.size === 0 || !canRemoveSegment) return;
     pushHistory();
@@ -815,7 +815,7 @@ export const ClipEditor: React.FC = () => {
     selectOnly(null);
   };
 
-  /** クリップを複製し、複製元の直後(再生順)に挿入する。 */
+  /** 場面を複製し、複製元の直後(再生順)に挿入する。 */
   const duplicateSegment = (key: string) => {
     if (form.segments.length >= MAX_CLIPS) return;
     pushHistory();
@@ -829,7 +829,7 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
-  /** タイムライン上でのドラッグ操作で、draggedKeyのクリップをtargetKeyの位置(再生順)へ移動する。 */
+  /** タイムライン上でのドラッグ操作で、draggedKeyの場面をtargetKeyの位置(再生順)へ移動する。 */
   const reorderSegment = (draggedKey: string, targetKey: string) => {
     if (draggedKey === targetKey) return;
     if (!form.segments.some((s) => s.key === draggedKey) || !form.segments.some((s) => s.key === targetKey)) {
@@ -847,7 +847,7 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
-  /** 選択中クリップの演出を全クリップへ一括適用する。 */
+  /** 選択中場面の演出を全場面へ一括適用する。 */
   const applyAnimationToAll = (animation: CaptionAnimation) => {
     pushHistory();
     setForm((prev) => ({
@@ -856,9 +856,9 @@ export const ClipEditor: React.FC = () => {
     }));
   };
 
-  // 字幕の見た目(文字スタイル・配色・見た目・フォント・位置・文字サイズ)は、選んでいるクリップだけに使う
-  // (以前は全クリップ共通で、1つ変えると全部の字幕が変わっていた)。クリップを選んでいない時は全体の既定を変える。
-  // 全部そろえたい時は「全クリップに使う」で、選んだクリップの見た目を既定にしてクリップごとの指定を外す。
+  // 字幕の見た目(文字スタイル・配色・見た目・フォント・位置・文字サイズ)は、選んでいる場面だけに使う
+  // (以前は全場面共通で、1つ変えると全部の字幕が変わっていた)。場面を選んでいない時は全体の既定を変える。
+  // 全部そろえたい時は「全場面に使う」で、選んだ場面の見た目を既定にして場面ごとの指定を外す。
   const styleTargetSegments = form.segments.filter((segment) => selectedKeys.has(segment.key));
   const styleSource = styleTargetSegments[0];
   const textStyleOf = (segment: ProjectSegment) =>
@@ -879,7 +879,7 @@ export const ClipEditor: React.FC = () => {
   };
   const usesTextStyle =
     Boolean(project?.captionTextStyleId) || form.segments.some((segment) => Boolean(segment.clipTextStyleId));
-  /** 選んだクリップ(無ければ全体)の字幕の見た目を変える。 */
+  /** 選んだ場面(無ければ全体)の字幕の見た目を変える。 */
   const changeCaptionLook = (patch: Partial<typeof shownLook>) => {
     if (styleTargetSegments.length === 0) {
       if (patch.primaryColor !== undefined) setPrimaryColor(patch.primaryColor);
@@ -916,7 +916,7 @@ export const ClipEditor: React.FC = () => {
   const shownPositionValue = styleSource?.clipCaptionPosition ?? (chinFixed ? CHIN_POSITION : captionPosition);
   const changeCaptionPosition = (value: string) => {
     if (value === CHIN_POSITION) {
-      // 選んだクリップの位置の指定を外して、動画全体の位置(顎の下)に戻す
+      // 選んだ場面の位置の指定を外して、動画全体の位置(顎の下)に戻す
       if (styleTargetSegments.length === 0) return;
       pushHistory();
       setForm((prev) => ({
@@ -944,7 +944,7 @@ export const ClipEditor: React.FC = () => {
       ),
     }));
   };
-  /** 選んだクリップの字幕の見た目を全クリップの既定にし、クリップごとの指定を外す。 */
+  /** 選んだ場面の字幕の見た目を全場面の既定にし、場面ごとの指定を外す。 */
   const applyCaptionLookToAll = () => {
     pushHistory();
     setPrimaryColor(shownLook.primaryColor);
@@ -971,7 +971,7 @@ export const ClipEditor: React.FC = () => {
     }));
   };
 
-  /** 指定クリップを再生順で次のクリップと結合する(splitSegmentの逆操作)。 */
+  /** 指定場面を再生順で次の場面と結合する(splitSegmentの逆操作)。 */
   const mergeSegmentWithNext = (key: string) => {
     setForm((prev) => {
       const index = prev.segments.findIndex((segment) => segment.key === key);
@@ -981,7 +981,7 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
-  /** 今プレビューが再生しているクリップを、再生ヘッドの位置で前後2クリップに分割できるか。 */
+  /** 今プレビューが再生している場面を、再生ヘッドの位置で前後2場面に分割できるか。 */
   const canSplitAtPlayhead = useMemo(() => {
     if (!activeProgramSegment || form.segments.length >= MAX_CLIPS) return false;
     const segment = form.segments.find((s) => s.key === activeProgramSegment.key);
@@ -989,7 +989,7 @@ export const ClipEditor: React.FC = () => {
     return canSplitSegment(segment, activeProgramSegment.offsetSeconds);
   }, [activeProgramSegment, form.segments]);
 
-  /** 今プレビューが再生しているクリップを、再生ヘッドの位置で分割する(mergeSegmentWithNextの逆操作)。 */
+  /** 今プレビューが再生している場面を、再生ヘッドの位置で分割する(mergeSegmentWithNextの逆操作)。 */
   const splitAtPlayhead = () => {
     if (!activeProgramSegment) return;
     const { key, offsetSeconds } = activeProgramSegment;
@@ -1004,7 +1004,7 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
-  /** 今プレビューが再生しているクリップの開始点(イン点)を、再生ヘッドの位置に打ち直す。 */
+  /** 今プレビューが再生している場面の開始点(イン点)を、再生ヘッドの位置に打ち直す。 */
   const trimStartToPlayhead = () => {
     if (!activeProgramSegment) return;
     const { key, offsetSeconds } = activeProgramSegment;
@@ -1014,7 +1014,7 @@ export const ClipEditor: React.FC = () => {
     updateSegment(key, { startFromSeconds: segment.startFromSeconds + offsetSeconds });
   };
 
-  /** 今プレビューが再生しているクリップの終了点(アウト点)を、再生ヘッドの位置に打ち直す。 */
+  /** 今プレビューが再生している場面の終了点(アウト点)を、再生ヘッドの位置に打ち直す。 */
   const trimEndToPlayhead = () => {
     if (!activeProgramSegment) return;
     const { key, offsetSeconds } = activeProgramSegment;
@@ -1041,7 +1041,7 @@ export const ClipEditor: React.FC = () => {
   };
 
   /**
-   * タイムライン上のクリップクリック。素クリックは単一選択、Ctrl/Cmd+クリックは個別トグル、
+   * タイムライン上の場面クリック。素クリックは単一選択、Ctrl/Cmd+クリックは個別トグル、
    * Shift+クリックは主選択(アンカー)から現在行までを範囲選択する(一般的なファイラー等と同じ挙動)。
    * Pointer Eventsベースのドラッグ処理(pointerDrag.ts)ではReact.MouseEventを扱いにくいため、
    * 必要な修飾キーだけを受け取る形にしている。
@@ -1143,7 +1143,7 @@ export const ClipEditor: React.FC = () => {
     setSfxUploading(true);
     try {
       const { path, fileName } = await uploadAudioFile(file);
-      // 現在の再生位置(プレビュー上の秒数)に追加する。総尺を超えないようクランプする。
+      // 現在の再生位置(プレビュー上の秒数)に追加する。全体の長さを超えないようクランプする。
       const currentSeconds = Math.min(
         stats.totalSeconds,
         Math.max(0, (playerRef.current?.getCurrentFrame() ?? 0) / VIDEO_FPS)
@@ -1198,12 +1198,12 @@ export const ClipEditor: React.FC = () => {
     setSfxClips((prev) => prev.filter((clip) => clip.key !== key));
   };
 
-  /** 指定クリップの、書き出し後の動画(=再生順)上での開始秒。ナレーション音声の配置に使う。 */
+  /** 指定場面の、書き出し後の動画(=再生順)上での開始秒。ナレーション音声の配置に使う。 */
   const segmentStartSeconds = (index: number): number =>
     form.segments.slice(0, index).reduce((sum, segment) => sum + segment.durationInSeconds, 0);
 
   /**
-   * 生成したナレーションをタイムラインに載せる。同じクリップのナレーションが既にあれば
+   * 生成したナレーションをタイムラインに載せる。同じ場面のナレーションが既にあれば
    * 置き換える(作り直しのたびに同じ台詞が重なって二重に聞こえるのを防ぐ)。
    */
   const upsertNarrationClip = (
@@ -1244,7 +1244,7 @@ export const ClipEditor: React.FC = () => {
     });
   };
 
-  /** 選択中クリップのテロップをAIナレーション(読み上げ音声)に変換し、SEと同じ扱いでタイムラインに追加する。 */
+  /** 選択中場面の字幕をAIナレーション(読み上げ音声)に変換し、SEと同じ扱いでタイムラインに追加する。 */
   const handleGenerateNarrationForSegment = async (key: string) => {
     const index = form.segments.findIndex((segment) => segment.key === key);
     if (index === -1) return;
@@ -1267,15 +1267,15 @@ export const ClipEditor: React.FC = () => {
   };
 
   /**
-   * テロップが入っている全クリップ分、順番にAIナレーションを生成してタイムラインに追加する。
-   * 既に同じ声で作ってあるクリップは飛ばす(無料枠のTTSは1日あたりの上限が厳しく、
+   * 字幕が入っている全場面分、順番にAIナレーションを生成してタイムラインに追加する。
+   * 既に同じ声で作ってある場面は飛ばす(無料枠のTTSは1日あたりの上限が厳しく、
    * やり直しのたびに全件を作り直すとすぐ上限に達するため)。
    */
   /**
-   * 字幕を全クリップに一括で付ける。字幕を付けるかどうかは編集画面で決める流れにしたため、
-   * ここが字幕の入口になる。自動編集がクリップごとに書き起こした下書き(speechText)が全クリップに
+   * 字幕を全場面に一括で付ける。字幕を付けるかどうかは編集画面で決める流れにしたため、
+   * ここが字幕の入口になる。自動編集が場面ごとに書き起こした下書き(speechText)が全場面に
    * あればそれを流し込むだけで済ませ(APIを呼ばない)、無ければ動画全体を文字起こしして
-   * 各クリップに割り当てる。
+   * 各場面に割り当てる。
    */
   const { transcribeState, handleTranscribe } = useTranscribeJob({
     onDone: (transcribed) => {
@@ -1304,14 +1304,14 @@ export const ClipEditor: React.FC = () => {
   };
 
   const handleClearCaptions = () => {
-    // 1回押すだけで全クリップの字幕が消えてしまうため、確認を挟む(元に戻すでも戻せる)。
-    if (!window.confirm("全クリップの字幕を削除します。よろしいですか?")) return;
+    // 1回押すだけで全場面の字幕が消えてしまうため、確認を挟む(元に戻すでも戻せる)。
+    if (!window.confirm("全場面の字幕を削除します。よろしいですか?")) return;
     pushHistory();
     setForm((prev) => ({ ...prev, segments: prev.segments.map((segment) => ({ ...segment, caption: "" })) }));
   };
 
   const handleGenerateNarrationForAll = async () => {
-    // 対象は「まだナレーションが無い、字幕のあるクリップ」と「今選んでいる声と違う声で作ったナレーション」。
+    // 対象は「まだナレーションが無い、字幕のある場面」と「今選んでいる声と違う声で作ったナレーション」。
     // 後者も作り直さないと、先に作った分と声が混ざってしまう(videoProject.tsのnarrationVoice参照)。
     // 同じ文・同じ声の音声はサーバーに保存してあるため(voiceoverCache.ts)、作り直してもAPIは使わない。
     const narrationBySegment = new Map(
@@ -1330,8 +1330,8 @@ export const ClipEditor: React.FC = () => {
     if (targets.length === 0) {
       alert(
         form.segments.some((segment) => segment.caption.trim().length > 0)
-          ? "字幕のあるクリップは全て、今の声でナレーションを作ってあります。作り直したいクリップは、そのクリップを選んで個別に作ってください"
-          : "字幕が入っているクリップがありません"
+          ? "字幕のある場面は全て、今の声でナレーションを作ってあります。作り直したい場面は、その場面を選んで個別に作ってください"
+          : "字幕が入っている場面がありません"
       );
       return;
     }
@@ -1355,7 +1355,7 @@ export const ClipEditor: React.FC = () => {
         if (!isRevoice) sfxCount += 1;
       } catch (error) {
         // ここまでに生成できた分はタイムラインに残るため、上限に達した場合でも
-        // 翌日に「全クリップに一括生成」を押し直せば、残りの分だけが生成される。
+        // 翌日に「全場面に一括生成」を押し直せば、残りの分だけが生成される。
         alert(
           `「${caption.slice(0, 10)}」のナレーション生成に失敗したため、ここで中断しました(${i}/${targets.length}件完了)。\n\n${
             toFriendlyErrorMessage(error, "少し時間をおいて、もう一度お試しください")
@@ -1455,14 +1455,14 @@ export const ClipEditor: React.FC = () => {
   /**
    * タブを押した時。字幕・音声と演出は設定シートも開く。カットはタイムラインの下の操作ボタンが主役、
    * 効果音・BGMは設定をタイムラインの下に常に出す(settingsInline)ので、どちらもシートは開かない。
-   * クリップを押しただけではシートを開かない: 押した瞬間にシートが出ると、ドラッグ中のタイムラインが隠れるため。
+   * 場面を押しただけではシートを開かない: 押した瞬間にシートが出ると、ドラッグ中のタイムラインが隠れるため。
    */
   // 効果音・BGMは動画全体の時刻で置く音なので、スマホでもタイムラインと設定を同時に見られるよう、
   // 設定をシートにせずタイムラインの下に常に出す(「AIに頼む」を開いた時だけは、これまでどおりシート)。
   const settingsInline = (activeTab === "se" || activeTab === "bgm") && !sheetOpen;
   const handleSelectTab = (tab: EditorTab) => {
     setActiveTab(tab);
-    // クリップごとに設定するタブで何も選んでいなければ(効果音を選んだ後など)、再生位置のクリップを選ぶ
+    // 場面ごとに設定するタブで何も選んでいなければ(効果音を選んだ後など)、再生位置の場面を選ぶ
     if ((tab === "cut" || tab === "caption" || tab === "effects") && selectedKeys.size === 0) {
       const key = activeSegmentKey ?? form.segments[0]?.key ?? null;
       if (key) selectOnly(key);
@@ -1493,13 +1493,13 @@ export const ClipEditor: React.FC = () => {
   const showFullscreen = () => playerRef.current?.requestFullscreen();
   /** 動画の先頭からの秒数の位置を、プレビューに映す。 */
   const previewAtSeconds = (seconds: number) => playerRef.current?.seekTo(Math.max(0, Math.round(seconds * VIDEO_FPS)));
-  /** クリップ内の秒数の位置を、プレビューに映す(強調テキスト等の表示時間を動かした時)。 */
+  /** 場面内の秒数の位置を、プレビューに映す(画面に出す文字等の表示時間を動かした時)。 */
   const previewInClip = (segmentKey: string, offsetSeconds: number) => {
     const range = segmentFrameRanges.find((r) => r.key === segmentKey);
     if (!range) return;
     playerRef.current?.seekTo(Math.min(range.endFrame - 1, range.startFrame + Math.round(offsetSeconds * VIDEO_FPS)));
   };
-  /** 設定パネルの「‹ クリップN ›」。そのクリップを選び、動画もクリップの頭へ移す。 */
+  /** 設定パネルの「‹ 場面N ›」。その場面を選び、動画も場面の頭へ移す。 */
   const goToClip = (index: number) => {
     const target = form.segments[Math.max(0, Math.min(form.segments.length - 1, index))];
     if (!target) return;
@@ -1521,15 +1521,15 @@ export const ClipEditor: React.FC = () => {
     : -1;
   const selectionLabel =
     selectedKeys.size > 1
-      ? `${selectedKeys.size}件のクリップ`
+      ? `${selectedKeys.size}件の場面`
       : selectedSegmentIndex >= 0
-        ? `クリップ${selectedSegmentIndex + 1}`
+        ? `場面${selectedSegmentIndex + 1}`
         : audioSelection?.kind === "bgm"
           ? "BGM"
           : audioSelection?.kind === "sfx"
             ? "選んだ音"
             : undefined;
-  // 演出タブの「動画全体」はクリップに関係ない設定なので、選択中のクリップ名は出さない。
+  // 演出タブの「動画全体」は場面に関係ない設定なので、選択中の場面名は出さない。
   // 効果音・BGMタブも、パネルの中に選んだ音の名前が出るため、見出しの横の補足(「選んだ音」「BGM」)は出さない。
   const settingsTargetLabel =
     (activeTab === "effects" && effectsScope === "global") || activeTab === "se" || activeTab === "bgm"
@@ -1539,7 +1539,7 @@ export const ClipEditor: React.FC = () => {
   const cutTools: ToolItem[] = [
     {
       key: "split",
-      label: "クリップ分割",
+      label: "場面を分ける",
       icon: <ScissorsIcon />,
       onClick: splitAtPlayhead,
       disabled: !canSplitAtPlayhead,
@@ -1564,21 +1564,21 @@ export const ClipEditor: React.FC = () => {
     {
       key: "add",
       label: "削除部分を復元",
-      // 選んだクリップの複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
+      // 選んだ場面の複製ではなく、削除した部分(一番長い空き)の先頭から最大5秒を末尾に戻す
       title: "削除した部分のうち一番長い所から、最大5秒を動画の最後に戻します",
       icon: <RestoreClipIcon />,
       onClick: addSegment,
       disabled: !canAddSegment,
     },
   ];
-  // スマホでは選択中クリップの設定(複製・結合・削除・音量)を開くボタンも並べる
+  // スマホでは選択中場面の設定(複製・結合・削除・音量)を開くボタンも並べる
   const cutToolsWithSettings: ToolItem[] = [
     ...cutTools,
     // タブレット縦向き以上では設定が常に見えているので出さない(.tool-only-sheet)
     { key: "settings", label: "設定", icon: <SettingsIcon />, onClick: openSettings, className: "tool-only-sheet" },
   ];
 
-  // AIナレーションは、一括生成(「全クリップの字幕」欄)とクリップごとの欄(字幕の見た目の次)に分けて置く。
+  // AIナレーションは、一括生成(「全場面の字幕」欄)と場面ごとの欄(字幕の見た目の次)に分けて置く。
   // どちらも同じ声の設定・生成中の状態を使うので、同じ値を渡す。
   const narrationProps = {
     segments: form.segments,
@@ -1605,7 +1605,7 @@ export const ClipEditor: React.FC = () => {
   const narrationPanel = <NarrationInspectorPanel {...narrationProps} />;
   const narrationBulkAction = <NarrationBulkGenerate {...narrationProps} />;
 
-  // 字幕の見た目の詳しい設定(配色・見た目・フォント・位置・文字サイズ)。選んでいるクリップ(無ければ全体)に使う。
+  // 字幕の見た目の詳しい設定(配色・見た目・フォント・位置・文字サイズ)。選んでいる場面(無ければ全体)に使う。
   // 字幕タブの「字幕の見た目」欄で、文字スタイルの下に畳んで置く。全体のフェードは演出タブの「動画全体」に移した。
   const captionLookSettings = (
     <>
@@ -1755,8 +1755,8 @@ export const ClipEditor: React.FC = () => {
       />
     ) : null;
 
-  // カット・字幕・演出(クリップごと)では、設定パネルを閉じずに前後のクリップへ移れるようにする。
-  // 効果音・BGMは動画全体の時刻で置く音で、クリップごとの設定ではないため切り替えは出さない。
+  // カット・字幕・演出(場面ごと)では、設定パネルを閉じずに前後の場面へ移れるようにする。
+  // 効果音・BGMは動画全体の時刻で置く音で、場面ごとの設定ではないため切り替えは出さない。
   const showClipNav =
     settingsView === "tab" &&
     (activeTab === "cut" || activeTab === "caption" || (activeTab === "effects" && effectsScope === "clip"));
@@ -1764,8 +1764,8 @@ export const ClipEditor: React.FC = () => {
     ? {
         label:
           selectedSegmentIndex >= 0
-            ? `クリップ${selectedSegmentIndex + 1} / ${form.segments.length}`
-            : "クリップ未選択",
+            ? `場面${selectedSegmentIndex + 1} / ${form.segments.length}`
+            : "場面を選んでいません",
         canPrev: selectedSegmentIndex > 0,
         canNext: selectedSegmentIndex < form.segments.length - 1,
         onPrev: () => goToClip(selectedSegmentIndex - 1),
@@ -1784,7 +1784,7 @@ export const ClipEditor: React.FC = () => {
         onBack={handleGoToAutoEdit}
         onHome={handleBackToTop}
         title="編集"
-        step={{ current: 6, total: 7 }}
+        step={{ current: 5, total: 6 }}
         hideProgress
         actions={
           <>
@@ -1840,7 +1840,7 @@ export const ClipEditor: React.FC = () => {
                 {
                   key: "copy",
                   label: copyStatus === "done" ? "字幕をコピーしました" : "字幕をコピー",
-                  description: "全クリップの字幕を、文章としてコピーする",
+                  description: "全場面の字幕を、文章としてコピーする",
                   icon: <CopyIcon />,
                   onClick: () => void handleCopyCaptions(),
                   keepOpen: true,
@@ -1856,7 +1856,7 @@ export const ClipEditor: React.FC = () => {
               ]}
               footer={
                 <span>
-                  総尺 {stats.totalSeconds.toFixed(1)}秒・クリップ {stats.clipCount}個・文字数 {stats.charCount}字
+                  全体の長さ {stats.totalSeconds.toFixed(1)}秒・場面 {stats.clipCount}個・文字数 {stats.charCount}字
                 </span>
               }
             />
@@ -1900,7 +1900,7 @@ export const ClipEditor: React.FC = () => {
             ) : null}
           </div>
         ) : (
-          <div className="editor-stage-empty">クリップを追加するとここで再生確認できます</div>
+          <div className="editor-stage-empty">場面を追加するとここで再生確認できます</div>
         )}
       </div>
 
@@ -2002,7 +2002,7 @@ export const ClipEditor: React.FC = () => {
           >
             <h2 className="text-sm font-semibold">字幕を一括編集</h2>
             <p className="text-xs" style={{ color: "var(--muted-2)" }}>
-              1行=1クリップです。行を増減すると適用できません(現在{bulkEditLines.length}行 / クリップ
+              1行=1場面です。行を増減すると適用できません(現在{bulkEditLines.length}行 / 場面
               {form.segments.length}個)。
             </p>
             <textarea

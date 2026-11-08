@@ -15,9 +15,9 @@ import { TextStylePicker } from "./TextStylePicker";
 
 type Props = {
   overlay: TextOverlay;
-  /** 表示タイミングの基準の説明(「クリップの先頭から」「動画の先頭から」)。 */
+  /** 表示タイミングの基準の説明(「場面の先頭から」「動画の先頭から」)。 */
   timeBaseLabel: string;
-  /** 表示時間を選べる範囲(クリップ内ならクリップの長さ、動画全体なら動画の長さ)。 */
+  /** 表示時間を選べる範囲(場面内なら場面の長さ、動画全体なら動画の長さ)。 */
   rangeSeconds: number;
   onChange: (patch: Partial<TextOverlay>) => void;
   onRemove: () => void;
@@ -27,9 +27,9 @@ type Props = {
 };
 
 /**
- * 自動編集(Gemini)が決めた強調テキスト1個ぶんの編集欄。文言・位置・大きさ・スタイル・色・縁取り・帯・傾き・
+ * 自動編集(Gemini)が決めた画面に出す文字1個ぶんの編集欄。文言・位置・大きさ・スタイル・色・縁取り・帯・傾き・
  * 表示タイミング・出現演出まで、自動編集が決めた項目はすべてここで直せるようにする。
- * クリップ内の強調テキストと、動画全体に出し続ける文字(globalOverlays)の両方で使う。
+ * 場面内の画面に出す文字と、動画全体に出し続ける文字(globalOverlays)の両方で使う。
  * 並ぶと長くなるため、普段は文言だけ見える形に畳んでおき、押すと開く。
  */
 export const TextOverlayFields: React.FC<Props> = ({
@@ -180,7 +180,7 @@ export const TextOverlayFields: React.FC<Props> = ({
   </Collapsible>
 );
 
-/** 「文字を追加」で作る強調テキストの初期値。画面中央上寄りに白文字+黒縁で出す。 */
+/** 「文字を追加」で作る画面に出す文字の初期値。画面中央上寄りに白文字+黒縁で出す。 */
 export const createDefaultTextOverlay = (): TextOverlay => ({
   text: "テキスト",
   startOffsetSeconds: 0,
