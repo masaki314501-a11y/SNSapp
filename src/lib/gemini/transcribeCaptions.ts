@@ -90,7 +90,8 @@ const rawResultSchema = z.object({
     .array(
       z.object({
         startFromSeconds: z.number().min(0),
-        durationInSeconds: z.number().positive(),
+        // 長さ0秒の物がたまに混ざる(全体を失敗にせず、下で捨てる)
+        durationInSeconds: z.number().min(0),
         caption: z.string(),
       })
     )
@@ -185,9 +186,11 @@ export const transcribeCaptions = async (
       throw new Error(`Gemini応答のスキーマ検証に失敗: ${parsed.error.message}`);
     }
 
-    const sorted = [...parsed.data.segments].sort(
-      (a, b) => a.startFromSeconds - b.startFromSeconds
-    );
+    // 長さ0秒の物は捨てる(Geminiがたまに返す。1つのせいで工程9・一括生成が丸ごと失敗していた)
+    const sorted = parsed.data.segments
+      .filter((segment) => segment.durationInSeconds > 0)
+      .sort((a, b) => a.startFromSeconds - b.startFromSeconds);
+    if (sorted.length === 0) throw new Error("字幕にできる言葉が見つかりませんでした");
     if (sorted.length < input.minClips || sorted.length > input.maxClips) {
       throw new Error(
         `Gemini応答のクリップ数が不正です(${sorted.length}個、期待値${input.minClips}〜${input.maxClips}個)`
