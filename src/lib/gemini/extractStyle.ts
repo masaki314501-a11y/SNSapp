@@ -7,7 +7,7 @@ import {
 } from "@video/shared/schema";
 import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
-import { waitForGeminiFileActive } from "./geminiFiles";
+import { uploadGeminiFile, waitForGeminiFileActive } from "./geminiFiles";
 import { loadStyleFewShotContext } from "./styleExamplesStore";
 import { extractedStyleSchema, type ExtractedStyle } from "./styleTypes";
 
@@ -155,7 +155,7 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
     if (input.kind === "image") {
       return input.images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.base64 } }));
     }
-    const uploaded = await ai.files.upload({
+    const uploaded = await uploadGeminiFile(ai, {
       file: input.absoluteVideoPath,
       config: { mimeType: input.mimeType },
     });

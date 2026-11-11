@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { Content, GoogleGenAI, Part } from "@google/genai";
-import { waitForGeminiFileActive } from "./geminiFiles";
+import { uploadGeminiFile, waitForGeminiFileActive } from "./geminiFiles";
 import { extractedStyleSchema } from "./styleTypes";
 
 /**
@@ -61,7 +61,7 @@ export const loadStyleFewShotContext = async (
       const mediaPath = path.join(MEDIA_DIR, example.mediaFilename);
       let mediaPart: Part;
       if (example.kind === "video") {
-        const uploaded = await ai.files.upload({ file: mediaPath, config: { mimeType: example.mimeType } });
+        const uploaded = await uploadGeminiFile(ai, { file: mediaPath, config: { mimeType: example.mimeType } });
         if (!uploaded.name || !uploaded.uri) continue;
         uploadedFileNames.push(uploaded.name);
         await waitForGeminiFileActive(ai, uploaded.name);

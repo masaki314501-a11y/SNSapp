@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CLIP_CAPTION_MAX_CHARS, truncateNaturally } from "./textUtils";
 import { runWithGeminiRateLimit } from "./rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "./geminiErrors";
-import { waitForGeminiFileActive } from "./geminiFiles";
+import { uploadGeminiFile, waitForGeminiFileActive } from "./geminiFiles";
 
 /** 文字起こしは動画1本まるごとを読むためトークン量が多く、Proだとコストがかさむ。
  * 精度とコストの釣り合いが良い最新のFlashを既定にする(エイリアスなので新版に自動で追従する)。 */
@@ -116,7 +116,7 @@ export const transcribeCaptions = async (
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
   input.onProgress?.("uploading");
-  const uploaded = await ai.files.upload({
+  const uploaded = await uploadGeminiFile(ai, {
     file: input.absoluteVideoPath,
     config: { mimeType: input.mimeType },
   });

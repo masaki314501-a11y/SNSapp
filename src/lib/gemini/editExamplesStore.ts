@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { PartMediaResolutionLevel, type Content, type GoogleGenAI, type Part } from "@google/genai";
-import { waitForGeminiFileActive } from "./geminiFiles";
+import { uploadGeminiFile, waitForGeminiFileActive } from "./geminiFiles";
 import { rawAutoEditPlanSchema, type RawAutoEditPlan } from "./autoEditTypes";
 
 /**
@@ -101,7 +101,7 @@ export const uploadExampleVideo = async (
   const tempPath = path.join(os.tmpdir(), `edit-example-${randomUUID()}${path.extname(mediaPath)}`);
   try {
     await copyFile(mediaPath, tempPath);
-    const uploaded = await ai.files.upload({ file: tempPath, config: { mimeType } });
+    const uploaded = await uploadGeminiFile(ai, { file: tempPath, config: { mimeType } });
     if (!uploaded.name || !uploaded.uri) {
       throw new Error("編集例動画のアップロードに失敗しました");
     }
