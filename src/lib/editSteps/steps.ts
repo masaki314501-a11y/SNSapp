@@ -11,7 +11,7 @@ export const EDIT_STEPS: { step: number; title: string; detail: string; usesAi: 
   { step: 5, title: "切れ目を自然につなぐ", detail: "切れ目を言葉の途切れに合わせ、ちらつく短い切れ端を外します", usesAi: false },
   { step: 6, title: "映像を拡大して、人の位置を整える", detail: "AIが顔の位置を調べ、顔が中央より少し高めに来るよう拡大します", usesAi: true },
   { step: 7, title: "字幕の位置を決める", detail: "話す人の顎より少し下に、顔と重ならないよう固定します", usesAi: false },
-  { step: 8, title: "左上のタイトルと、ランキングの枠を作る", detail: "左上のタイトルと、ランキングの動画なら枠をAIが決めて作ります(手本も見せます)", usesAi: true },
+  { step: 8, title: "左上のタイトルと、ランキングの枠を作る", detail: "左上のタイトルと、ランキングの動画なら枠をAIが決めて作ります(2つを比べる動画なら、下に比べるカードを2枚並べます。手本も見せます)", usesAi: true },
   { step: 9, title: "字幕を入れる", detail: "話している言葉をAIが書き起こして入れます(位置は工程7で固定)", usesAi: true },
   { step: 10, title: "大事な言葉を、目立つ字幕に変える", detail: "AIが強調したい言葉を選び、強調した字幕にします(手本も見せます)", usesAi: true },
   { step: 11, title: "目立つ字幕に、効果音と少しの寄りを付ける", detail: "強調した字幕に効果音と、少しの寄りを付けます", usesAi: false },

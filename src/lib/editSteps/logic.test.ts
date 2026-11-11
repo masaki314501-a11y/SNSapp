@@ -168,6 +168,45 @@ describe("工程ごとの編集(機械でやる工程)", () => {
   });
 });
 
+describe("比べる動画(枠が2つ)", () => {
+  it("8. 番号を付けずに、2枚のカードを同じ高さで横に並べ、テロップの帯より上に置く", () => {
+    const { globalOverlays, globalShapes } = buildObjects({ title: "日本と韓国", frameCount: 2, captionTopPercent: 70, accentColor: "#FF3366" });
+    expect(globalOverlays.map((o) => o.text)).toEqual(["日本と韓国"]);
+    expect(globalShapes).toHaveLength(2);
+    expect(globalShapes[0].yPercent).toBe(globalShapes[1].yPercent);
+    expect(globalShapes[0].xPercent).toBeLessThan(globalShapes[1].xPercent);
+    expect(globalShapes[0].yPercent + globalShapes[0].heightPercent / 2).toBeLessThanOrEqual(68.01);
+    // 左右の端が、左の余白からTikTokの右側のボタンの手前までに収まる
+    expect(globalShapes[0].xPercent - globalShapes[0].widthPercent / 2).toBeGreaterThanOrEqual(7);
+    expect(globalShapes[1].xPercent + globalShapes[1].widthPercent / 2).toBeLessThanOrEqual(86);
+  });
+
+  it("8. テロップが顎の下にあり、その下が空いていれば、カードはテロップの下に置く", () => {
+    const { globalShapes } = buildObjects({ title: "日本と韓国", frameCount: 2, captionTopPercent: 45, captionBottomPercent: 52, accentColor: "#FF3366" });
+    for (const shape of globalShapes) {
+      expect(shape.yPercent - shape.heightPercent / 2).toBeGreaterThanOrEqual(53.99);
+      expect(shape.yPercent + shape.heightPercent / 2).toBeLessThanOrEqual(77.01);
+    }
+  });
+
+  it("10. 項目名は、それぞれのカードの真ん中に入れ、呼び直しても二重にならない", () => {
+    const objects = buildObjects({ title: "日本と韓国", frameCount: 2, captionTopPercent: 70, accentColor: "#FF3366" });
+    const base = { framing: null, captionYPercent: 70, ...objects, segments: [seg(0, 2, "a"), seg(2, 5, "b")] };
+    const fills = [
+      { frame: 1, key: "a", sourceSeconds: 0, label: "日本" },
+      { frame: 2, key: "b", sourceSeconds: 2, label: "韓国" },
+    ];
+    const once = placeFrameFills({ ...base, frameFills: fills });
+    const twice = placeFrameFills(once);
+    const labels = twice.globalOverlays.filter((o) => o.text === "日本" || o.text === "韓国");
+    expect(labels.map((o) => [o.text, o.xPercent, o.yPercent])).toEqual([
+      ["日本", objects.globalShapes[0].xPercent, objects.globalShapes[0].yPercent],
+      ["韓国", objects.globalShapes[1].xPercent, objects.globalShapes[1].yPercent],
+    ]);
+    expect(labels[0].color).toBe("#FF3366");
+  });
+});
+
 describe("枠に項目名を入れる(工程10・12)", () => {
   const objects = buildObjects({ title: "医療用語5選", frameCount: 3, captionTopPercent: 55, accentColor: "#FF3366" });
   const a = seg(0, 2, "a");

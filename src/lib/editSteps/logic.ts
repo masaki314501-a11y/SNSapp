@@ -266,11 +266,54 @@ const FRAME_GAP_PERCENT = 1.5;
 const FRAME_LOWEST_PERCENT = 77;
 /** 枠1つの高さの上限(%)。枠が少ない時に大きくなりすぎないように。 */
 const FRAME_MAX_HEIGHT_PERCENT = 11;
+/**
+ * 枠が2つの時は、ランキングではなく2つを比べる動画(日本と韓国など)とみなし、番号は付けずに、
+ * 画面の下へ2枚のカードを横に並べる(ランキングで2つだけ挙げる動画は、まず無いため)。
+ * 横は、左の余白(7%)からTikTokの右側のボタンの手前(86%)までに収める。
+ */
+const COMPARE_CARD_CENTERS_PERCENT = [27, 66] as const;
+const COMPARE_CARD_WIDTH_PERCENT = 36;
+const COMPARE_CARD_MAX_HEIGHT_PERCENT = 14;
+/** これより低い所しか空いていない時は、テロップの下ではなく上に置く(%)。 */
+const COMPARE_CARD_MIN_HEIGHT_PERCENT = 8;
+
+const compareCards = (params: {
+  top: number;
+  captionTopPercent: number;
+  captionBottomPercent?: number;
+  accentColor: string;
+  frameStyle?: ObjectStyle["frame"];
+}): ShapeOverlay[] => {
+  // テロップが顎の下(画面の途中)にあり、その下に十分な高さがあれば、テロップの下へ。無ければテロップの上の一番下へ
+  const below =
+    params.captionBottomPercent !== undefined ? ([params.captionBottomPercent + 2, FRAME_LOWEST_PERCENT] as const) : null;
+  const [from, to] =
+    below && below[1] - below[0] >= COMPARE_CARD_MIN_HEIGHT_PERCENT ? below : ([params.top, params.captionTopPercent - 2] as const);
+  const height = Math.min(COMPARE_CARD_MAX_HEIGHT_PERCENT, to - from);
+  if (height <= 2) return [];
+  const y = round2(to - height / 2);
+  return COMPARE_CARD_CENTERS_PERCENT.map((x) => ({
+    kind: "rect" as const,
+    startOffsetSeconds: 0,
+    xPercent: x,
+    yPercent: y,
+    widthPercent: COMPARE_CARD_WIDTH_PERCENT,
+    heightPercent: round2(height),
+    borderColor: params.frameStyle?.borderColor ?? params.accentColor,
+    borderWidthPx: params.frameStyle?.borderWidthPx ?? 6,
+    fillColor: params.frameStyle ? (params.frameStyle.fillColor ?? undefined) : "#FFFFFF",
+    fillOpacity: 0.85,
+    cornerRadiusPx: params.frameStyle?.cornerRadiusPx ?? 16,
+    animation: params.frameStyle?.animation ?? "fade",
+  }));
+};
+
 /** タイトルの縁取りの見える太さ(文字の大きさに対する割合)。 */
 const TITLE_STROKE_RATIO = 0.06;
 
 /**
  * 8. 必要なオブジェクトを作る: 左上のタイトルテロップと、ランキングの枠(N個を左に縦に並べ、番号を付ける)。
+ * 枠が2つの時は、比べる動画のカード2枚を下に横に並べる(compareCards)。
  * 枠は、タイトルの下からテロップの帯の上まで(テロップと被らないように)に収める。
  */
 /**
@@ -324,6 +367,9 @@ export const buildObjects = (params: {
 
   const titleLines = titleText.split("\n").length;
   const top = title.yPercent + (titleLines * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
+  if (params.frameCount === 2) {
+    return { globalOverlays: [title], globalShapes: compareCards({ ...params, top, frameStyle }) };
+  }
   // 枠を並べられる所: タイトルの下からテロップの帯の上まで。テロップが画面の途中(顎の下)にある時は、帯の下から
   // 画面の下の見える所(セーフティゾーンの下端)までも使う。以前は帯の上だけに詰めていて、枠がとても細くなっていた
   const areas: [number, number][] = [[top, params.captionTopPercent - 2]];
@@ -473,10 +519,15 @@ const FRAME_FILL_WIDTH_PX = ((FRAME_WIDTH_PERCENT - 8) / 100) * 1080;
  */
 export const placeFrameFills = (state: StepState): StepState => {
   const fills = state.frameFills ?? [];
-  const isFill = (overlay: TextOverlay) => overlay.xPercent === FRAME_FILL_X_PERCENT && fills.some((fill) => fill.label === overlay.text);
+  const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
+  // 比べる動画の2枚のカード(横に並ぶ)では、項目名をカードの真ん中に入れる
+  const sideBySide = rects.length === 2 && rects[0].yPercent === rects[1].yPercent;
+  const isFill = (overlay: TextOverlay) =>
+    fills.some((fill) => fill.label === overlay.text) &&
+    (overlay.xPercent === FRAME_FILL_X_PERCENT ||
+      (sideBySide && rects.some((rect) => rect.xPercent === overlay.xPercent && rect.yPercent === overlay.yPercent)));
   const base = state.globalOverlays.filter((overlay) => !isFill(overlay));
   if (fills.length === 0) return { ...state, globalOverlays: base };
-  const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
   // 完成の動画で、各クリップが始まる時刻
   const starts = new Map<string, number>();
   let t = 0;
@@ -499,14 +550,16 @@ export const placeFrameFills = (state: StepState): StepState => {
     const number = base.find((overlay) => overlay.text === String(fill.frame) && Math.abs(overlay.yPercent - rect.yPercent) < 0.01);
     const heightPx = (rect.heightPercent / 100) * 1920;
     const chars = Math.max(1, [...fill.label].length);
+    const widthPx = sideBySide ? ((rect.widthPercent - 4) / 100) * 1080 : FRAME_FILL_WIDTH_PX;
     labels.push({
       text: fill.label,
       startOffsetSeconds: round2(start),
-      xPercent: FRAME_FILL_X_PERCENT,
+      xPercent: sideBySide ? rect.xPercent : FRAME_FILL_X_PERCENT,
       yPercent: rect.yPercent,
-      fontSizePx: Math.max(24, Math.min(56, Math.round(heightPx * 0.42), Math.floor(FRAME_FILL_WIDTH_PX / chars))),
-      color: number?.color ?? "#111111",
-      fontFamily: number?.fontFamily,
+      fontSizePx: Math.max(24, Math.min(sideBySide ? 80 : 56, Math.round(heightPx * 0.42), Math.floor(widthPx / chars))),
+      // 番号の無いカードでは、枠の線の色で書く
+      color: number?.color ?? (sideBySide ? rect.borderColor : undefined) ?? "#111111",
+      fontFamily: number?.fontFamily ?? (sideBySide ? state.globalOverlays[0]?.fontFamily : undefined),
       rotationDeg: 0,
       animation: "pop",
     });

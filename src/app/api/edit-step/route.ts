@@ -200,7 +200,7 @@ export async function POST(request: Request) {
           const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
           return {
             state: { ...state, globalOverlays: built.globalOverlays, globalShapes: built.globalShapes },
-            note: `左上のタイトル「${objects.title.replace(/\n/g, "")}」を作りました${objects.frameCount >= 2 ? `。ランキングの枠を${objects.frameCount}個並べました` : "(ランキングの枠は無し)"}`,
+            note: `左上のタイトル「${objects.title.replace(/\n/g, "")}」を作りました${objects.frameCount === 2 ? "。2つを比べる動画なので、下に比べるカードを2枚並べました" : objects.frameCount >= 2 ? `。ランキングの枠を${objects.frameCount}個並べました` : "(ランキングの枠は無し)"}`,
             details: [
               `タイトルの見た目: 書体「${fontLabel(objects.look.title.fontFamily)}」・文字${objects.look.title.textColor}・縁取り${objects.look.title.strokeColor ?? "なし"}・帯${objects.look.title.bandColor ?? "なし"}`,
               ...(objects.frameCount >= 2
