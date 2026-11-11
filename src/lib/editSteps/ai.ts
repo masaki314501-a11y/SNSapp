@@ -11,9 +11,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runWithGeminiRateLimit } from "@/lib/gemini/rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "@/lib/gemini/geminiErrors";
-import { waitForGeminiFileActive } from "@/lib/gemini/geminiFiles";
+import { uploadGeminiFile, waitForGeminiFileActive } from "@/lib/gemini/geminiFiles";
 import { editExampleMediaPath, uploadExampleVideo, type EditExample } from "@/lib/gemini/editExamplesStore";
 import { selectEditExamples } from "@/lib/gemini/editExampleSelection";
+import { sanitizeSvgFragment, type FigureLayer } from "./figure";
+import type { ObjectLayout } from "./logic";
 
 /**
  * 工程ごとの編集(編集マニュアルの1〜11)のうち、AIに頼む工程(3・6・8・10)。
@@ -44,7 +46,7 @@ const UPLOAD_REUSE_MS = 40 * 60 * 60 * 1000;
 const videoPart = async (ai: GoogleGenAI, absolutePath: string, mimeType: string): Promise<Part> => {
   const cached = uploadedVideos.get(absolutePath);
   if (cached && cached.expiresAt > Date.now()) return { fileData: { fileUri: cached.uri, mimeType } };
-  const uploaded = await ai.files.upload({ file: absolutePath, config: { mimeType } });
+  const uploaded = await uploadGeminiFile(ai, { file: absolutePath, config: { mimeType } });
   if (!uploaded.name || !uploaded.uri) throw new Error("動画のアップロードに失敗しました");
   await waitForGeminiFileActive(ai, uploaded.name);
   uploadedVideos.set(absolutePath, { uri: uploaded.uri, expiresAt: Date.now() + UPLOAD_REUSE_MS });
@@ -101,10 +103,10 @@ export const REFERENCE_GUIDE_PROMPT = `
 この見た目に近づけて、別の動画をAIが工程ごとに編集します。そのAIに渡すメモを、次の見出しの順に書いてください。
 スクリーンショット(静止画)からは動きが分からないので、動きは動画の手本がある時だけ書き、分からない所は「分からない」と書いてください。
 
-### ジャンル・動画の型
+### ジャンル・動画の型(ランキング・比較・採点・割合・手順・Q&Aなど、どの型か)
 ### 工程7・9 基本テロップ(書体・色・縁取り・帯・大きさ・位置)
 ### 工程8 左上のタイトル(位置・書体・色・縁取り・帯・大きさ・出方)
-### 工程8 ランキングの枠・一覧(形・線の色と太さ・角の丸み・塗り・並べ方・番号の付け方・出方・中身の埋め方)
+### 工程8 画面に置く物(ランキングの枠・比べるカード・グラフ・表・図など、何を置いているか。形・色・並べ方・中身の埋め方・出方。何も置いていなければ「なし」)
 ### 工程10 強調テロップ(書体・色・帯・大きさ・何を強調しているか)
 ### 色と書体の数(この手本で使っている色の数・書体の数)
 
@@ -120,7 +122,7 @@ const referenceGuides = new Map<string, { guide: string; expiresAt: number }>();
 const referencePart = async (ai: GoogleGenAI, file: StyleReferenceFile): Promise<Part> => {
   const cached = referenceUploads.get(file.absolutePath);
   if (cached && cached.expiresAt > Date.now()) return cached.part;
-  const uploaded = await ai.files.upload({ file: file.absolutePath, config: { mimeType: file.mimeType } });
+  const uploaded = await uploadGeminiFile(ai, { file: file.absolutePath, config: { mimeType: file.mimeType } });
   if (!uploaded.name || !uploaded.uri) throw new Error("見た目の手本のアップロードに失敗しました");
   await waitForGeminiFileActive(ai, uploaded.name);
   const part: Part = { fileData: { fileUri: uploaded.uri, mimeType: file.mimeType } };
@@ -333,8 +335,17 @@ export const detectFace = async (input: { absolutePath: string; mimeType: string
 };
 
 /** 工程8の指示文。 */
-export const OBJECTS_PROMPT = `
-添付した動画は、ショート動画の素材です。編集で画面に置く物(左上のタイトルと、ランキングの枠)を決めてください。
+/** 図の土台・部品の書き方(工程8・10で共通)。 */
+const FIGURE_DRAWING_RULES = `   - svg: SVGの要素だけで書く(<svg>タグは書かない)。使える要素: g・rect・circle・ellipse・line・polyline・polygon・path。
+     文字(text要素)・画像・グラデーション・フィルター・styleは使えない(書いても消える)。色は fill・stroke の属性に #RRGGBB で書く。
+   - texts: 図に書く文字。text(文字)・x・y(文字の中心の座標)・size(文字の高さ。座標の単位で40以上)・color・strokeColor(縁取りの色。無ければnull)。
+     文字は短く(1つ全角10文字以内)。文字同士・文字と線が重ならないように置く。`;
+
+/**
+ * 工程8の指示文。figureViewBoxHeight は、AIが図を描く箱の縦の大きさ(横は1000)。人と字幕を避けて図を置ける所が無ければ null。
+ */
+export const OBJECTS_PROMPT = (figureViewBoxHeight: number | null) => `
+添付した動画は、ショート動画の素材です。編集で画面に置く物(左上のタイトルと、話の中身を見せる枠・カード・図)を決めてください。
 見た目と出方は、手本とクセ帳の編集チームの物に近づけてください。
 
 1. title: 動画の最初から最後まで、画面の左上に出すタイトル。何の話かが一目でわかる短い言葉(全角16文字以内)。
@@ -342,17 +353,34 @@ export const OBJECTS_PROMPT = `
    「絶対」「最強」「No.1」「〇〇初」「大人気」のような誇大・比較の言葉は使わない。言っていない数字は入れない。
 2. titleLook: タイトルの見た目。fontFamily(書体)・textColor(文字の色)・strokeColor(縁取りの色。付けないならnull)・
    bandColor(文字の後ろに敷く帯の色。敷かないならnull)・animation(出方)。
-3. frameCount: ランキングや「〇選」のように、話の中で項目を順に挙げていく動画なら、その項目の数(2〜10)。
-   ランキングの枠をその数だけ並べる。項目を順に挙げる動画でなければ0。
-4. frameLook: 枠の見た目(frameCountが0なら、使わないので何でもよい)。borderColor(線の色)・borderWidthPx(線の太さ。2〜12)・
-   fillColor(中の塗り。塗らないならnull)・cornerRadiusPx(角の丸み。0〜40)・numberColor(枠に付ける番号の色)・animation(出方)。
+3. layout: 動画の型に合わせて、画面に置く物を1つ選ぶ。まず動画の型(ランキング・比較・採点・割合・手順・Q&Aなど)を見極めてから選ぶ。
+   - ranking: ランキング・「〇選」のように、3つ以上の項目を順に挙げていく動画。画面の左に、番号付きの枠を縦に並べ、項目名を順に入れていく。
+   - compare: 2つの物(AとB)を比べる動画。画面の下に、比べる2つを入れるカードを左右に2枚並べる。
+   - figure: それ以外で、話の中身を図にすると分かりやすい動画。割合なら円グラフや帯グラフ、採点なら採点表、手順なら流れの図、
+     数の比べなら棒グラフのように、動画に合った図をあなたが自由に描く(下の6)。${figureViewBoxHeight === null ? "\n     ただし、この動画は人と字幕を避けて図を置ける所が無いので、figure は選ばない。" : ""}
+   - none: 枠や図が無くても伝わる動画(Q&A・雑談・感想など)。
+4. frameCount: layoutがrankingの時だけ、挙げていく項目の数(3〜10)。それ以外は0。
+5. frameLook: 枠・カードの見た目(layoutがranking・compareの時に使う。それ以外は何でもよい)。borderColor(線の色)・borderWidthPx(線の太さ。2〜12)・
+   fillColor(中の塗り。塗らないならnull)・cornerRadiusPx(角の丸み。0〜40)・numberColor(枠に付ける番号・カードの文字の色)・animation(出方)。
+6. figure: layoutがfigureの時だけ描く(それ以外は、idea・svgを空の文字、textsを空の配列で答える)。${
+  figureViewBoxHeight === null
+    ? ""
+    : `
+   図を描く場所は、画面の中の 横1000 × 縦${figureViewBoxHeight} の箱(この大きさの座標で描く)。人と字幕に重ならない所をツールが選んであるので、箱の外には描かない。
+   - idea: 何を表す図か、この後、話に合わせて何を足していくか(1〜2文)。
+   - 土台(svg・texts)は、動画の最初から出しておく「中身がまだ入っていない状態」にする(空の円グラフの外枠、項目名と「/20」だけの採点表など)。
+     数字・答え・結果は、字幕ができた後の工程で、話に合わせて足していく。
+${FIGURE_DRAWING_RULES}
+   - 動画の中で実際に話している内容だけを図にする。言っていない項目・数字は入れない。
+   - 読みやすいよう、文字と背景の色をはっきり分ける(動画の上に直接描くので、必要なら白か黒の板を敷く)。`
+}
 
 - 書体は次から選ぶ: ${FONT_HINTS}
 - 出方は次から選ぶ: ${ANIMATION_HINTS}
-- 色は #RRGGBB で書く。タイトル・枠・テロップを合わせた動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。
-- 位置・大きさ・並べ方はツールの側で決めるので書かない。
+- 色は #RRGGBB で書く。タイトル・枠・図・テロップを合わせた動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。
+- タイトル・枠・カードの位置・大きさ・並べ方はツールの側で決めるので書かない。
 
-reasonに、そう決めた理由(どの手本・クセ帳のどこを参考にしたか)を1〜2文で書いてください。
+reasonに、そう決めた理由(動画の型と、どの手本・クセ帳のどこを参考にしたか)を1〜2文で書いてください。
 `.trim();
 
 /** 工程8で決めるタイトル・枠の見た目。 */
@@ -368,12 +396,47 @@ export type ObjectLook = {
   };
 };
 
-/** 8. 左上のタイトルと、ランキングの枠の数を決める。 */
+const figureTextsSchema = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      text: { type: Type.STRING },
+      x: { type: Type.NUMBER },
+      y: { type: Type.NUMBER },
+      size: { type: Type.NUMBER },
+      color: colorSchema,
+      strokeColor: nullableColorSchema,
+    },
+    required: ["text", "x", "y", "size", "color", "strokeColor"],
+  },
+};
+const figureTextsParse = z
+  .array(z.object({ text: z.string(), x: z.number(), y: z.number(), size: z.number(), color, strokeColor: nullableColor }))
+  .default([]);
+/** AIが書いた図の一部を、使える形に整える(SVGは描く要素だけ残す・空の文字は外す・文字は小さすぎないようにする)。 */
+const cleanFigureLayer = (layer: { svg: string; texts: z.infer<typeof figureTextsParse> }): FigureLayer => ({
+  svg: sanitizeSvgFragment(layer.svg),
+  texts: layer.texts
+    .map((text) => ({ ...text, text: text.text.trim().slice(0, 16), size: Math.max(30, text.size) }))
+    .filter((text) => text.text),
+});
+
+/** 8. 左上のタイトルと、画面に置く物(ランキングの枠・比べるカード・図)を決める。 */
 export const decideObjects = async (input: {
   absolutePath: string;
   mimeType: string;
   references?: StyleReferenceFile[];
-}): Promise<{ title: string; frameCount: number; look: ObjectLook; reason: string }> => {
+  /** 図を描く箱の縦の大きさ(横は1000)。図を置ける所が無ければ null。 */
+  figureViewBoxHeight: number | null;
+}): Promise<{
+  title: string;
+  layout: ObjectLayout;
+  frameCount: number;
+  look: ObjectLook;
+  figure: { idea: string; base: FigureLayer } | null;
+  reason: string;
+}> => {
   const part = await videoPart(client(), input.absolutePath, input.mimeType);
   const examples = await exampleParts(input.absolutePath, input.mimeType);
   const guide = await stepGuidePart();
@@ -381,7 +444,7 @@ export const decideObjects = async (input: {
   const result = await askJson({
     model: STEP_MODEL,
     label: "タイトルと枠",
-    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, part, { text: OBJECTS_PROMPT }],
+    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, part, { text: OBJECTS_PROMPT(input.figureViewBoxHeight) }],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -397,6 +460,7 @@ export const decideObjects = async (input: {
           },
           required: ["fontFamily", "textColor", "strokeColor", "bandColor", "animation"],
         },
+        layout: { type: Type.STRING, format: "enum", enum: ["ranking", "compare", "figure", "none"] },
         frameCount: { type: Type.INTEGER },
         frameLook: {
           type: Type.OBJECT,
@@ -410,9 +474,14 @@ export const decideObjects = async (input: {
           },
           required: ["borderColor", "borderWidthPx", "fillColor", "cornerRadiusPx", "numberColor", "animation"],
         },
+        figure: {
+          type: Type.OBJECT,
+          properties: { idea: { type: Type.STRING }, svg: { type: Type.STRING }, texts: figureTextsSchema },
+          required: ["idea", "svg", "texts"],
+        },
         reason: { type: Type.STRING },
       },
-      required: ["title", "titleLook", "frameCount", "frameLook", "reason"],
+      required: ["title", "titleLook", "layout", "frameCount", "frameLook", "figure", "reason"],
     },
     parse: z.object({
       title: z.string(),
@@ -423,6 +492,7 @@ export const decideObjects = async (input: {
         bandColor: nullableColor,
         animation: z.enum(ANIMATION_VALUES),
       }),
+      layout: z.enum(["ranking", "compare", "figure", "none"]),
       frameCount: z.number().int(),
       frameLook: z.object({
         borderColor: color,
@@ -432,13 +502,24 @@ export const decideObjects = async (input: {
         numberColor: color,
         animation: z.enum(ANIMATION_VALUES),
       }),
+      figure: z.object({ idea: z.string(), svg: z.string(), texts: figureTextsParse }).nullable().default(null),
       reason: z.string(),
     }),
   });
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const base = result.figure ? cleanFigureLayer(result.figure) : null;
+  // 図を選んでも、置く所が無い・何も描かれていない時は、図は置かない
+  const figure =
+    result.layout === "figure" && input.figureViewBoxHeight !== null && base && (base.svg || base.texts.length > 0)
+      ? { idea: result.figure?.idea.trim() ?? "", base }
+      : null;
+  const layout: ObjectLayout =
+    result.layout === "figure" ? (figure ? "figure" : "none") : result.layout === "ranking" && result.frameCount < 2 ? "none" : result.layout;
   return {
     title: result.title.trim().slice(0, 20),
-    frameCount: clamp(result.frameCount, 0, 10),
+    layout,
+    frameCount: layout === "ranking" ? clamp(result.frameCount, 2, 10) : layout === "compare" ? 2 : 0,
+    figure,
     look: {
       title: result.titleLook,
       frame: {
@@ -451,8 +532,50 @@ export const decideObjects = async (input: {
   };
 };
 
+/** 工程8で画面に置いた物(工程10で、中身を話に合わせて入れていくため)。 */
+export type PlacedObjects =
+  | { kind: "frames"; layout: "ranking" | "compare"; frameCount: number }
+  | { kind: "figure"; idea: string; viewBoxHeight: number; base: FigureLayer }
+  | { kind: "none" };
+
+const objectsSection = (objects: PlacedObjects): string => {
+  if (objects.kind === "frames" && objects.layout === "compare") {
+    return `
+画面の下には、比べる2つを入れるカードが、左(1)・右(2)に並んでいます。比べる2つそれぞれについて、
+- frame: 入れるカード(1=左、2=右)。話に出てくる順に1から。
+- index: その物の名前が初めて出てくる字幕の番号(上の一覧の番号)。
+- label: カードに入れる短い言葉。比べる物の名前を、そのまま全角8文字以内で。
+を frameItems で答えてください。figureItems は空の配列で答えてください。`;
+  }
+  if (objects.kind === "frames") {
+    return `
+画面の左には、項目を順に埋めていく枠が${objects.frameCount}個、上から1〜${objects.frameCount}の番号付きで並んでいます。挙げていく項目ごとに、
+- frame: 入れる枠の番号(1〜${objects.frameCount})。ランキングを下の順位から発表する時は、順位と同じ番号の枠に入れる(5位なら5)。それ以外は挙げた順に1から。
+- index: その項目を言い始める字幕の番号(上の一覧の番号)。項目名が出てくる字幕。
+- label: 枠に入れる短い言葉。項目名を、そのまま全角8文字以内で(説明や答えは入れない)。
+を frameItems で答えてください。項目が枠より少なければ、ある分だけ答える。figureItems は空の配列で答えてください。`;
+  }
+  if (objects.kind === "figure") {
+    return `
+画面には、前の工程で描いた図(横1000 × 縦${objects.viewBoxHeight} の座標)の土台が、動画の最初から出ています。
+図の中身: ${objects.idea}
+土台の絵(SVG): ${objects.base.svg || "(なし)"}
+土台の文字: ${JSON.stringify(objects.base.texts)}
+
+話に合わせて図に足していく部品を、話す順に figureItems で答えてください(2〜12個)。部品ごとに、
+- index: その部品を出し始める字幕の番号(上の一覧の番号)。その中身(数字・点数・答えなど)を言う字幕。
+- label: 何を足すかの短い説明(確認用。全角20文字以内)。
+- svg・texts: 足す絵と文字。土台と同じ座標で、土台に重ねて描く。前に出した部品は消えずに残るので、足す分だけ書く。
+${FIGURE_DRAWING_RULES}
+   - 言っていない数字・項目は入れない。円グラフの切れは、土台の円と同じ中心・半径で、言った割合どおりの角度で描く。
+frameItems は空の配列で答えてください。`;
+  }
+  return `
+この動画には中身を入れていく枠や図が無いので、frameItems・figureItems は空の配列で答えてください。`;
+};
+
 /** 工程10の指示文。 */
-export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "", frameCount = 0) => `
+export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "", objects: PlacedObjects = { kind: "none" }) => `
 次は、ショート動画の字幕を順に並べたものです(番号: 字幕)。
 ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`).join("\n")}
 
@@ -470,20 +593,8 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`
 - 書体は次から選ぶ: ${FONT_HINTS}
 - 色は #RRGGBB で書く。動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。書体は基本と強調で2つまで(チェック項目)。
 ${objectColorsLine}
+${objectsSection(objects)}
 
-${
-  frameCount >= 2
-    ? `
-画面の左には、項目を順に埋めていく枠が${frameCount}個、上から1〜${frameCount}の番号付きで並んでいます。挙げていく項目ごとに、
-- frame: 入れる枠の番号(1〜${frameCount})。ランキングを下の順位から発表する時は、順位と同じ番号の枠に入れる(5位なら5)。それ以外は挙げた順に1から。
-- index: その項目を言い始める字幕の番号(上の一覧の番号)。項目名が出てくる字幕。
-- label: 枠に入れる短い言葉。項目名を、そのまま全角8文字以内で(説明や答えは入れない)。
-を frameItems で答えてください。項目が枠より少なければ、ある分だけ答える。
-`
-    : `
-この動画には項目を埋める枠が無いので、frameItems は空の配列で答えてください。
-`
-}
 選んだ字幕の番号(picks)と、それぞれを選んだ理由(reasons。picksと同じ順)、見た目をそう決めた理由(lookReason)を答えてください。
 `.trim();
 
@@ -500,8 +611,8 @@ export const pickEmphasis = async (input: {
   captions: string[];
   /** 工程8で使った色(タイトル・枠。白・黒は除く)。字幕の色と合わせて3色以内にするため。 */
   objectColors?: string[];
-  /** 工程8で並べた、項目を埋める枠の数(枠が無ければ0)。 */
-  frameCount?: number;
+  /** 工程8で画面に置いた物(枠・カード・図)。 */
+  objects: PlacedObjects;
   references?: StyleReferenceFile[];
 }): Promise<{
   picks: { index: number; reason: string }[];
@@ -509,18 +620,20 @@ export const pickEmphasis = async (input: {
   lookReason: string;
   /** 枠に入れる項目(index は0始まりの字幕の番号)。 */
   frameItems: { frame: number; index: number; label: string }[];
+  /** 図に足す部品(index は0始まりの字幕の番号)。 */
+  figureItems: (FigureLayer & { index: number; label: string })[];
 }> => {
   const { captions } = input;
   const examples = await exampleParts(input.absolutePath, input.mimeType);
   const guide = await stepGuidePart();
   const references = await referenceParts(input.references);
   const colorsLine = input.objectColors?.length
-    ? `- タイトル・枠ですでに白・黒のほかに ${input.objectColors.join("・")} を使っているので、字幕もこの色(か白・黒)から選ぶと3色以内に収まる。`
+    ? `- タイトル・枠・図ですでに白・黒のほかに ${input.objectColors.join("・")} を使っているので、字幕(と図に足す部品)もこの色(か白・黒)から選ぶと3色以内に収まる。`
     : "";
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine, input.frameCount ?? 0) }],
+    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine, input.objects) }],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -553,8 +666,16 @@ export const pickEmphasis = async (input: {
             required: ["frame", "index", "label"],
           },
         },
+        figureItems: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: { index: { type: Type.INTEGER }, label: { type: Type.STRING }, svg: { type: Type.STRING }, texts: figureTextsSchema },
+            required: ["index", "label", "svg", "texts"],
+          },
+        },
       },
-      required: ["picks", "reasons", "baseLook", "emphasisLook", "lookReason", "frameItems"],
+      required: ["picks", "reasons", "baseLook", "emphasisLook", "lookReason", "frameItems", "figureItems"],
     },
     parse: z.object({
       picks: z.array(z.number().int()),
@@ -563,6 +684,9 @@ export const pickEmphasis = async (input: {
       emphasisLook: z.object({ fontFamily: z.enum(FONT_VALUES), textColor: color, bandColor: nullableColor }),
       lookReason: z.string(),
       frameItems: z.array(z.object({ frame: z.number().int(), index: z.number().int(), label: z.string() })).default([]),
+      figureItems: z
+        .array(z.object({ index: z.number().int(), label: z.string(), svg: z.string(), texts: figureTextsParse }))
+        .default([]),
     }),
   });
   const seen = new Set<number>();
@@ -573,16 +697,27 @@ export const pickEmphasis = async (input: {
     return [{ index, reason: result.reasons[i] ?? "" }];
   });
   // 枠に入れる項目: 番号が範囲外・同じ枠に2つ目・字幕の番号が範囲外の物は外す。長すぎる言葉は8文字で切る
+  const frameCount = input.objects.kind === "frames" ? input.objects.frameCount : 0;
   const frames = new Set<number>();
   const frameItems = result.frameItems.flatMap((item) => {
     const index = item.index - 1;
     const label = [...item.label.replace(/\s+/g, "")].slice(0, 8).join("");
-    if (item.frame < 1 || item.frame > (input.frameCount ?? 0) || frames.has(item.frame)) return [];
+    if (item.frame < 1 || item.frame > frameCount || frames.has(item.frame)) return [];
     if (index < 0 || index >= captions.length || !label) return [];
     frames.add(item.frame);
     return [{ frame: item.frame, index, label }];
   });
-  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason, frameItems };
+  // 図に足す部品: 図が無い時・字幕の番号が範囲外の時・何も描いていない時は外す
+  const figureItems =
+    input.objects.kind !== "figure"
+      ? []
+      : result.figureItems.slice(0, 12).flatMap((item) => {
+          const index = item.index - 1;
+          const layer = cleanFigureLayer(item);
+          if (index < 0 || index >= captions.length || (!layer.svg && layer.texts.length === 0)) return [];
+          return [{ ...layer, index, label: item.label.trim().slice(0, 30) }];
+        });
+  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason, frameItems, figureItems };
 };
 
 /** 工程12(チェック)の誤字・脱字の確認の指示文。 */

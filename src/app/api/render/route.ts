@@ -48,7 +48,8 @@ const MEMORY_SAVING_OPTIONS = {
 const LOCAL_ORIGIN = `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 
 const resolveUploadedSrc = (src?: string): string | undefined => {
-  if (!src || src.startsWith("http://") || src.startsWith("https://")) return src;
+  // AIが描いた図(工程8・10)は、絵をそのまま data: のURLで持っているので、そのまま渡す
+  if (!src || src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) return src;
   return `${LOCAL_ORIGIN}/api/media/${src}`;
 };
 

@@ -6,6 +6,7 @@ import type {
   CaptionStyle,
   ClipZoom,
   FaceBox,
+  ImageOverlay,
   ShapeOverlay,
   TextOverlay,
   VideoAdjust,
@@ -14,6 +15,7 @@ import type {
 import type { ProjectBgm, ProjectSegment } from "@/lib/videoProject";
 import { captionBox, faceOnScreen } from "./screenBoxes";
 import type { CheckItem } from "./checklist";
+import type { FigureDraft } from "./figure";
 
 /**
  * 工程ごとの編集(編集マニュアルの1〜11)のうち、AIを使わず決まりで行う処理。
@@ -36,7 +38,15 @@ export type StepState = {
   captionLook?: { fontFamily: CaptionFontFamily; captionStyle: CaptionStyle; primaryColor: string } | null;
   /** ランキング・「〇選」の枠に入れる項目(工程10でAIが決める)。場面を外しても出る時刻を合わせ直せるよう、字幕のクリップで覚える。 */
   frameFills?: FrameFill[];
+  /** AIが描いた図(ランキング・比べる動画以外の型。工程8で土台、工程10で部品を決める)。 */
+  figure?: FigureDraft | null;
+  /** 図を画面に置いた物(placeFigureで作る。プロジェクトの画像・画面に出す文字に足して見せる)。 */
+  figureImages?: ImageOverlay[];
+  figureTexts?: TextOverlay[];
 };
+
+/** 工程8でAIが決める、画面に置く物の型。ranking=左に縦の枠、compare=下に比べるカード2枚、figure=AIが描く図、none=何も置かない。 */
+export type ObjectLayout = "ranking" | "compare" | "figure" | "none";
 
 /** 枠に入れる項目。frame は枠の番号(上から1〜)、key はその項目を言い始めるクリップ、sourceSeconds はその元の動画での時刻。 */
 export type FrameFill = { frame: number; key: string; sourceSeconds: number; label: string };
@@ -267,8 +277,8 @@ const FRAME_LOWEST_PERCENT = 77;
 /** 枠1つの高さの上限(%)。枠が少ない時に大きくなりすぎないように。 */
 const FRAME_MAX_HEIGHT_PERCENT = 11;
 /**
- * 枠が2つの時は、ランキングではなく2つを比べる動画(日本と韓国など)とみなし、番号は付けずに、
- * 画面の下へ2枚のカードを横に並べる(ランキングで2つだけ挙げる動画は、まず無いため)。
+ * 2つを比べる動画(日本と韓国など。工程8でAIが型を compare と答えた時)は、番号は付けずに、
+ * 画面の下へ2枚のカードを横に並べる。
  * 横は、左の余白(7%)からTikTokの右側のボタンの手前(86%)までに収める。
  */
 const COMPARE_CARD_CENTERS_PERCENT = [27, 66] as const;
@@ -313,7 +323,7 @@ const TITLE_STROKE_RATIO = 0.06;
 
 /**
  * 8. 必要なオブジェクトを作る: 左上のタイトルテロップと、ランキングの枠(N個を左に縦に並べ、番号を付ける)。
- * 枠が2つの時は、比べる動画のカード2枚を下に横に並べる(compareCards)。
+ * 比べる動画(layout=compare)では、カード2枚を下に横に並べる(compareCards)。
  * 枠は、タイトルの下からテロップの帯の上まで(テロップと被らないように)に収める。
  */
 /**
@@ -327,6 +337,8 @@ export type ObjectStyle = {
 
 export const buildObjects = (params: {
   title: string;
+  /** 置く物の型。ranking は frameCount 個の枠を左に縦に、compare は比べるカード2枚を下に並べる。 */
+  layout: ObjectLayout;
   frameCount: number;
   captionTopPercent: number;
   /** テロップの帯の下端(%)。顎の下に固定した時は、枠をテロップの上と下に分けて並べる(帯には置かない)。 */
@@ -363,13 +375,14 @@ export const buildObjects = (params: {
   // 左寄せの文字は、xPercentを文字の中心として扱う描画に合わせ、文字幅の半分だけ右へずらす
   const titleWidthPercent = (longestLine * fontSizePx * 100) / 1080;
   title.xPercent = round2(TITLE_STYLE.xPercent + titleWidthPercent / 2);
-  if (params.frameCount < 2) return { globalOverlays: [title], globalShapes: [] };
+  if (params.layout === "compare") {
+    const titleBottom = title.yPercent + (titleText.split("\n").length * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
+    return { globalOverlays: [title], globalShapes: compareCards({ ...params, top: titleBottom, frameStyle }) };
+  }
+  if (params.layout !== "ranking" || params.frameCount < 2) return { globalOverlays: [title], globalShapes: [] };
 
   const titleLines = titleText.split("\n").length;
   const top = title.yPercent + (titleLines * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
-  if (params.frameCount === 2) {
-    return { globalOverlays: [title], globalShapes: compareCards({ ...params, top, frameStyle }) };
-  }
   // 枠を並べられる所: タイトルの下からテロップの帯の上まで。テロップが画面の途中(顎の下)にある時は、帯の下から
   // 画面の下の見える所(セーフティゾーンの下端)までも使う。以前は帯の上だけに詰めていて、枠がとても細くなっていた
   const areas: [number, number][] = [[top, params.captionTopPercent - 2]];

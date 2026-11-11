@@ -30,7 +30,9 @@ import {
   type StepState,
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
-import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts, shortenCaptions } from "@/lib/editSteps/ai";
+import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
+import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
+import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts, shortenCaptions, type PlacedObjects } from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
@@ -53,6 +55,11 @@ const requestSchema = z.object({
     videoAdjust: z.any().nullable().optional(),
     bgm: z.any().nullable().optional(),
     captionLook: z.any().nullable().optional(),
+    // 以前はここに無く、受け取る時に捨てていた(工程12で枠の項目名の時刻を合わせ直せていなかった)
+    frameFills: z.array(z.any()).optional(),
+    figure: z.any().nullable().optional(),
+    figureImages: z.array(z.any()).optional(),
+    figureTexts: z.array(z.any()).optional(),
   }),
   /** 完成動画の長さの上限(秒)。お客様の指定が無ければ30秒。 */
   targetSeconds: z.number().positive().optional(),
@@ -178,32 +185,66 @@ export async function POST(request: Request) {
           };
         }
         case 8: {
+          const captionTopPercent = state.captionYPercent ?? BOTTOM_CAPTION_TOP_PERCENT;
+          const captionBottomPercent =
+            state.captionYPercent !== null ? state.captionYPercent + captionBandHeight(captionLook.style, captionLook.fontSize) : undefined;
+          // AIが図を描く場所(人と字幕に重ならない、空いた所)。置ける所が無ければ、図は選ばせない
+          const face = segments.find((segment) => segment.faceBox)?.faceBox;
+          const area = figureArea({
+            captionTopPercent,
+            captionBottomPercent,
+            faceBottomPercent: face ? faceOnScreen(face, state.framing, undefined).bottom : undefined,
+          });
           const objects = await decideObjects({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             references: await resolveReferences(),
+            figureViewBoxHeight: area ? figureViewBoxHeight(area) : null,
           });
           // タイトルの指定があれば、文言はそれを使う(見た目と枠の数はAIの案のまま)
           const fixedTitle = parsed.data.title?.trim();
           if (fixedTitle) objects.title = fixedTitle;
           const built = buildObjects({
             title: objects.title,
+            layout: objects.layout,
             frameCount: objects.frameCount,
-            captionTopPercent: state.captionYPercent ?? BOTTOM_CAPTION_TOP_PERCENT,
-            captionBottomPercent:
-              state.captionYPercent !== null
-                ? state.captionYPercent + captionBandHeight(captionLook.style, captionLook.fontSize)
-                : undefined,
+            captionTopPercent,
+            captionBottomPercent,
             accentColor: look.primaryColor,
             style: objects.look,
           });
+          const figure: FigureDraft | null =
+            objects.figure && area
+              ? {
+                  box: area,
+                  viewBoxHeight: figureViewBoxHeight(area),
+                  idea: objects.figure.idea,
+                  base: objects.figure.base,
+                  parts: [],
+                  fontFamily: objects.look.title.fontFamily,
+                }
+              : null;
           const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+          const placedNote =
+            objects.layout === "compare"
+              ? "。2つを比べる動画なので、下に比べるカードを2枚並べました"
+              : objects.layout === "ranking"
+                ? `。ランキングの枠を${objects.frameCount}個並べました`
+                : figure
+                  ? `。話の中身を見せる図の土台を描きました(${figure.idea})`
+                  : "(枠や図は無し)";
           return {
-            state: { ...state, globalOverlays: built.globalOverlays, globalShapes: built.globalShapes },
-            note: `左上のタイトル「${objects.title.replace(/\n/g, "")}」を作りました${objects.frameCount === 2 ? "。2つを比べる動画なので、下に比べるカードを2枚並べました" : objects.frameCount >= 2 ? `。ランキングの枠を${objects.frameCount}個並べました` : "(ランキングの枠は無し)"}`,
+            state: placeFigure({
+              ...state,
+              globalOverlays: built.globalOverlays,
+              globalShapes: built.globalShapes,
+              frameFills: [],
+              figure,
+            }),
+            note: `左上のタイトル「${objects.title.replace(/\n/g, "")}」を作りました${placedNote}`,
             details: [
               `タイトルの見た目: 書体「${fontLabel(objects.look.title.fontFamily)}」・文字${objects.look.title.textColor}・縁取り${objects.look.title.strokeColor ?? "なし"}・帯${objects.look.title.bandColor ?? "なし"}`,
-              ...(objects.frameCount >= 2
+              ...(objects.layout === "ranking" || objects.layout === "compare"
                 ? [`枠の見た目: 線${objects.look.frame.borderColor}(${objects.look.frame.borderWidthPx}px)・塗り${objects.look.frame.fillColor ?? "なし"}・角の丸み${objects.look.frame.cornerRadiusPx}px・番号${objects.look.frame.numberColor}`]
                 : []),
               objects.reason,
@@ -244,18 +285,30 @@ export async function POST(request: Request) {
               [
                 ...state.globalOverlays.flatMap((overlay) => [overlay.color, overlay.strokeColor, overlay.backgroundColor]),
                 ...state.globalShapes.flatMap((shape) => [shape.borderColor, shape.fillColor]),
+                ...(state.figureImages ?? []).flatMap((image) => figureImageColors(image.src)),
+                ...(state.figureTexts ?? []).flatMap((text) => [text.color, text.strokeColor]),
               ]
                 .filter((value): value is string => Boolean(value))
                 .filter((value) => !isWhiteOrBlack(value))
                 .map((value) => value.toUpperCase())
             ),
           ];
-          const { picks, look: chosen, lookReason, frameItems } = await pickEmphasis({
+          const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
+          const objects: PlacedObjects = state.figure
+            ? { kind: "figure", idea: state.figure.idea, viewBoxHeight: state.figure.viewBoxHeight, base: state.figure.base }
+            : rects.length >= 2
+              ? {
+                  kind: "frames",
+                  layout: rects.length === 2 && rects[0].yPercent === rects[1].yPercent ? "compare" : "ranking",
+                  frameCount: rects.length,
+                }
+              : { kind: "none" };
+          const { picks, look: chosen, lookReason, frameItems, figureItems } = await pickEmphasis({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
             objectColors,
-            frameCount: state.globalShapes.filter((shape) => shape.kind === "rect").length,
+            objects,
             references: await resolveReferences(),
           });
           // 同じ字幕が続くクリップ(カットの切れ目の後)も、そろえて強調する
@@ -267,16 +320,35 @@ export async function POST(request: Request) {
             sourceSeconds: withCaption[item.index].startFromSeconds,
             label: item.label,
           }));
+          // 図に、話に合わせて部品を足す(その中身を言う字幕の時から最後まで出す)
+          const figure: FigureDraft | null = state.figure
+            ? {
+                ...state.figure,
+                parts: figureItems.map((item) => ({
+                  svg: item.svg,
+                  texts: item.texts,
+                  label: item.label,
+                  key: withCaption[item.index].key,
+                  sourceSeconds: withCaption[item.index].startFromSeconds,
+                })),
+              }
+            : null;
           const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
           return {
-            state: placeFrameFills({
-              ...state,
-              segments: applyEmphasis(segments, keys, chosen.emphasis),
-              captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
-              frameFills,
-            }),
-            note: `${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${frameFills.length}個に項目名を入れました` : ""}`,
+            state: placeFigure(
+              placeFrameFills({
+                ...state,
+                segments: applyEmphasis(segments, keys, chosen.emphasis),
+                captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
+                frameFills,
+                figure,
+              })
+            ),
+            note: `${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${frameFills.length}個に項目名を入れました` : ""}${figure && figure.parts.length > 0 ? `。図に、話に合わせて${figure.parts.length}個の部品を足しました` : ""}`,
             details: [
+              ...(figure && figure.parts.length > 0
+                ? [`図に足した部品: ${figure.parts.map((part) => `「${part.label}」`).join("・")}`]
+                : []),
               ...(frameFills.length > 0
                 ? [`枠に入れた項目: ${[...frameFills].sort((a, b) => a.frame - b.frame).map((fill) => `${fill.frame}「${fill.label}」`).join("・")}`]
                 : []),
@@ -315,8 +387,8 @@ export async function POST(request: Request) {
           const removeKeys = new Set(removals.map((removal) => captioned[removal.index].key));
           const kept = segments.filter((segment) => !removeKeys.has(segment.key));
           return {
-            // 場面を外すと後ろの時刻がずれるので、枠の項目名が出る時刻を合わせ直す
-            state: placeFrameFills({ ...state, segments: markContinuedCaptions(kept) }),
+            // 場面を外すと後ろの時刻がずれるので、枠の項目名・図の部品が出る時刻を合わせ直す
+            state: placeFigure(placeFrameFills({ ...state, segments: markContinuedCaptions(kept) })),
             note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。「やり直す」を押すか、編集画面で短くしてください)` : ""}`,
             details: removals.map((removal) => `「${captioned[removal.index].caption.replace(/\n/g, "")}」 ${removal.reason}`),
           };
@@ -345,6 +417,7 @@ export async function POST(request: Request) {
               .map((overlay) => String(overlay.text))
               .filter((text) => !/^\d+$/.test(text))
               .map((text) => ({ kind: "タイトル・枠の文字" as const, text })),
+            ...(state.figureTexts ?? []).map((overlay) => ({ kind: "タイトル・枠の文字" as const, text: String(overlay.text) })),
             ...segments.map((segment) => segment.caption).filter((caption) => caption.trim()).map((text) => ({ kind: "字幕" as const, text })),
           ];
           const found = await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts });
@@ -356,13 +429,15 @@ export async function POST(request: Request) {
             fixedTypos.reduce((current, typo) => (current === typo.text ? current.replace(typo.wrong, typo.correct) : current), text);
           const fixedSegments = segments.map((segment) => (segment.caption.trim() ? { ...segment, caption: fix(segment.caption) } : segment));
           const fixedOverlays = state.globalOverlays.map((overlay) => ({ ...overlay, text: fix(String(overlay.text)) }));
-          const adjusted: StepState = {
+          const fixLayer = <L extends FigureLayer>(layer: L): L => ({ ...layer, texts: layer.texts.map((text) => ({ ...text, text: fix(text.text) })) });
+          const adjusted: StepState = placeFigure({
             ...state,
+            figure: state.figure ? { ...state.figure, base: fixLayer(state.figure.base), parts: state.figure.parts.map(fixLayer) } : state.figure,
             segments: fixedSegments,
             globalOverlays: fixedOverlays,
             frameFills: state.frameFills?.map((fill) => ({ ...fill, label: fix(fill.label) })),
             videoAdjust: light.adjust,
-          };
+          });
           const result = runChecklist({
             state: adjusted,
             spans,

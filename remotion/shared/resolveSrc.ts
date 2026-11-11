@@ -5,7 +5,8 @@
  * 起動後もファイルシステムを見て配信する /api/media 経由で参照する。
  */
 export const resolveClipSrc = (src: string): string => {
-  if (src.startsWith("http://") || src.startsWith("https://")) {
+  // AIが描いた図(工程8・10)は、絵をそのまま data: のURLで持っている
+  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
     return src;
   }
   return `/api/media/${src}`;

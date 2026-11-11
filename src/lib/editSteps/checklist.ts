@@ -1,3 +1,4 @@
+import { figureImageColors, isFigureImage } from "./figure";
 import type { CaptionFontFamily, CaptionFontSize, CaptionStyle, ClipZoom, ImageOverlay } from "@video/shared/schema";
 import { estimateOverlayBox } from "@video/shared/textWrap";
 import { findTextStylePreset } from "@video/shared/textStylePresets";
@@ -271,8 +272,10 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
 
   // 画像の出どころ: 画像の棚の物(AIが作った・使ってよいと確かめて貯めた物)は○。お客様から受け取って入れた画像は、使ってよい物か人が確かめる
   const images = [...(input.globalImages ?? []), ...segments.flatMap((segment) => segment.images ?? [])];
-  const ownImages = [...new Set(images.map((image) => image.src).filter((src) => !src.startsWith(LIBRARY_IMAGE_PREFIX)))];
+  // AIが描いた図(工程8・10)は、お客様の画像ではないので数えない
+  const ownImages = [...new Set(images.map((image) => image.src).filter((src) => !src.startsWith(LIBRARY_IMAGE_PREFIX) && !isFigureImage(src)))];
   const libraryImages = new Set(images.map((image) => image.src).filter((src) => src.startsWith(LIBRARY_IMAGE_PREFIX)));
+  const figureCount = new Set(images.map((image) => image.src).filter(isFigureImage)).size;
   add({
     id: "copyright",
     group: "基本",
@@ -282,7 +285,12 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
       images.length === 0
         ? "画像は使っていません(映像はお客様が撮影した動画です)"
         : ownImages.length === 0
-          ? `使っている画像${libraryImages.size}枚は、すべて画像の棚の物(AIが作った画像)です`
+          ? `使っている画像は、${[
+              libraryImages.size > 0 ? `画像の棚の物(AIが作った画像)${libraryImages.size}枚` : "",
+              figureCount > 0 ? `AIが描いた図${figureCount}枚` : "",
+            ]
+              .filter(Boolean)
+              .join("と")}だけです`
           : `お客様から受け取って入れた画像が${ownImages.length}枚あります(${ownImages.map((src) => src.split("/").pop()).join("・")})。使ってよい物か確かめてください`,
   });
 
@@ -374,6 +382,12 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   for (const shape of state.globalShapes) {
     addColor(shape.borderColor);
     addColor(shape.fillColor);
+  }
+  // AIが描いた図の線・塗り・文字の色も数える
+  for (const image of state.figureImages ?? []) figureImageColors(image.src).forEach(addColor);
+  for (const text of state.figureTexts ?? []) {
+    addColor(text.color);
+    addColor(text.strokeColor);
   }
   for (const segment of segments) {
     addColor(segment.captionEmphasis?.bandColor);
