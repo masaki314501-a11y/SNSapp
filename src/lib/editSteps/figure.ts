@@ -44,6 +44,9 @@ export const FIGURE_MIN_HEIGHT_PERCENT = 10;
 /** 左上のタイトルの下端の見積もり(%。2行の時)。図は、これより下に置く。 */
 const TITLE_BOTTOM_PERCENT = 20;
 
+/** 図の文字の数の上限(動画全体に出す文字の上限80個から、タイトル・枠の分を残す)。 */
+const MAX_FIGURE_TEXTS = 60;
+
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 /**
@@ -212,5 +215,6 @@ export const placeFigure = <S extends { segments: ProjectSegment[]; figure?: Fig
     if (part.svg) figureImages.push(image(part.svg, start, "pop"));
     figureTexts.push(...part.texts.map((text) => toScreenText(text, draft, start, "pop")));
   }
-  return { ...state, figureImages, figureTexts };
+  // 動画全体に出す文字には上限(80個)があるので、図の文字は先に出る物から60個までにする
+  return { ...state, figureImages, figureTexts: figureTexts.slice(0, MAX_FIGURE_TEXTS) };
 };

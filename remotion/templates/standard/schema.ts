@@ -37,8 +37,9 @@ export const standardVideoSchema = z.object({
   bgm: bgmSchema.optional().describe("背景音楽(全体に1つ、ループ再生)"),
   // 参考投稿によくある「動画の上部にずっと出ているタイトル」など、カットをまたいで表示する文字。
   // startOffsetSeconds/durationInSecondsは動画全体の先頭からの秒数。
-  globalOverlays: z.array(textOverlaySchema).max(24).optional().describe("動画全体に重ねる文字(タイトル等)"),
-  globalImages: z.array(imageOverlaySchema).max(24).optional().describe("動画全体に重ねる画像(ロゴ等)"),
+  // AIが描いた図(工程8・10)は、図の中の文字・部品を1つずつ置くので、数を多めに取る(以前の24個では図の文字で超えた)
+  globalOverlays: z.array(textOverlaySchema).max(80).optional().describe("動画全体に重ねる文字(タイトル・図の文字等)"),
+  globalImages: z.array(imageOverlaySchema).max(40).optional().describe("動画全体に重ねる画像(ロゴ・図等)"),
   globalShapes: z.array(shapeOverlaySchema).max(24).optional().describe("動画全体に重ねる図形(ランキングの枠等)"),
   framing: videoFramingSchema.optional().describe("動画全体の画角(全クリップの映像の寄せ方)"),
   /**
