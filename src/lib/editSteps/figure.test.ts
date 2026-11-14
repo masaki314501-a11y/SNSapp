@@ -73,6 +73,23 @@ describe("AIが描いた図", () => {
     expect(byText).toEqual({ 白さ: undefined, "20": 5, "10": undefined, "15": undefined });
   });
 
+  it("円グラフの細い切れに並んだ別の項目名は、近くても消さない", () => {
+    const box = { xPercent: 46.5, yPercent: 61.2, widthPercent: 79, heightPercent: 30 };
+    const label = (key: string, sourceSeconds: number, text: string, x: number, y: number) => ({
+      key, sourceSeconds, label: text, svg: "", texts: [{ text, x, y, size: 40, color: "#FFFFFF", strokeColor: null }],
+    });
+    const figure: FigureDraft = {
+      box,
+      viewBoxHeight: figureViewBoxHeight(box),
+      idea: "職業の割合の円グラフ",
+      base: { svg: '<circle cx="500" cy="300" r="250" fill="#FFFFFF"/>', texts: [] },
+      // 画面では、自営業(40, 54)と歯科医師(43.9, 51.9)くらいの近さ
+      parts: [label("a", 0, "自営業", 425, 260), label("b", 2, "歯科医師", 475, 225)],
+    };
+    const placed = placeFigure({ segments: [seg(0, 2, "a"), seg(2, 5, "b")], figure });
+    expect(placed.figureTexts.every((text) => text.durationInSeconds === undefined)).toBe(true);
+  });
+
   it("図が無ければ、何も置かない", () => {
     expect(placeFigure({ segments: [], figure: null })).toMatchObject({ figureImages: [], figureTexts: [] });
   });

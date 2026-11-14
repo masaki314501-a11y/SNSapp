@@ -222,9 +222,12 @@ export const placeFigure = <S extends { segments: ProjectSegment[]; figure?: Fig
   return { ...state, figureImages, figureTexts: endReplacedTexts(figureTexts.slice(0, MAX_FIGURE_TEXTS)) };
 };
 
-/** 同じ場所とみなす、文字の中心のずれ(画面に対する%)。 */
-const SAME_SPOT_X_PERCENT = 4;
-const SAME_SPOT_Y_PERCENT = 2.5;
+/**
+ * 同じ場所とみなす、文字の中心のずれ(画面に対する%)。採点表の点数は同じ座標に書き直されるので、ほぼ同じ所だけにする
+ * (横4%・縦2.5%にしていた時は、円グラフの細い切れに並んだ別の項目名「自営業」「歯科医師」まで消えた)。
+ */
+const SAME_SPOT_X_PERCENT = 2;
+const SAME_SPOT_Y_PERCENT = 1.2;
 
 /**
  * 同じ場所に後から別の文字が出る時は、前の文字をその時刻で消す。
