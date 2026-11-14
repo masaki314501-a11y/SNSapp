@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectSegment } from "@/lib/videoProject";
+import { estimateOverlayBox } from "@video/shared/textWrap";
 import {
   applyEmphasis,
   buildObjects,
@@ -123,6 +124,22 @@ describe("工程ごとの編集(機械でやる工程)", () => {
     const lowest = Math.max(...globalShapes.map((s) => s.yPercent + s.heightPercent / 2));
     expect(lowest).toBeLessThanOrEqual(53.01);
     expect(buildObjects({ title: "解説", layout: "none", frameCount: 0, captionTopPercent: 55, accentColor: "#FF3366" }).globalShapes).toHaveLength(0);
+  });
+
+  it("8. 帯付きの長いタイトルも、チェック項目と同じ見積もりで、アプリのボタンで隠れる所に入らない", () => {
+    for (const bandColor of ["#00BFFF", null]) {
+      const { globalOverlays } = buildObjects({
+        title: "ラミネートベニア治療採点",
+        layout: "none",
+        frameCount: 0,
+        captionTopPercent: 55,
+        accentColor: "#FF3366",
+        style: { title: { textColor: "#FFFFFF", strokeColor: "#000000", bandColor, animation: "fade" } },
+      });
+      const box = estimateOverlayBox(globalOverlays[0]);
+      expect(box.left).toBeGreaterThanOrEqual(5);
+      expect(box.right).toBeLessThanOrEqual(87);
+    }
   });
 
   it("8. テロップが顎の下(画面の途中)にある時は、枠をテロップの上と下に分けて並べ、帯には置かない", () => {

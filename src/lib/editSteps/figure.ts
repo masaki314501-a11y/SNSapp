@@ -172,7 +172,7 @@ const toScreenText = (
 };
 
 /**
- * 図を、画面に置く画像と文字にする。土台は動画の最初から、部品はその話を始めるクリップの時刻から、最後まで出す。
+ * 図を、画面に置く画像と文字にする。土台は最初の部品と一緒に、部品はその話を始めるクリップの時刻から出す(同じ場所に次の文字が出るまで)。
  * 場面を外した後(工程12)も呼び直して、出る時刻を合わせ直す。
  */
 export const placeFigure = <S extends { segments: ProjectSegment[]; figure?: FigureDraft | null }>(
@@ -207,14 +207,44 @@ export const placeFigure = <S extends { segments: ProjectSegment[]; figure?: Fig
   });
   const figureImages: ImageOverlay[] = [];
   const figureTexts: TextOverlay[] = [];
-  if (draft.base.svg) figureImages.push(image(draft.base.svg, 0, "fade"));
-  figureTexts.push(...draft.base.texts.map((text) => toScreenText(text, draft, 0, "fade")));
-  for (const part of draft.parts) {
-    const start = startOf(part);
-    if (start === undefined) continue;
+  const placedParts = draft.parts
+    .map((part) => ({ part, start: startOf(part) }))
+    .filter((item): item is { part: FigurePart; start: number } => item.start !== undefined);
+  // 土台は、最初の部品と一緒に出す(最初から出すと、中身の無い白い丸や空の表だけがしばらく映っていた)。部品が無ければ最初から
+  const baseStart = placedParts.length > 0 ? Math.min(...placedParts.map((item) => item.start)) : 0;
+  if (draft.base.svg) figureImages.push(image(draft.base.svg, baseStart, "fade"));
+  figureTexts.push(...draft.base.texts.map((text) => toScreenText(text, draft, baseStart, "fade")));
+  for (const { part, start } of placedParts) {
     if (part.svg) figureImages.push(image(part.svg, start, "pop"));
     figureTexts.push(...part.texts.map((text) => toScreenText(text, draft, start, "pop")));
   }
   // 動画全体に出す文字には上限(80個)があるので、図の文字は先に出る物から60個までにする
-  return { ...state, figureImages, figureTexts: figureTexts.slice(0, MAX_FIGURE_TEXTS) };
+  return { ...state, figureImages, figureTexts: endReplacedTexts(figureTexts.slice(0, MAX_FIGURE_TEXTS)) };
 };
+
+/** 同じ場所とみなす、文字の中心のずれ(画面に対する%)。 */
+const SAME_SPOT_X_PERCENT = 4;
+const SAME_SPOT_Y_PERCENT = 2.5;
+
+/**
+ * 同じ場所に後から別の文字が出る時は、前の文字をその時刻で消す。
+ * 採点表で2つ目の治療の点数が1つ目の点数の上に出て、数字が重なって読めなかったため
+ * (AIが白い四角で前の点数を隠そうとしても、画像は文字より下に描かれるので隠れなかった)。
+ */
+export const endReplacedTexts = (texts: TextOverlay[]): TextOverlay[] =>
+  texts.map((text) => {
+    const start = text.startOffsetSeconds ?? 0;
+    const end = text.durationInSeconds !== undefined ? start + text.durationInSeconds : Infinity;
+    const next = texts
+      .filter(
+        (other) =>
+          other !== text &&
+          (other.startOffsetSeconds ?? 0) > start &&
+          (other.startOffsetSeconds ?? 0) < end &&
+          Math.abs(other.xPercent - text.xPercent) < SAME_SPOT_X_PERCENT &&
+          Math.abs(other.yPercent - text.yPercent) < SAME_SPOT_Y_PERCENT
+      )
+      .reduce<number | null>((min, other) => Math.min(min ?? Infinity, other.startOffsetSeconds ?? 0), null);
+    // 表示秒数には下限(0.2秒)があるので、それより短くなる時は残す
+    return next !== null && next - start >= 0.2 ? { ...text, durationInSeconds: round2(next - start) } : text;
+  });

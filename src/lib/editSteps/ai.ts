@@ -339,7 +339,8 @@ export const detectFace = async (input: { absolutePath: string; mimeType: string
 const FIGURE_DRAWING_RULES = `   - svg: SVGの要素だけで書く(<svg>タグは書かない)。使える要素: g・rect・circle・ellipse・line・polyline・polygon・path。
      文字(text要素)・画像・グラデーション・フィルター・styleは使えない(書いても消える)。色は fill・stroke の属性に #RRGGBB で書く。
    - texts: 図に書く文字。text(文字)・x・y(文字の中心の座標)・size(文字の高さ。座標の単位で40以上)・color・strokeColor(縁取りの色。無ければnull)。
-     文字は短く(1つ全角10文字以内)。文字同士・文字と線が重ならないように置く。`;
+     文字は短く(1つ全角10文字以内)。文字同士・文字と線が重ならないように置く。
+   - 部品の色は、土台の塗りと違う色にする(土台と同じ色で塗ると見えない。黒い円の上に黒い切れを描いて、何も見えない円グラフになったことがある)。`;
 
 /**
  * 工程8の指示文。figureViewBoxHeight は、AIが図を描く箱の縦の大きさ(横は1000)。人と字幕を避けて図を置ける所が無ければ null。
@@ -368,7 +369,7 @@ export const OBJECTS_PROMPT = (figureViewBoxHeight: number | null) => `
     : `
    図を描く場所は、画面の中の 横1000 × 縦${figureViewBoxHeight} の箱(この大きさの座標で描く)。人と字幕に重ならない所をツールが選んであるので、箱の外には描かない。
    - idea: 何を表す図か、この後、話に合わせて何を足していくか(1〜2文)。
-   - 土台(svg・texts)は、動画の最初から出しておく「中身がまだ入っていない状態」にする(空の円グラフの外枠、項目名と「/20」だけの採点表など)。
+   - 土台(svg・texts)は、最初の部品と一緒に出る「中身がまだ入っていない状態」にする(空の円グラフの外枠、項目名と「/20」だけの採点表など)。
      数字・答え・結果は、字幕ができた後の工程で、話に合わせて足していく。
 ${FIGURE_DRAWING_RULES}
    - 動画の中で実際に話している内容だけを図にする。言っていない項目・数字は入れない。
@@ -557,7 +558,7 @@ const objectsSection = (objects: PlacedObjects): string => {
   }
   if (objects.kind === "figure") {
     return `
-画面には、前の工程で描いた図(横1000 × 縦${objects.viewBoxHeight} の座標)の土台が、動画の最初から出ています。
+画面には、前の工程で描いた図(横1000 × 縦${objects.viewBoxHeight} の座標)の土台が、最初の部品と一緒に出ます。
 図の中身: ${objects.idea}
 土台の絵(SVG): ${objects.base.svg || "(なし)"}
 土台の文字: ${JSON.stringify(objects.base.texts)}
@@ -566,6 +567,7 @@ const objectsSection = (objects: PlacedObjects): string => {
 - index: その部品を出し始める字幕の番号(上の一覧の番号)。その中身(数字・点数・答えなど)を言う字幕。
 - label: 何を足すかの短い説明(確認用。全角20文字以内)。
 - svg・texts: 足す絵と文字。土台と同じ座標で、土台に重ねて描く。前に出した部品は消えずに残るので、足す分だけ書く。
+  ただし、前の文字と同じ位置に新しい文字を置くと、前の文字はその時に消える(採点表で次の物の点数に変わる時は、同じ枠の同じ位置に新しい点数を書けばよい。白い四角などで隠さなくてよい)。
 ${FIGURE_DRAWING_RULES}
    - 言っていない数字・項目は入れない。円グラフの切れは、土台の円と同じ中心・半径で、言った割合どおりの角度で描く。
 frameItems は空の配列で答えてください。`;

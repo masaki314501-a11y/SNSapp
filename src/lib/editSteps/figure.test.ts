@@ -34,7 +34,7 @@ describe("AIが描いた図", () => {
     expect(figureArea({ captionTopPercent: 70, faceBottomPercent: 62 })).toBeNull();
   });
 
-  it("土台は最初から、部品はその話を始めるクリップから出し、場面を外したら時刻を合わせ直す", () => {
+  it("土台は最初の部品と一緒に、部品はその話を始めるクリップから出し、場面を外したら時刻を合わせ直す", () => {
     const box = { xPercent: 46.5, yPercent: 65, widthPercent: 79, heightPercent: 20 };
     const figure: FigureDraft = {
       box,
@@ -46,7 +46,7 @@ describe("AIが描いた図", () => {
       ],
     };
     const placed = placeFigure({ segments: [seg(0, 2, "a"), seg(2, 5, "b")], figure });
-    expect(placed.figureImages.map((image) => image.startOffsetSeconds)).toEqual([0, 2]);
+    expect(placed.figureImages.map((image) => image.startOffsetSeconds)).toEqual([2, 2]);
     expect(placed.figureImages.every((image) => isFigureImage(image.src))).toBe(true);
     expect(placed.figureTexts.map((text) => [text.text, text.startOffsetSeconds])).toEqual([["学生 40%", 2]]);
     // 文字は図の座標から画面の%へ(横650/1000 → 箱の左7% + 79%×0.65)
@@ -54,6 +54,23 @@ describe("AIが描いた図", () => {
     expect(figureImageColors(placed.figureImages[1].src)).toEqual(["#20B2AA"]);
     const again = placeFigure({ ...placed, segments: [seg(2, 5, "b")] });
     expect(again.figureImages.map((image) => image.startOffsetSeconds)).toEqual([0, 0]);
+  });
+
+  it("同じ場所に後から次の文字が出たら、前の文字はそこで消す(別の場所の文字は残す)", () => {
+    const box = { xPercent: 46.5, yPercent: 65, widthPercent: 79, heightPercent: 20 };
+    const score = (key: string, sourceSeconds: number, text: string, x: number) => ({
+      key, sourceSeconds, label: text, svg: "", texts: [{ text, x, y: 100, size: 60, color: "#000000", strokeColor: null }],
+    });
+    const figure: FigureDraft = {
+      box,
+      viewBoxHeight: figureViewBoxHeight(box),
+      idea: "採点表",
+      base: { svg: '<rect x="0" y="0" width="300" height="200" fill="#FFFFFF"/>', texts: [{ text: "白さ", x: 150, y: 30, size: 40, color: "#000000", strokeColor: null }] },
+      parts: [score("a", 0, "20", 150), score("b", 2, "10", 500), score("c", 5, "15", 152)],
+    };
+    const placed = placeFigure({ segments: [seg(0, 2, "a"), seg(2, 5, "b"), seg(5, 9, "c")], figure });
+    const byText = Object.fromEntries(placed.figureTexts.map((text) => [text.text, text.durationInSeconds]));
+    expect(byText).toEqual({ 白さ: undefined, "20": 5, "10": undefined, "15": undefined });
   });
 
   it("図が無ければ、何も置かない", () => {

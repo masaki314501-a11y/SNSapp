@@ -14,6 +14,7 @@ import type {
 } from "@video/shared/schema";
 import type { ProjectBgm, ProjectSegment } from "@/lib/videoProject";
 import { captionBox, faceOnScreen } from "./screenBoxes";
+import { estimateTextWidthPx } from "@video/shared/textWrap";
 import type { CheckItem } from "./checklist";
 import type { FigureDraft } from "./figure";
 
@@ -352,8 +353,11 @@ export const buildObjects = (params: {
   // (自動で2行にすると「看護/師」のように言葉の途中で切れたため、改行はAIが意味の切れ目に入れた時だけ)
   const maxWidthPx = ((TITLE_RIGHT_LIMIT_PERCENT - TITLE_STYLE.xPercent) / 100) * 1080;
   const titleText = params.title;
-  const longestLine = Math.max(...titleText.split("\n").map((line) => line.length));
-  const fontSizePx = Math.max(36, Math.min(TITLE_STYLE.fontSizePx, Math.floor(maxWidthPx / longestLine)));
+  // 幅は、チェック項目(隠れる所に出ていないか)と同じ見積もりで測る: 半角は全角の半分、帯がある時は左右の余白0.8文字ぶん、
+  // 帯が無い時も縁取りの分0.3文字ぶんを足す(以前は余白を入れずに置いていて、帯付きの長いタイトルの左端が隠れる所にかかった)
+  const longestEm = estimateTextWidthPx(titleText, 1);
+  const paddingEm = titleStyle?.bandColor ? 0.8 : 0.3;
+  const fontSizePx = Math.max(36, Math.min(TITLE_STYLE.fontSizePx, Math.floor(maxWidthPx / (longestEm + paddingEm))));
   // 上の端が、TikTokの検索欄で隠れる所(画面の上8%)より下に来るように置く
   const titleHalfHeight = (titleText.split("\n").length * fontSizePx * 1.2 + fontSizePx * 0.2) * 100 / 1920 / 2;
   const title: TextOverlay = {
@@ -373,7 +377,7 @@ export const buildObjects = (params: {
     animation: titleStyle?.animation ?? "fade",
   };
   // 左寄せの文字は、xPercentを文字の中心として扱う描画に合わせ、文字幅の半分だけ右へずらす
-  const titleWidthPercent = (longestLine * fontSizePx * 100) / 1080;
+  const titleWidthPercent = ((longestEm + paddingEm) * fontSizePx * 100) / 1080;
   title.xPercent = round2(TITLE_STYLE.xPercent + titleWidthPercent / 2);
   if (params.layout === "compare") {
     const titleBottom = title.yPercent + (titleText.split("\n").length * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
