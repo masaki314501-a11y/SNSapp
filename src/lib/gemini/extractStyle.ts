@@ -28,7 +28,9 @@ const RETRY_BASE_DELAY_MS = 8_000;
 
 export type ExtractStyleInput =
   | { kind: "image"; images: { base64: string; mimeType: string }[] }
-  | { kind: "video"; absoluteVideoPath: string; mimeType: string };
+  | { kind: "video"; absoluteVideoPath: string; mimeType: string }
+  /** YouTubeの動画。ダウンロードせず、URLのままAIに見せる。 */
+  | { kind: "youtube"; url: string };
 
 const FONT_FAMILY_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value);
 const CAPTION_POSITION_VALUES = CAPTION_POSITION_OPTIONS.map((option) => option.value);
@@ -148,13 +150,14 @@ export const extractStyle = async (input: ExtractStyleInput): Promise<ExtractedS
 
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.GEMINI_STYLE_MODEL || DEFAULT_MODEL;
-  const prompt = buildPrompt(input.kind, input.kind === "image" ? input.images.length : 1);
+  const prompt = buildPrompt(input.kind === "image" ? "image" : "video", input.kind === "image" ? input.images.length : 1);
 
   let uploadedFileName: string | undefined;
   const buildContentParts = async (): Promise<Part[]> => {
     if (input.kind === "image") {
       return input.images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.base64 } }));
     }
+    if (input.kind === "youtube") return [{ fileData: { fileUri: input.url } }];
     const uploaded = await uploadGeminiFile(ai, {
       file: input.absoluteVideoPath,
       config: { mimeType: input.mimeType },

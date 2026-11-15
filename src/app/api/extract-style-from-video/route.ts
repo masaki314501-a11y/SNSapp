@@ -5,11 +5,13 @@ import { createExtractStyleJob, updateExtractStyleJob } from "@/lib/gemini/extra
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "@/lib/uploadedVideo";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { basicAuthDenied } from "@/lib/basicAuth";
+import { videoIdOfYouTubeReference, youtubeWatchUrl } from "@/lib/youtubeReference";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  videoPath: z.string().regex(VIDEO_PATH_PATTERN),
+  // アップロード済みの動画(videos/〜)か、YouTubeの手本(youtube/動画ID)
+  videoPath: z.string().refine((value) => VIDEO_PATH_PATTERN.test(value) || videoIdOfYouTubeReference(value) !== null),
 });
 
 /**
@@ -31,8 +33,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const resolved = await resolveUploadedVideo(parsed.data.videoPath);
-  if (!resolved) {
+  const youtubeId = videoIdOfYouTubeReference(parsed.data.videoPath);
+  const resolved = youtubeId ? null : await resolveUploadedVideo(parsed.data.videoPath);
+  if (!youtubeId && !resolved) {
     return NextResponse.json({ error: "参考動画が見つかりません" }, { status: 400 });
   }
 
@@ -40,11 +43,11 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
-      const style = await extractStyle({
-        kind: "video",
-        absoluteVideoPath: resolved.absolutePath,
-        mimeType: resolved.mimeType,
-      });
+      const style = await extractStyle(
+        youtubeId
+          ? { kind: "youtube", url: youtubeWatchUrl(youtubeId) }
+          : { kind: "video", absoluteVideoPath: resolved!.absolutePath, mimeType: resolved!.mimeType }
+      );
       updateExtractStyleJob(jobId, { status: "done", ...style });
     } catch (error) {
       console.error("[extract-style-from-video] スタイル抽出に失敗しました", error);

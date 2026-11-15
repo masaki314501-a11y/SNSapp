@@ -18,6 +18,7 @@ import { WaitTime } from "@/components/WaitTime";
 import type { WaitTaskId } from "@/lib/waitEstimate";
 import { toFriendlyErrorMessage } from "@/lib/friendlyError";
 import { PlusIcon, UploadIcon } from "@/components/icons";
+import { YOUTUBE_REFERENCE_MIME_TYPE, videoIdOfYouTubeReference, youtubeThumbnailUrl } from "@/lib/youtubeReference";
 
 /**
  * ラフカット(/create/cut)で絞り込んだ「使う範囲」に対して、参考画像/参考動画からスタイルを
@@ -35,6 +36,9 @@ const captionAnimationLabel = (value: CaptionAnimation): string =>
 
 const IMAGE_MIME_BY_EXTENSION: Record<string, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
 const isVideoReference = (reference: ProjectStyleReference): boolean => reference.mimeType.startsWith("video/");
+/** YouTubeのURLで足した手本(ファイルは無く、AIにURLのまま見せる)。 */
+const isYouTubeReference = (reference: ProjectStyleReference): boolean =>
+  reference.mimeType === YOUTUBE_REFERENCE_MIME_TYPE;
 
 const EmptyState: React.FC = () => (
   <main className="flow-main">
@@ -61,6 +65,9 @@ export const StyleAndTranscribe: React.FC = () => {
   /** 画面を離れる時にまとめて解放するため、作ったプレビューURLを覚えておく。 */
   const createdPreviewUrlsRef = useRef<string[]>([]);
   const [referenceUploading, setReferenceUploading] = useState(false);
+  /** YouTubeのURLの入力欄と、確かめている最中か。 */
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeChecking, setYoutubeChecking] = useState(false);
   /** 目安の待ち時間用。アップロード中の動画の合計MBと、抽出の種類(画像何枚か/動画か)。 */
   const [uploadingMegabytes, setUploadingMegabytes] = useState(0);
   const [extractWait, setExtractWait] = useState<{ task: WaitTaskId; units: number }>({
@@ -99,8 +106,49 @@ export const StyleAndTranscribe: React.FC = () => {
     };
   }, []);
 
-  const previewUrlOf = (reference: ProjectStyleReference): string =>
-    localPreviewUrls[reference.path] ?? `/api/media/${reference.path}`;
+  const previewUrlOf = (reference: ProjectStyleReference): string => {
+    const youtubeId = videoIdOfYouTubeReference(reference.path);
+    if (youtubeId) return youtubeThumbnailUrl(youtubeId);
+    return localPreviewUrls[reference.path] ?? `/api/media/${reference.path}`;
+  };
+
+  /**
+   * YouTube(ショート)のURLを手本に足す。動画はダウンロードせず、AIにURLのまま見せる。
+   * 画像の手本が無い時は、動画のファイルを足した時と同じく、この動画から見た目を読み取る。
+   */
+  const handleAddYouTube = async () => {
+    const url = youtubeUrl.trim();
+    if (!url) return;
+    if (references.length >= MAX_STYLE_REFERENCES) {
+      alert(`参考は${MAX_STYLE_REFERENCES}個までです。いらないものを✕で外してから追加してください`);
+      return;
+    }
+    setYoutubeChecking(true);
+    try {
+      const res = await fetch("/api/youtube-reference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "URLを確かめられませんでした");
+      const added: ProjectStyleReference = { path: data.path, mimeType: data.mimeType };
+      if (references.some((reference) => reference.path === added.path)) {
+        alert("この動画は、もう手本に入っています");
+        return;
+      }
+      setYoutubeUrl("");
+      setReferences((prev) => [...prev.filter(isVideoReference), added, ...prev.filter((r) => !isVideoReference(r))]);
+      if (!references.some((reference) => !isVideoReference(reference))) {
+        setExtractWait({ task: "extract-style-video", units: 1 });
+        void handleExtractStyleFromVideo(added.path);
+      }
+    } catch (error) {
+      alert(toFriendlyErrorMessage(error, "URLを確かめられませんでした"));
+    } finally {
+      setYoutubeChecking(false);
+    }
+  };
 
   /**
    * 画像は今ある画像と合わせて全部でスタイルを抽出し直す。画像が1枚も無く動画だけのときは、
@@ -208,7 +256,7 @@ export const StyleAndTranscribe: React.FC = () => {
   if (!hasCheckedProject) return null;
   if (!project || keepRanges.length === 0) return <EmptyState />;
 
-  const isBusy = referenceUploading || extractStyleState.status === "processing";
+  const isBusy = referenceUploading || youtubeChecking || extractStyleState.status === "processing";
   const hasAnyReference = references.length > 0;
   const canAddMore = references.length < MAX_STYLE_REFERENCES;
 
@@ -256,7 +304,23 @@ export const StyleAndTranscribe: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {references.map((reference, index) => (
                 <div key={reference.path} className="relative">
-                  {isVideoReference(reference) ? (
+                  {isYouTubeReference(reference) ? (
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={previewUrlOf(reference)}
+                        alt={`手本${index + 1}(YouTube)`}
+                        className="h-28 w-auto rounded-lg object-contain"
+                        style={{ border: "1px solid var(--border)" }}
+                      />
+                      <span
+                        className="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                        style={{ background: "rgba(0,0,0,0.65)", color: "#fff" }}
+                      >
+                        YouTube
+                      </span>
+                    </div>
+                  ) : isVideoReference(reference) ? (
                     <video
                       src={previewUrlOf(reference)}
                       muted
@@ -304,6 +368,40 @@ export const StyleAndTranscribe: React.FC = () => {
             </span>
           </label>
         )}
+
+        {canAddMore ? (
+          <div className="panel flex flex-col gap-2 p-4">
+            <label htmlFor="style-reference-youtube" className="text-xs font-bold" style={{ color: "var(--muted)" }}>
+              YouTubeのURLで足す(ショートも使えます)
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="style-reference-youtube"
+                type="url"
+                inputMode="url"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) void handleAddYouTube();
+                }}
+                placeholder="https://www.youtube.com/shorts/…"
+                disabled={isBusy}
+                className="field-input min-w-0 flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => void handleAddYouTube()}
+                disabled={isBusy || youtubeUrl.trim() === ""}
+                className="btn-outline shrink-0"
+              >
+                {youtubeChecking ? "確かめ中..." : "URLで足す"}
+              </button>
+            </div>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              公開中の動画だけ使えます。TikTokの動画は、アプリの「動画を保存」で保存してから、上でファイルを選んでください
+            </span>
+          </div>
+        ) : null}
 
         {referenceUploading ? <span className="badge-pill warning w-fit">手本の動画をアップロード中...</span> : null}
         <WaitTime task="video-upload" units={uploadingMegabytes} active={referenceUploading} />

@@ -89,12 +89,14 @@ const colorSchema = { type: Type.STRING };
 const nullableColorSchema = { type: Type.STRING, nullable: true };
 
 /** 見た目の手本(ステップ3でお客様が選んだスクショ・動画。サーバー上の場所)。 */
-export type StyleReferenceFile = { absolutePath: string; mimeType: string; kind: "image" | "video" };
+/** 見た目の手本。YouTubeの手本はyoutubeUrlを持ち、ファイルを送らずURLのままAIに見せる。 */
+export type StyleReferenceFile = { absolutePath: string; mimeType: string; kind: "image" | "video"; youtubeUrl?: string };
 
 export const REFERENCES_INTRO = `
 次は、この動画のために選ばれた「見た目の手本」(まねしたい投稿のスクリーンショット・動画)です。一番優先して参考にしてください。
 手本(編集チームの過去の動画)やクセ帳と食い違う所は、こちらに合わせてください。何をどう参考にするかは、あなたが判断してください。
 ただし、見た目の手本に写っている文言・題材は、今回の動画に持ち込まないでください。
+TikTokなどのロゴ・投稿者名の透かしは、保存した時に付いた物なので、編集のクセとしてまねしないでください。
 `.trim();
 
 /** 見た目の手本から、工程とチェック項目に沿ってクセを読み取らせる指示文(工程別のクセ帳と同じ見出し)。 */
@@ -102,6 +104,7 @@ export const REFERENCE_GUIDE_PROMPT = `
 上は、これから編集する動画のために選ばれた「見た目の手本」(まねしたい投稿のスクリーンショット・動画)です。
 この見た目に近づけて、別の動画をAIが工程ごとに編集します。そのAIに渡すメモを、次の見出しの順に書いてください。
 スクリーンショット(静止画)からは動きが分からないので、動きは動画の手本がある時だけ書き、分からない所は「分からない」と書いてください。
+TikTokなどのロゴ・投稿者名の透かしは、保存した時に付いた物なので、テロップやクセとして書かないでください。
 
 ### ジャンル・動画の型(ランキング・比較・採点・割合・手順・Q&Aなど、どの型か)
 ### 工程7・9 基本テロップ(書体・色・縁取り・帯・大きさ・位置)
@@ -120,6 +123,7 @@ const referenceUploads = new Map<string, { part: Part; expiresAt: number }>();
 const referenceGuides = new Map<string, { guide: string; expiresAt: number }>();
 
 const referencePart = async (ai: GoogleGenAI, file: StyleReferenceFile): Promise<Part> => {
+  if (file.youtubeUrl) return { fileData: { fileUri: file.youtubeUrl } };
   const cached = referenceUploads.get(file.absolutePath);
   if (cached && cached.expiresAt > Date.now()) return cached.part;
   const uploaded = await uploadGeminiFile(ai, { file: file.absolutePath, config: { mimeType: file.mimeType } });
@@ -139,7 +143,7 @@ const referenceParts = async (references: StyleReferenceFile[] | undefined): Pro
   const ai = client();
   const media: Part[] = [];
   for (const [index, file] of references.entries()) {
-    media.push({ text: `【見た目の手本${index + 1}(${file.kind === "video" ? "動画" : "スクリーンショット"})】` });
+    media.push({ text: `【見た目の手本${index + 1}(${file.youtubeUrl ? "動画(YouTube)" : file.kind === "video" ? "動画" : "スクリーンショット"})】` });
     media.push(await referencePart(ai, file));
   }
   const key = references.map((file) => file.absolutePath).join("|");

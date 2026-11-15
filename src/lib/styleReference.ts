@@ -2,6 +2,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { VIDEO_PATH_PATTERN, resolveUploadedVideo } from "./uploadedVideo";
+import { YOUTUBE_REFERENCE_MIME_TYPE, YOUTUBE_REFERENCE_PATH_PATTERN, videoIdOfYouTubeReference, youtubeWatchUrl } from "./youtubeReference";
 
 /**
  * 参考画像(スクショ)の保存場所。以前はスタイル抽出が終わったら捨てていたが、自動編集が
@@ -35,12 +36,23 @@ export const saveReferenceImage = async (buffer: Buffer, mimeType: string): Prom
 };
 
 export const isStyleReferencePath = (referencePath: string): boolean =>
-  REFERENCE_IMAGE_PATH_PATTERN.test(referencePath) || VIDEO_PATH_PATTERN.test(referencePath);
+  REFERENCE_IMAGE_PATH_PATTERN.test(referencePath) ||
+  VIDEO_PATH_PATTERN.test(referencePath) ||
+  YOUTUBE_REFERENCE_PATH_PATTERN.test(referencePath);
 
-/** 参考画像/動画のパスを検証して絶対パス・MIMEタイプ・種別を返す。見つからなければnull。 */
+/**
+ * 参考画像/動画のパスを検証して絶対パス・MIMEタイプ・種別を返す。見つからなければnull。
+ * YouTubeの手本はファイルが無いので、youtubeUrl(AIにそのまま渡すURL)を付け、absolutePathにも同じURLを入れる
+ * (同じ手本かどうかの見分けに使うため)。
+ */
 export const resolveStyleReference = async (
   referencePath: string
-): Promise<{ absolutePath: string; mimeType: string; kind: "image" | "video" } | null> => {
+): Promise<{ absolutePath: string; mimeType: string; kind: "image" | "video"; youtubeUrl?: string } | null> => {
+  const youtubeId = videoIdOfYouTubeReference(referencePath);
+  if (youtubeId) {
+    const youtubeUrl = youtubeWatchUrl(youtubeId);
+    return { absolutePath: youtubeUrl, mimeType: YOUTUBE_REFERENCE_MIME_TYPE, kind: "video", youtubeUrl };
+  }
   if (VIDEO_PATH_PATTERN.test(referencePath)) {
     const video = await resolveUploadedVideo(referencePath);
     return video ? { ...video, kind: "video" } : null;
