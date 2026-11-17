@@ -333,6 +333,8 @@ export const captionEmphasisSchema = z.object({
   band: z.boolean().default(false),
   bandColor: zColor().optional(),
   textColor: zColor().optional(),
+  /** 縁取り文字の時の縁取りの色。無ければ基本の字幕と同じ色。 */
+  strokeColor: zColor().optional(),
   fontFamily: captionFontFamilySchema.removeDefault().optional(),
   textStyleId: z.string().optional(),
 });

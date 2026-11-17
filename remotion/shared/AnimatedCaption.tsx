@@ -156,7 +156,7 @@ export const AnimatedCaption: React.FC<Props> = ({
           color: emphasis?.textColor ?? "white",
           // 縁取りの内側半分は文字に隠れるので、見える太さはこの半分(文字の約9%)。以前の2.5px固定では
           // 細すぎて、ショート動画でよく見る太い縁取りの字幕にならなかった。
-          WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18)}px ${accentColor}`,
+          WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18)}px ${emphasis?.strokeColor ?? accentColor}`,
           paintOrder: "stroke fill",
           fontFamily: fontFamilyStack,
           fontSize: 48 * sizeScale,

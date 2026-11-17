@@ -20,6 +20,7 @@ import {
   removeRanges,
   smoothJoins,
   splitByCaptions,
+  captionRuns,
   markContinuedCaptions,
   placeFrameFills,
   replaceCaptions,
@@ -338,13 +339,13 @@ export async function POST(request: Request) {
             state: placeFigure(
               placeFrameFills({
                 ...state,
-                segments: applyEmphasis(segments, keys, chosen.emphasis),
+                segments: applyEmphasis(segments, keys, chosen.emphasis, chosen.base),
                 captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
                 frameFills,
                 figure,
               })
             ),
-            note: `${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${frameFills.length}個に項目名を入れました` : ""}${figure && figure.parts.length > 0 ? `。図に、話に合わせて${figure.parts.length}個の部品を足しました` : ""}`,
+            note: `${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${new Set(frameFills.map((fill) => fill.frame)).size}個に項目名を入れました${frameFills.length > new Set(frameFills.map((fill) => fill.frame)).size ? `(話題ごとの中身も入れて、合わせて${frameFills.length}回)` : ""}` : ""}${figure && figure.parts.length > 0 ? `。図に、話に合わせて${figure.parts.length}個の部品を足しました` : ""}`,
             details: [
               ...(figure && figure.parts.length > 0
                 ? [`図に足した部品: ${figure.parts.map((part) => `「${part.label}」`).join("・")}`]
@@ -412,13 +413,20 @@ export async function POST(request: Request) {
             segmentRanges(segments),
             segments.find((segment) => segment.faceBox)?.faceBox
           );
+          // 枠・カードの中身は、入れた言葉(frameFills)のまま確かめる(比べるカードは「名前\n中身」と2行にして出すので、
+          // 画面の文字のまま渡すと、AIが「日本5年保証」のようにつながった1つの言葉として見てしまった)
+          const fillLabels = [...new Set((state.frameFills ?? []).map((fill) => fill.label))];
+          const isFillText = (text: string) => fillLabels.some((label) => text === label || text.endsWith(`\n${label}`));
           const texts = [
             ...state.globalOverlays
               .map((overlay) => String(overlay.text))
-              .filter((text) => !/^\d+$/.test(text))
+              .filter((text) => !/^\d+$/.test(text) && !isFillText(text))
               .map((text) => ({ kind: "タイトル・枠の文字" as const, text })),
+            ...fillLabels.map((text) => ({ kind: "タイトル・枠の文字" as const, text })),
             ...(state.figureTexts ?? []).map((overlay) => ({ kind: "タイトル・枠の文字" as const, text: String(overlay.text) })),
-            ...segments.map((segment) => segment.caption).filter((caption) => caption.trim()).map((text) => ({ kind: "字幕" as const, text })),
+            // 切れ目をまたいで同じ字幕が続く所は、見る人には1つの字幕なので、1つにまとめて渡す
+            // (そのまま渡すと、AIが「直前の字幕と重複している」と誤って指摘していた)
+            ...captionRuns(segments).map((run) => ({ kind: "字幕" as const, text: run.text })),
           ];
           const found = await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts });
           // 誤字・脱字は、AIが出した正しい書き方に自動で直す(直した所はチェックの結果に出す)。
@@ -430,14 +438,15 @@ export async function POST(request: Request) {
           const fixedSegments = segments.map((segment) => (segment.caption.trim() ? { ...segment, caption: fix(segment.caption) } : segment));
           const fixedOverlays = state.globalOverlays.map((overlay) => ({ ...overlay, text: fix(String(overlay.text)) }));
           const fixLayer = <L extends FigureLayer>(layer: L): L => ({ ...layer, texts: layer.texts.map((text) => ({ ...text, text: fix(text.text) })) });
-          const adjusted: StepState = placeFigure({
+          // 枠・カードの中身を直したら、画面の文字も入れ直す(placeFrameFills)
+          const adjusted: StepState = placeFigure(placeFrameFills({
             ...state,
             figure: state.figure ? { ...state.figure, base: fixLayer(state.figure.base), parts: state.figure.parts.map(fixLayer) } : state.figure,
             segments: fixedSegments,
             globalOverlays: fixedOverlays,
             frameFills: state.frameFills?.map((fill) => ({ ...fill, label: fix(fill.label) })),
             videoAdjust: light.adjust,
-          });
+          }));
           const result = runChecklist({
             state: adjusted,
             spans,

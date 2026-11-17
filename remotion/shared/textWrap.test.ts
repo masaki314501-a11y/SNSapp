@@ -25,4 +25,9 @@ describe("breakIntoLines", () => {
     const lines = breakIntoLines("当院ではマウスピース矯正の保証期間が5年あります", 74, 700, ["保証期間が5年"], 1.25);
     expect(lines.some((line) => line.includes("保証期間が5年"))).toBe(true);
   });
+
+  it("カタカナの語は途中で切らない(イン/プラントにしない)", () => {
+    expect(breakIntoLines("5分でできるインプラント", 90, 984)).toEqual(["5分でできる", "インプラント"]);
+    expect(breakIntoLines("即日インプラントって知ってますか", 80, 700)).toEqual(["即日", "インプラントって", "知ってますか"]);
+  });
 });

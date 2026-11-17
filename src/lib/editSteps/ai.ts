@@ -550,7 +550,11 @@ const objectsSection = (objects: PlacedObjects): string => {
 - frame: 入れるカード(1=左、2=右)。話に出てくる順に1から。
 - index: その物の名前が初めて出てくる字幕の番号(上の一覧の番号)。
 - label: カードに入れる短い言葉。比べる物の名前を、そのまま全角8文字以内で。
-を frameItems で答えてください。figureItems は空の配列で答えてください。`;
+を frameItems で答えてください。
+話が進んで、比べる中身(費用・期間・方法など)を話題ごとに言う時は、同じカードに続けて答えてください
+(index: その物のその中身を言う字幕の番号、label: その中身だけを全角8文字以内で。例「約100万円」)。
+カードの上の行には名前が残り、下の行の中身が話題ごとに入れ替わります。言っていない中身は入れない。
+figureItems は空の配列で答えてください。`;
   }
   if (objects.kind === "frames") {
     return `
@@ -579,6 +583,9 @@ frameItems は空の配列で答えてください。`;
   return `
 この動画には中身を入れていく枠や図が無いので、frameItems・figureItems は空の配列で答えてください。`;
 };
+
+/** 比べるカード1枚に入れる物の上限(名前と、話題ごとの中身)。 */
+const MAX_COMPARE_CARD_ITEMS = 8;
 
 /** 工程10の指示文。 */
 export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "", objects: PlacedObjects = { kind: "none" }) => `
@@ -702,15 +709,21 @@ export const pickEmphasis = async (input: {
     seen.add(index);
     return [{ index, reason: result.reasons[i] ?? "" }];
   });
-  // 枠に入れる項目: 番号が範囲外・同じ枠に2つ目・字幕の番号が範囲外の物は外す。長すぎる言葉は8文字で切る
+  // 枠に入れる項目: 番号が範囲外・同じ枠に2つ目・字幕の番号が範囲外の物は外す。長すぎる言葉は8文字で切る。
+  // 比べるカードは、名前の後に話題ごとの中身を続けて入れるので、同じカードに何個か入れてよい(同じ字幕の2つ目は外す)
   const frameCount = input.objects.kind === "frames" ? input.objects.frameCount : 0;
-  const frames = new Set<number>();
+  const isCompare = input.objects.kind === "frames" && input.objects.layout === "compare";
+  const used = new Set<string>();
+  const perFrame = new Map<number, number>();
   const frameItems = result.frameItems.flatMap((item) => {
     const index = item.index - 1;
     const label = [...item.label.replace(/\s+/g, "")].slice(0, 8).join("");
-    if (item.frame < 1 || item.frame > frameCount || frames.has(item.frame)) return [];
+    const usedKey = isCompare ? `${item.frame}:${index}` : String(item.frame);
+    if (item.frame < 1 || item.frame > frameCount || used.has(usedKey)) return [];
+    if ((perFrame.get(item.frame) ?? 0) >= (isCompare ? MAX_COMPARE_CARD_ITEMS : 1)) return [];
     if (index < 0 || index >= captions.length || !label) return [];
-    frames.add(item.frame);
+    used.add(usedKey);
+    perFrame.set(item.frame, (perFrame.get(item.frame) ?? 0) + 1);
     return [{ frame: item.frame, index, label }];
   });
   // 図に足す部品: 図が無い時・字幕の番号が範囲外の時・何も描いていない時は外す

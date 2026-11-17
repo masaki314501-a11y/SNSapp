@@ -4,6 +4,7 @@ import { estimateOverlayBox } from "@video/shared/textWrap";
 import {
   applyEmphasis,
   buildObjects,
+  emphasisStrokeColor,
   chinCaptionY,
   emphasisEffects,
   framingForFace,
@@ -221,6 +222,57 @@ describe("比べる動画(型がcompare)", () => {
       ["韓国", objects.globalShapes[1].xPercent, objects.globalShapes[1].yPercent],
     ]);
     expect(labels[0].color).toBe("#FF3366");
+  });
+
+  it("10. 名前の後に入れた話題ごとの中身は、上の行に名前を残した2行で出し、次の中身が出たら前の中身を消す", () => {
+    const objects = buildObjects({ title: "日本と韓国", layout: "compare", frameCount: 2, captionTopPercent: 70, accentColor: "#FF3366" });
+    const segments = [seg(0, 2, "a"), seg(2, 4, "b"), seg(4, 6, "c"), seg(6, 8, "d"), seg(8, 10, "e")];
+    const base = { framing: null, captionYPercent: 70, ...objects, segments };
+    const fills = [
+      { frame: 1, key: "a", sourceSeconds: 0, label: "日本" },
+      { frame: 2, key: "b", sourceSeconds: 2, label: "韓国" },
+      { frame: 1, key: "c", sourceSeconds: 4, label: "約100万円" },
+      { frame: 2, key: "c", sourceSeconds: 4, label: "約50万円" },
+      { frame: 1, key: "e", sourceSeconds: 8, label: "2年" },
+    ];
+    const placed = placeFrameFills(placeFrameFills({ ...base, frameFills: fills }));
+    const cards = placed.globalOverlays.filter((o) => o.text !== "日本と韓国");
+    expect(cards.map((o) => [o.text, o.xPercent, o.startOffsetSeconds, o.durationInSeconds])).toEqual([
+      ["日本", objects.globalShapes[0].xPercent, 0, 4],
+      ["日本\n約100万円", objects.globalShapes[0].xPercent, 4, 4],
+      ["日本\n2年", objects.globalShapes[0].xPercent, 8, undefined],
+      ["韓国", objects.globalShapes[1].xPercent, 2, 2],
+      ["韓国\n約50万円", objects.globalShapes[1].xPercent, 4, undefined],
+    ]);
+    // 2行の文字もカードの中に収まる
+    for (const card of cards) {
+      const rect = objects.globalShapes[card.xPercent === objects.globalShapes[0].xPercent ? 0 : 1];
+      const box = estimateOverlayBox(card);
+      expect(box.left).toBeGreaterThanOrEqual(rect.xPercent - rect.widthPercent / 2);
+      expect(box.right).toBeLessThanOrEqual(rect.xPercent + rect.widthPercent / 2);
+      expect(box.bottom - box.top).toBeLessThanOrEqual(rect.heightPercent + 0.5);
+    }
+  });
+});
+
+describe("強調字幕の縁取り(工程10)", () => {
+  it("文字も縁取りも暗い時(赤や青の文字に黒の縁取り)は、白の縁取りにする", () => {
+    expect(emphasisStrokeColor("#FF0000", "#000000")).toBe("#FFFFFF");
+    expect(emphasisStrokeColor("#1E50FF", "#111111")).toBe("#FFFFFF");
+  });
+  it("文字も縁取りも明るい時は黒の縁取り、見分けがつく時はそのまま", () => {
+    expect(emphasisStrokeColor("#FFE600", "#FFFFFF")).toBe("#000000");
+    expect(emphasisStrokeColor("#FFE600", "#000000")).toBeUndefined();
+    expect(emphasisStrokeColor("#FF0000", "#FFFFFF")).toBeUndefined();
+  });
+  it("帯の無い強調字幕で、基本の字幕が縁取り文字の時だけ縁取りの色を付ける", () => {
+    const a = seg(0, 2, "a");
+    const red = { textColor: "#FF0000", bandColor: null };
+    expect(applyEmphasis([a], new Set(["a"]), red, { style: "outline", accentColor: "#000000" })[0].captionEmphasis?.strokeColor).toBe("#FFFFFF");
+    expect(applyEmphasis([a], new Set(["a"]), red, { style: "pill", accentColor: "#000000" })[0].captionEmphasis?.strokeColor).toBeUndefined();
+    expect(
+      applyEmphasis([a], new Set(["a"]), { textColor: "#FF0000", bandColor: "#FFFFFF" }, { style: "outline", accentColor: "#000000" })[0].captionEmphasis?.strokeColor
+    ).toBeUndefined();
   });
 });
 

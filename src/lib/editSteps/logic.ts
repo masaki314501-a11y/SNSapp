@@ -490,13 +490,49 @@ export const STEP_EMPHASIS_SFX = "pop";
 export const STEP_EMPHASIS_ZOOM = 1.1;
 
 /** 10. 強調したい言葉(のクリップ)を、強調テロップにする。見た目は工程10でAIが手本とクセ帳を見て決めた物(無ければ白い帯に黒い文字)。 */
+/** 色の明るさ(0=黒〜1=白。人の目の感じ方に合わせた重み)。 */
+const luminance = (hex: string): number => {
+  const value = /^#?([0-9a-f]{6})$/i.exec(hex.trim())?.[1];
+  if (!value) return 0.5;
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(value.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const DARK_LUMINANCE = 0.3;
+const LIGHT_LUMINANCE = 0.6;
+
+/**
+ * 帯の無い強調字幕(縁取り文字)の縁取りの色。文字も縁取りも暗い色(赤や青の文字に黒の縁取り)だと、
+ * 黒い服などの暗い所に重なった時に読めなかったので、白の縁取りにする。文字も縁取りも明るい時は黒の縁取りにする。
+ * 見分けがつく組み合わせなら、基本の字幕と同じ縁取りのまま(undefined)。
+ */
+export const emphasisStrokeColor = (textColor: string, baseStrokeColor: string): string | undefined => {
+  const text = luminance(textColor);
+  const stroke = luminance(baseStrokeColor);
+  if (text < DARK_LUMINANCE && stroke < DARK_LUMINANCE) return "#FFFFFF";
+  if (text > LIGHT_LUMINANCE && stroke > LIGHT_LUMINANCE) return "#000000";
+  return undefined;
+};
+
 export const applyEmphasis = (
   segments: ProjectSegment[],
   keys: Set<string>,
-  look?: { fontFamily?: CaptionFontFamily; textColor: string; bandColor: string | null }
+  look?: { fontFamily?: CaptionFontFamily; textColor: string; bandColor: string | null },
+  /** 基本の字幕の見た目(縁取り文字の時、強調字幕の縁取りが読める色かを確かめるため)。 */
+  baseLook?: { style: "outline" | "pill"; accentColor: string }
 ): ProjectSegment[] => {
+  const strokeColor =
+    look && look.bandColor === null && baseLook?.style === "outline" ? emphasisStrokeColor(look.textColor, baseLook.accentColor) : undefined;
   const emphasis: CaptionEmphasis = look
-    ? { band: look.bandColor !== null, bandColor: look.bandColor ?? undefined, textColor: look.textColor, fontFamily: look.fontFamily }
+    ? {
+        band: look.bandColor !== null,
+        bandColor: look.bandColor ?? undefined,
+        textColor: look.textColor,
+        fontFamily: look.fontFamily,
+        ...(strokeColor ? { strokeColor } : {}),
+      }
     : { ...STEP_EMPHASIS };
   return segments.map((segment) =>
     keys.has(segment.key)
@@ -539,10 +575,11 @@ export const placeFrameFills = (state: StepState): StepState => {
   const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
   // 比べる動画の2枚のカード(横に並ぶ)では、項目名をカードの真ん中に入れる
   const sideBySide = rects.length === 2 && rects[0].yPercent === rects[1].yPercent;
+  // 前に入れた項目名(入れ直すので外す)。カードでは「名前\n中身」の形でも入れるので、カードの真ん中にある文字は全部外す
   const isFill = (overlay: TextOverlay) =>
-    fills.some((fill) => fill.label === overlay.text) &&
-    (overlay.xPercent === FRAME_FILL_X_PERCENT ||
-      (sideBySide && rects.some((rect) => rect.xPercent === overlay.xPercent && rect.yPercent === overlay.yPercent)));
+    sideBySide
+      ? rects.some((rect) => rect.xPercent === overlay.xPercent && rect.yPercent === overlay.yPercent)
+      : fills.some((fill) => fill.label === overlay.text) && overlay.xPercent === FRAME_FILL_X_PERCENT;
   const base = state.globalOverlays.filter((overlay) => !isFill(overlay));
   if (fills.length === 0) return { ...state, globalOverlays: base };
   // 完成の動画で、各クリップが始まる時刻
@@ -560,6 +597,10 @@ export const placeFrameFills = (state: StepState): StepState => {
     return after ? starts.get(after.key) : undefined;
   };
   const labels: TextOverlay[] = [];
+  if (sideBySide) {
+    labels.push(...compareCardTexts(fills, rects, startOf, state.globalOverlays[0]?.fontFamily));
+    return { ...state, globalOverlays: [...base, ...labels] };
+  }
   for (const fill of fills) {
     const rect = rects[fill.frame - 1];
     const start = startOf(fill);
@@ -582,6 +623,53 @@ export const placeFrameFills = (state: StepState): StepState => {
     });
   }
   return { ...state, globalOverlays: [...base, ...labels] };
+};
+
+/**
+ * 比べる動画の2枚のカードに入れる文字。1つ目は比べる物の名前(1行)。2つ目からは話題ごとの中身で、
+ * 上の行に名前を残して「名前\n中身」の2行で出し、同じカードに次の中身が出たらそこで消す(入れ替わって見える)。
+ */
+const compareCardTexts = (
+  fills: FrameFill[],
+  rects: ShapeOverlay[],
+  startOf: (fill: FrameFill) => number | undefined,
+  fontFamily: TextOverlay["fontFamily"]
+): TextOverlay[] => {
+  const texts: TextOverlay[] = [];
+  // 中身(2行)の文字の大きさは、左右のカードで一番長い名前・中身に合わせてそろえる
+  // (話題ごと・左右で大きさが変わると落ち着かないため)。幅は、半角(数字など)を全角の半分ほどとして測る
+  const contentEm = Math.max(1, ...fills.map((fill) => estimateTextWidthPx(fill.label, 1)));
+  rects.forEach((rect, rectIndex) => {
+    const placed = fills
+      .filter((fill) => fill.frame === rectIndex + 1)
+      .map((fill) => ({ fill, start: startOf(fill) }))
+      .filter((item): item is { fill: FrameFill; start: number } => item.start !== undefined)
+      .sort((a, b) => a.start - b.start);
+    if (placed.length === 0) return;
+    const name = placed[0].fill.label;
+    const heightPx = (rect.heightPercent / 100) * 1920;
+    const widthPx = ((rect.widthPercent - 4) / 100) * 1080;
+    placed.forEach(({ fill, start }, index) => {
+      const lines = index === 0 ? [name] : [name, fill.label];
+      const chars = index === 0 ? estimateTextWidthPx(name, 1) : contentEm;
+      const next = placed[index + 1]?.start;
+      texts.push({
+        text: lines.join("\n"),
+        startOffsetSeconds: round2(start),
+        ...(next !== undefined && next - start >= 0.2 ? { durationInSeconds: round2(next - start) } : {}),
+        xPercent: rect.xPercent,
+        yPercent: rect.yPercent,
+        // 2行の時は、カードの高さに2行が入る大きさにする
+        fontSizePx: Math.max(24, Math.min(80, Math.round(heightPx * (lines.length === 1 ? 0.42 : 0.3)), Math.floor(widthPx / chars))),
+        color: rect.borderColor ?? "#111111",
+        fontFamily,
+        rotationDeg: 0,
+        // 名前の後の中身は、名前が動かないよう、出し直しの動きを付けない
+        animation: index === 0 ? "pop" : "none",
+      });
+    });
+  });
+  return texts;
 };
 
 /**

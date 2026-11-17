@@ -101,6 +101,9 @@ export const estimateOverlayBox = (overlay: OverlayLayoutInput & Pick<TextOverla
 /** 行頭に来てはいけない文字(句読点・長音・小さい仮名・閉じかっこ等)。 */
 const NO_LINE_START = /^[、。，．,.・：:；;？！?!）)」』】〕＞>ー〜～ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ]/;
 const HIRAGANA = /^[ぁ-ゖ]/;
+/** カタカナ(長音・中黒を含む)。語の区切りの仕組みは「インプラント」を「イン/プラント」に分けるので、続くカタカナはつなげる。 */
+const KATAKANA_START = /^[ァ-ヺー・]/;
+const KATAKANA_END = /[ァ-ヺー]$/;
 
 const segmenter =
   typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter("ja", { granularity: "word" }) : null;
@@ -132,6 +135,8 @@ const splitIntoPhrases = (text: string, keepTogether: string[]): string[][] => {
       (!NO_LINE_START.test(token) &&
         !/^\s+$/.test(token) &&
         (!HIRAGANA.test(token) || (/^[おご]$/.test(token) && /^[一-龯]/.test(next))) &&
+        // カタカナの語の途中(イン/プラント)では切らない
+        !(KATAKANA_START.test(token) && KATAKANA_END.test(previous.join(""))) &&
         // 前のかたまりが「お」「ご」だけなら、続く漢字はくっつける
         !/^[おご]$/.test(previous.join("")));
     if (startsPhrase) phrases.push([token]);

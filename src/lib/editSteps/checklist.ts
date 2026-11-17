@@ -392,6 +392,7 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   for (const segment of segments) {
     addColor(segment.captionEmphasis?.bandColor);
     addColor(segment.captionEmphasis?.textColor);
+    addColor(segment.captionEmphasis?.strokeColor);
   }
   add({
     id: "colors",
