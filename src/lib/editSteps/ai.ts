@@ -15,7 +15,7 @@ import { uploadGeminiFile, waitForGeminiFileActive } from "@/lib/gemini/geminiFi
 import { editExampleMediaPath, uploadExampleVideo, type EditExample } from "@/lib/gemini/editExamplesStore";
 import { selectEditExamples } from "@/lib/gemini/editExampleSelection";
 import { sanitizeSvgFragment, type FigureLayer } from "./figure";
-import type { ObjectLayout } from "./logic";
+import { toReferenceLayout, type ObjectLayout, type ReferenceLayout } from "./logic";
 
 /**
  * 工程ごとの編集(編集マニュアルの1〜11)のうち、AIに頼む工程(3・6・8・10)。
@@ -94,19 +94,21 @@ export type StyleReferenceFile = { absolutePath: string; mimeType: string; kind:
 
 export const REFERENCES_INTRO = `
 次は、この動画のために選ばれた「見た目の手本」(まねしたい投稿のスクリーンショット・動画)です。一番優先して参考にしてください。
-手本(編集チームの過去の動画)やクセ帳と食い違う所は、こちらに合わせてください。何をどう参考にするかは、あなたが判断してください。
-ただし、見た目の手本に写っている文言・題材は、今回の動画に持ち込まないでください。
+見た目(書体・色・縁取り・帯・大きさ・枠やカードの形・出方)は、手本と同じにしてください。手本(編集チームの過去の動画)やクセ帳と食い違う所も、こちらに合わせます。
+色の数・書体の数も、手本どおりでかまいません(チェック項目の上限より手本を優先します)。
+中身(タイトルの文言・枠やカードに入れる言葉・強調する言葉・図の中身)だけは、手本ではなく、今回の動画で話している内容に合わせてください。見た目の手本に写っている文言・題材は、今回の動画に持ち込まないでください。
 TikTokなどのロゴ・投稿者名の透かしは、保存した時に付いた物なので、編集のクセとしてまねしないでください。
 `.trim();
 
 /** 見た目の手本から、工程とチェック項目に沿ってクセを読み取らせる指示文(工程別のクセ帳と同じ見出し)。 */
 export const REFERENCE_GUIDE_PROMPT = `
 上は、これから編集する動画のために選ばれた「見た目の手本」(まねしたい投稿のスクリーンショット・動画)です。
-この見た目に近づけて、別の動画をAIが工程ごとに編集します。そのAIに渡すメモを、次の見出しの順に書いてください。
+この手本と同じ見た目・配置で、別の動画をAIが工程ごとに編集します(中身は、その動画で話している内容に合わせます)。そのAIに渡すメモを、次の見出しの順に書いてください。
 スクリーンショット(静止画)からは動きが分からないので、動きは動画の手本がある時だけ書き、分からない所は「分からない」と書いてください。
 TikTokなどのロゴ・投稿者名の透かしは、保存した時に付いた物なので、テロップやクセとして書かないでください。
 
 ### ジャンル・動画の型(ランキング・比較・採点・割合・手順・Q&Aなど、どの型か)
+### 工程6 人物の位置(顔の位置・顔の大きさ・人が画面のどこに、どのくらいの大きさで映っているか)
 ### 工程7・9 基本テロップ(書体・色・縁取り・帯・大きさ・位置)
 ### 工程8 左上のタイトル(位置・書体・色・縁取り・帯・大きさ・出方)
 ### 工程8 画面に置く物(ランキングの枠・比べるカード・グラフ・表・図など、何を置いているか。形・色・並べ方・中身の埋め方・出方。何も置いていなければ「なし」)
@@ -134,6 +136,95 @@ const referencePart = async (ai: GoogleGenAI, file: StyleReferenceFile): Promise
   return part;
 };
 
+/** 見た目の手本を、見出しを付けて並べる。 */
+const referenceMedia = async (ai: GoogleGenAI, references: StyleReferenceFile[]): Promise<Part[]> => {
+  const media: Part[] = [];
+  for (const [index, file] of references.entries()) {
+    media.push({ text: `【見た目の手本${index + 1}(${file.youtubeUrl ? "動画(YouTube)" : file.kind === "video" ? "動画" : "スクリーンショット"})】` });
+    media.push(await referencePart(ai, file));
+  }
+  return media;
+};
+
+/** 見た目の手本から、配置(人物・字幕・タイトル・枠の位置と大きさ)を数字で読み取らせる指示文。 */
+export const REFERENCE_LAYOUT_PROMPT = `
+上は、これから編集する動画のために選ばれた「見た目の手本」です。今回の動画を手本と同じ配置にするため、手本の画面の配置を数字で読み取ってください。
+位置・大きさは、縦長の画面の幅・高さに対する%(0〜100。左上が0)で答えます。手本に無い物はnullにしてください。
+- face: 話している人の顔。xPercent・yPercent=顔の中心、heightPercent=顔(髪の生え際からあごまで)の高さ。人が映っていなければnull。
+- caption: 話した言葉を出す基本の字幕(強調した字幕ではない、ふつうの字幕)。topPercent=字幕の1行目の上端の高さ、charHeightPercent=1文字の高さ。
+  どの字幕も色付き・大きい見た目で、ふつうの字幕と強調した字幕の区別が無い時は、その字幕で答える。話した言葉の字幕が1つも無い時だけnull。
+- title: 動画のあいだずっと出ているタイトル。align(left=左寄せ・center=中央寄せ)、xPercent=左寄せなら文字の左端・中央寄せなら文字の中心、
+  yPercent=タイトル全体の縦の中心、charHeightPercent=1文字の高さ。無ければnull。
+- frames: ランキングの枠のように、項目を入れる枠を縦に並べている時の、枠の横の中心(xPercent)と枠の幅(widthPercent)。無ければnull。
+動画の手本では、動画の大半での位置を答えてください。手本が複数ある時は、手本1を優先してください。
+TikTokなどのロゴ・投稿者名の透かしは、タイトルや字幕として数えないでください。
+`.trim();
+
+const nullableObject = (properties: Record<string, Schema>, required: string[]): Schema => ({
+  type: Type.OBJECT,
+  nullable: true,
+  properties,
+  required,
+});
+const referenceLayouts = new Map<string, { layout: ReferenceLayout | null; expiresAt: number }>();
+
+/**
+ * 見た目の手本の配置を読み取る(工程6・7・8で、人物・字幕・タイトル・枠を手本と同じ所に置くため)。
+ * 見た目の手本が無い・読み取れない時はnull(今までの決まった配置にする)。同じ手本の組み合わせなら1回だけ読み取る。
+ */
+export const readReferenceLayout = async (references: StyleReferenceFile[] | undefined): Promise<ReferenceLayout | null> => {
+  if (!references || references.length === 0) return null;
+  const key = references.map((file) => file.absolutePath).join("|");
+  const cached = referenceLayouts.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.layout;
+  const media = await referenceMedia(client(), references);
+  const percent = z.number().min(0).max(100);
+  const result = await askJson({
+    model: STEP_MODEL,
+    label: "見た目の手本の配置",
+    parts: [...media, { text: REFERENCE_LAYOUT_PROMPT }],
+    schema: {
+      type: Type.OBJECT,
+      properties: {
+        face: nullableObject(
+          { xPercent: { type: Type.NUMBER }, yPercent: { type: Type.NUMBER }, heightPercent: { type: Type.NUMBER } },
+          ["xPercent", "yPercent", "heightPercent"]
+        ),
+        caption: nullableObject({ topPercent: { type: Type.NUMBER }, charHeightPercent: { type: Type.NUMBER } }, ["topPercent", "charHeightPercent"]),
+        title: nullableObject(
+          {
+            align: { type: Type.STRING, format: "enum", enum: ["left", "center"] },
+            xPercent: { type: Type.NUMBER },
+            yPercent: { type: Type.NUMBER },
+            charHeightPercent: { type: Type.NUMBER },
+          },
+          ["align", "xPercent", "yPercent", "charHeightPercent"]
+        ),
+        frames: nullableObject({ xPercent: { type: Type.NUMBER }, widthPercent: { type: Type.NUMBER } }, ["xPercent", "widthPercent"]),
+      },
+      required: ["face", "caption", "title", "frames"],
+    },
+    parse: z.object({
+      face: z.object({ xPercent: percent, yPercent: percent, heightPercent: percent }).nullable().default(null),
+      caption: z.object({ topPercent: percent, charHeightPercent: percent }).nullable().default(null),
+      title: z
+        .object({ align: z.enum(["left", "center"]), xPercent: percent, yPercent: percent, charHeightPercent: percent })
+        .nullable()
+        .default(null),
+      frames: z.object({ xPercent: percent, widthPercent: percent }).nullable().default(null),
+    }),
+  }).catch((error) => {
+    // 読み取れなくても編集は続けられる(今までの決まった配置にする)
+    console.warn("[edit-step] 見た目の手本の配置を読み取れませんでした", error);
+    return null;
+  });
+  // 読み取れなかった時は覚えない(次の工程で読み取り直す。以前は失敗を覚えてしまい、工程6〜8がすべて決まった配置になった)
+  if (!result) return null;
+  const layout = toReferenceLayout(result);
+  referenceLayouts.set(key, { layout, expiresAt: Date.now() + UPLOAD_REUSE_MS });
+  return layout;
+};
+
 /**
  * 見た目の手本を見せる部分と、そこから工程・チェック項目に沿って読み取ったメモ(見た目の手本が無ければ空)。
  * メモは同じ手本の組み合わせなら1回だけ作って使い回す。
@@ -141,11 +232,7 @@ const referencePart = async (ai: GoogleGenAI, file: StyleReferenceFile): Promise
 const referenceParts = async (references: StyleReferenceFile[] | undefined): Promise<Part[]> => {
   if (!references || references.length === 0) return [];
   const ai = client();
-  const media: Part[] = [];
-  for (const [index, file] of references.entries()) {
-    media.push({ text: `【見た目の手本${index + 1}(${file.youtubeUrl ? "動画(YouTube)" : file.kind === "video" ? "動画" : "スクリーンショット"})】` });
-    media.push(await referencePart(ai, file));
-  }
+  const media = await referenceMedia(ai, references);
   const key = references.map((file) => file.absolutePath).join("|");
   let guide = referenceGuides.get(key);
   if (!guide || guide.expiresAt < Date.now()) {
@@ -349,9 +436,11 @@ const FIGURE_DRAWING_RULES = `   - svg: SVGの要素だけで書く(<svg>タグ�
 /**
  * 工程8の指示文。figureViewBoxHeight は、AIが図を描く箱の縦の大きさ(横は1000)。人と字幕を避けて図を置ける所が無ければ null。
  */
-export const OBJECTS_PROMPT = (figureViewBoxHeight: number | null) => `
+export const OBJECTS_PROMPT = (figureViewBoxHeight: number | null, hasReferences = false) => `
 添付した動画は、ショート動画の素材です。編集で画面に置く物(左上のタイトルと、話の中身を見せる枠・カード・図)を決めてください。
-見た目と出方は、手本とクセ帳の編集チームの物に近づけてください。
+${hasReferences
+  ? "見た目と出方は、見た目の手本と同じにしてください(手本と同じ書体・色・縁取り・帯・線・塗り・角の丸み・出方)。\nタイトルの文言・項目の数・図の中身は、手本ではなく、今回の動画で話している内容から決めてください。"
+  : "見た目と出方は、手本とクセ帳の編集チームの物に近づけてください。"}
 
 1. title: 動画の最初から最後まで、画面の左上に出すタイトル。何の話かが一目でわかる短い言葉(全角16文字以内)。
    話の中に出てくる、動画のテーマになる言葉(商品・サービス・症状・用語などの名前)を、話したとおりに1つ入れる。12文字を超える時だけ、意味の切れ目に「\\n」を1つ入れて2行にする。
@@ -382,8 +471,10 @@ ${FIGURE_DRAWING_RULES}
 
 - 書体は次から選ぶ: ${FONT_HINTS}
 - 出方は次から選ぶ: ${ANIMATION_HINTS}
-- 色は #RRGGBB で書く。タイトル・枠・図・テロップを合わせた動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。
-- タイトル・枠・カードの位置・大きさ・並べ方はツールの側で決めるので書かない。
+- 色は #RRGGBB で書く。${hasReferences
+  ? "色の数は、見た目の手本どおりでよい。"
+  : "タイトル・枠・図・テロップを合わせた動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。"}
+- タイトル・枠・カードの位置・大きさ・並べ方はツールの側で決める${hasReferences ? "(見た目の手本と同じ所に置く)" : ""}ので書かない。
 
 reasonに、そう決めた理由(動画の型と、どの手本・クセ帳のどこを参考にしたか)を1〜2文で書いてください。
 `.trim();
@@ -449,7 +540,14 @@ export const decideObjects = async (input: {
   const result = await askJson({
     model: STEP_MODEL,
     label: "タイトルと枠",
-    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, part, { text: OBJECTS_PROMPT(input.figureViewBoxHeight) }],
+    parts: [
+      ...examples,
+      ...guide,
+      ...references,
+      { text: "【ここから、今回編集する動画】" },
+      part,
+      { text: OBJECTS_PROMPT(input.figureViewBoxHeight, references.length > 0) },
+    ],
     schema: {
       type: Type.OBJECT,
       properties: {
@@ -588,7 +686,12 @@ frameItems は空の配列で答えてください。`;
 const MAX_COMPARE_CARD_ITEMS = 8;
 
 /** 工程10の指示文。 */
-export const EMPHASIS_PROMPT = (captions: string[], objectColorsLine = "", objects: PlacedObjects = { kind: "none" }) => `
+export const EMPHASIS_PROMPT = (
+  captions: string[],
+  objectColorsLine = "",
+  objects: PlacedObjects = { kind: "none" },
+  hasReferences = false
+) => `
 次は、ショート動画の字幕を順に並べたものです(番号: 字幕)。
 ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`).join("\n")}
 
@@ -599,12 +702,17 @@ ${captions.map((caption, index) => `${index + 1}: ${caption.replace(/\n/g, "")}`
 - 説明・つなぎ・前置き・締めのあいさつの字幕は選ばない。
 - 効果を言い切る言葉(「絶対治る」「痛くない」など)を含む字幕は選ばない。
 
-あわせて、字幕の見た目を、手本とクセ帳の編集チームの物に近づけて決めてください。
+あわせて、字幕の見た目を、${hasReferences
+  ? "見た目の手本と同じにしてください(手本の基本の字幕・強調した字幕と同じ書体・色・縁取り・帯)。選ぶ字幕(中身)は、今回の動画で話している内容から選んでください"
+  : "手本とクセ帳の編集チームの物に近づけて決めてください"}。
 - baseLook: 基本テロップ(強調しない字幕)の見た目。fontFamily(書体)・style(outline=縁取り文字 / pill=色付きの帯の上に白い文字)・
   accentColor(outlineなら縁取りの色、pillなら帯の色)。
 - emphasisLook: 強調テロップの見た目。fontFamily(書体)・textColor(文字の色)・bandColor(文字の後ろに敷く帯の色。敷かないならnull)。
 - 書体は次から選ぶ: ${FONT_HINTS}
-- 色は #RRGGBB で書く。動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。書体は基本と強調で2つまで(チェック項目)。
+- 色は #RRGGBB で書く。${hasReferences
+  ? "色の数・書体の数は、見た目の手本どおりでよい。"
+  : "動画全体の色は、白・黒を除いて3色以内にする(チェック項目。白・黒は数えない)。書体は基本と強調で2つまで(チェック項目)。"}
+- 強調テロップは、基本テロップと見て違いが分かる見た目にする(基本と同じ色・同じ書体にしない。灰色など、目立たない色にしない)。
 ${objectColorsLine}
 ${objectsSection(objects)}
 
@@ -640,13 +748,13 @@ export const pickEmphasis = async (input: {
   const examples = await exampleParts(input.absolutePath, input.mimeType);
   const guide = await stepGuidePart();
   const references = await referenceParts(input.references);
-  const colorsLine = input.objectColors?.length
+  const colorsLine = input.objectColors?.length && references.length === 0
     ? `- タイトル・枠・図ですでに白・黒のほかに ${input.objectColors.join("・")} を使っているので、字幕(と図に足す部品)もこの色(か白・黒)から選ぶと3色以内に収まる。`
     : "";
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine, input.objects) }],
+    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine, input.objects, references.length > 0) }],
     schema: {
       type: Type.OBJECT,
       properties: {

@@ -15,6 +15,8 @@ import {
   chinCaptionY,
   emphasisEffects,
   framingForFace,
+  framingToMatch,
+  referenceCaptionY,
   placeMainFootage,
   removeLongSilences,
   removeRanges,
@@ -33,7 +35,17 @@ import {
 import { captionBandHeight } from "@/lib/editSteps/logic";
 import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
 import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
-import { decideObjects, detectFace, findMistakes, pickEmphasis, pickRemovals, proofreadTexts, shortenCaptions, type PlacedObjects } from "@/lib/editSteps/ai";
+import {
+  decideObjects,
+  detectFace,
+  findMistakes,
+  pickEmphasis,
+  pickRemovals,
+  proofreadTexts,
+  readReferenceLayout,
+  shortenCaptions,
+  type PlacedObjects,
+} from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
@@ -51,6 +63,7 @@ const requestSchema = z.object({
     segments: z.array(z.any()),
     framing: z.any().nullable(),
     captionYPercent: z.number().nullable(),
+    captionFontSize: z.enum(["small", "medium", "large", "xlarge"]).nullable().optional(),
     globalShapes: z.array(z.any()),
     globalOverlays: z.array(z.any()),
     videoAdjust: z.any().nullable().optional(),
@@ -112,7 +125,8 @@ export async function POST(request: Request) {
   const state = parsed.data.state as StepState;
   const segments = state.segments as ProjectSegment[];
   const newKey = () => randomUUID();
-  const captionLook = { style: look.captionStyle as CaptionStyle, fontSize: look.fontSize as CaptionFontSize };
+  // 字幕の大きさは、工程7で見た目の手本に合わせた時はそれを使う
+  const captionLook = { style: look.captionStyle as CaptionStyle, fontSize: (state.captionFontSize ?? look.fontSize) as CaptionFontSize };
   // 見た目の手本(工程8・10で使う)。見つからない物は外す
   const resolveReferences = async () =>
     (
@@ -169,6 +183,17 @@ export async function POST(request: Request) {
         case 6: {
           const face = await detectFace({ absolutePath: video.absolutePath, mimeType: video.mimeType });
           if (!face) return { state: { ...state, framing: null }, note: "顔が見つからなかったため、拡大しませんでした" };
+          // 見た目の手本があれば、手本の人物と同じ位置・大きさに映るように寄せる
+          const target = (await readReferenceLayout(await resolveReferences()))?.face;
+          if (target) {
+            const matched = framingToMatch(face, target);
+            return {
+              state: { ...state, framing: matched, segments: segments.map((segment) => ({ ...segment, faceBox: face })) },
+              note: matched
+                ? `見た目の手本に合わせて、顔が横${Math.round(target.xPercent)}%・縦${Math.round(target.yPercent)}%の所に映るよう、${matched.scale}倍に拡大しました`
+                : "顔の位置と大きさが、すでに見た目の手本とほぼ同じなので、拡大しませんでした",
+            };
+          }
           const framing = framingForFace(face);
           return {
             state: { ...state, framing, segments: segments.map((segment) => ({ ...segment, faceBox: face })) },
@@ -178,6 +203,22 @@ export async function POST(request: Request) {
           };
         }
         case 7: {
+          // 見た目の手本があれば、手本の字幕と同じ高さ・大きさにする
+          const reference = (await readReferenceLayout(await resolveReferences()))?.caption;
+          if (reference) {
+            const fittedLook = { style: captionLook.style, fontSize: reference.fontSize };
+            const y = referenceCaptionY(reference.topPercent, fittedLook);
+            const sizeLabel = { small: "小", medium: "中", large: "大", xlarge: "特大" }[reference.fontSize];
+            return {
+              state: {
+                ...state,
+                captionYPercent: y,
+                captionFontSize: reference.fontSize,
+                segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })),
+              },
+              note: `見た目の手本に合わせて、字幕を画面の上から${y}%の所に、大きさ「${sizeLabel}」で固定しました`,
+            };
+          }
           const face = segments.find((segment) => segment.faceBox)?.faceBox;
           const y = face ? chinCaptionY(face, state.framing, captionLook) : null;
           return {
@@ -196,10 +237,12 @@ export async function POST(request: Request) {
             captionBottomPercent,
             faceBottomPercent: face ? faceOnScreen(face, state.framing, undefined).bottom : undefined,
           });
+          const references = await resolveReferences();
+          const referenceLayout = await readReferenceLayout(references);
           const objects = await decideObjects({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
-            references: await resolveReferences(),
+            references,
             figureViewBoxHeight: area ? figureViewBoxHeight(area) : null,
           });
           // タイトルの指定があれば、文言はそれを使う(見た目と枠の数はAIの案のまま)
@@ -213,6 +256,7 @@ export async function POST(request: Request) {
             captionBottomPercent,
             accentColor: look.primaryColor,
             style: objects.look,
+            placement: referenceLayout ?? undefined,
           });
           const figure: FigureDraft | null =
             objects.figure && area
@@ -247,6 +291,9 @@ export async function POST(request: Request) {
               `タイトルの見た目: 書体「${fontLabel(objects.look.title.fontFamily)}」・文字${objects.look.title.textColor}・縁取り${objects.look.title.strokeColor ?? "なし"}・帯${objects.look.title.bandColor ?? "なし"}`,
               ...(objects.layout === "ranking" || objects.layout === "compare"
                 ? [`枠の見た目: 線${objects.look.frame.borderColor}(${objects.look.frame.borderWidthPx}px)・塗り${objects.look.frame.fillColor ?? "なし"}・角の丸み${objects.look.frame.cornerRadiusPx}px・番号${objects.look.frame.numberColor}`]
+                : []),
+              ...(referenceLayout?.title || referenceLayout?.frames
+                ? [`位置: 見た目の手本に合わせて置きました(${[referenceLayout.title ? "タイトル" : "", referenceLayout.frames && objects.layout === "ranking" ? "枠" : ""].filter(Boolean).join("・") || "なし"})`]
                 : []),
               objects.reason,
             ],

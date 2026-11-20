@@ -8,6 +8,9 @@ import {
   chinCaptionY,
   emphasisEffects,
   framingForFace,
+  framingToMatch,
+  referenceCaptionY,
+  toReferenceLayout,
   placeMainFootage,
   removeLongSilences,
   removeRanges,
@@ -221,7 +224,8 @@ describe("比べる動画(型がcompare)", () => {
       ["日本", objects.globalShapes[0].xPercent, objects.globalShapes[0].yPercent],
       ["韓国", objects.globalShapes[1].xPercent, objects.globalShapes[1].yPercent],
     ]);
-    expect(labels[0].color).toBe("#FF3366");
+    // 白いカードの上は、読めるよう黒っぽい文字にする(線の色で書くと、灰色の線の時に薄くて読めなかった)
+    expect(labels[0].color).toBe("#111111");
   });
 
   it("10. 名前の後に入れた話題ごとの中身は、上の行に名前を残した2行で出し、次の中身が出たら前の中身を消す", () => {
@@ -334,3 +338,55 @@ describe("カットの切れ目をまたいで続く字幕", () => {
   });
 });
 
+describe("見た目の手本の配置に合わせる", () => {
+  it("6. 顔が手本の人物と同じ位置・大きさに映るように寄せる", () => {
+    const face = { xPercent: 50, yPercent: 50, widthPercent: 20, heightPercent: 10 };
+    const target = { xPercent: 60, yPercent: 35, heightPercent: 15 };
+    const framing = framingToMatch(face, target)!;
+    expect(framing.scale).toBe(1.5);
+    // 寄せた後の顔の位置 = focus + (face - focus) * scale
+    expect(framing.focusXPercent + (face.xPercent - framing.focusXPercent) * framing.scale).toBeCloseTo(target.xPercent, 1);
+    expect(framing.focusYPercent + (face.yPercent - framing.focusYPercent) * framing.scale).toBeCloseTo(target.yPercent, 1);
+    // ほとんど同じなら寄せない
+    expect(framingToMatch(face, { xPercent: 51, yPercent: 48, heightPercent: 10 })).toBeNull();
+  });
+
+  it("手本の字幕の文字の高さを、一番近い大きさの段階にする", () => {
+    const layout = toReferenceLayout({
+      face: null,
+      caption: { topPercent: 60, charHeightPercent: 3.9 },
+      title: { align: "center", xPercent: 50, yPercent: 15, charHeightPercent: 4 },
+      frames: null,
+    });
+    expect(layout.caption?.fontSize).toBe("xlarge");
+    expect(layout.title?.fontSizePx).toBe(77);
+  });
+
+  it("7. 字幕は手本の高さに置くが、画面の下の見える所からははみ出さない", () => {
+    expect(referenceCaptionY(60, { style: "outline", fontSize: "medium" })).toBe(60);
+    expect(referenceCaptionY(99, { style: "outline", fontSize: "medium" })).toBeLessThan(90);
+  });
+
+  it("8. タイトルを手本と同じ中央寄せにし、枠を手本と同じ横の位置・幅に置く", () => {
+    const { globalOverlays, globalShapes } = buildObjects({
+      title: "医療用語5選",
+      layout: "ranking",
+      frameCount: 3,
+      captionTopPercent: 70,
+      accentColor: "#FF3366",
+      placement: { title: { align: "center", xPercent: 50, yPercent: 15, fontSizePx: 80 }, frames: { xPercent: 70, widthPercent: 30 } },
+    });
+    expect(globalOverlays[0]).toMatchObject({ textAlign: "center", xPercent: 50, yPercent: 15, fontSizePx: 80 });
+    expect(globalShapes.every((shape) => shape.xPercent === 70 && shape.widthPercent === 30)).toBe(true);
+    // 枠に入れる項目名も、その枠の中に入る
+    const filled = placeFrameFills({
+      segments: [seg(0, 2, "a")],
+      framing: null,
+      captionYPercent: 70,
+      globalShapes,
+      globalOverlays,
+      frameFills: [{ frame: 1, key: "a", sourceSeconds: 0, label: "DM" }],
+    });
+    expect(filled.globalOverlays.find((overlay) => overlay.text === "DM")?.xPercent).toBe(73);
+  });
+});

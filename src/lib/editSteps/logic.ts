@@ -1,3 +1,4 @@
+import { CAPTION_FONT_SIZE_SCALE } from "@video/shared/schema";
 import type {
   CaptionAnimation,
   CaptionEmphasis,
@@ -29,6 +30,8 @@ export type StepState = {
   segments: ProjectSegment[];
   framing: VideoFraming | null;
   captionYPercent: number | null;
+  /** 基本テロップの大きさ(工程7で、見た目の手本の字幕の大きさに合わせた時だけ)。無ければプロジェクトの設定のまま。 */
+  captionFontSize?: CaptionFontSize | null;
   globalShapes: ShapeOverlay[];
   globalOverlays: TextOverlay[];
   /** 映像の明るさ・コントラスト・彩度(工程14のチェックで、光の補正として決める)。 */
@@ -238,6 +241,67 @@ export const framingForFace = (face: FaceBox): VideoFraming | null => {
   return { scale: MAX_FRAMING_SCALE, focusXPercent: round2(face.xPercent), focusYPercent: 100 };
 };
 
+/**
+ * 見た目の手本から読み取った配置(工程6・7・8で、人物・字幕・タイトル・枠を手本と同じ所に置く)。
+ * 位置・大きさは画面の幅・高さに対する%。手本に無い物はnull。
+ */
+export type ReferenceLayout = {
+  face: { xPercent: number; yPercent: number; heightPercent: number } | null;
+  caption: { topPercent: number; fontSize: CaptionFontSize } | null;
+  title: { align: "left" | "center"; xPercent: number; yPercent: number; fontSizePx: number } | null;
+  frames: { xPercent: number; widthPercent: number } | null;
+};
+
+/** 字幕の文字の基準の大きさ(px。縦1920px。CAPTION_FONT_SIZE_SCALEを掛けた物が、実際の大きさ)。 */
+const CAPTION_BASE_FONT_PX = 48;
+
+/** AIが読み取った手本の配置を、使える形に直す(字幕の大きさは一番近い段階に、タイトルの大きさはpxに)。 */
+export const toReferenceLayout = (raw: {
+  face: { xPercent: number; yPercent: number; heightPercent: number } | null;
+  caption: { topPercent: number; charHeightPercent: number } | null;
+  title: { align: "left" | "center"; xPercent: number; yPercent: number; charHeightPercent: number } | null;
+  frames: { xPercent: number; widthPercent: number } | null;
+}): ReferenceLayout => {
+  const nearestSize = (charHeightPercent: number): CaptionFontSize => {
+    const px = (charHeightPercent / 100) * 1920;
+    return (Object.entries(CAPTION_FONT_SIZE_SCALE) as [CaptionFontSize, number][]).reduce((best, entry) =>
+      Math.abs(entry[1] * CAPTION_BASE_FONT_PX - px) < Math.abs(best[1] * CAPTION_BASE_FONT_PX - px) ? entry : best
+    )[0];
+  };
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  return {
+    face: raw.face && raw.face.heightPercent >= 3 ? raw.face : null,
+    caption: raw.caption ? { topPercent: raw.caption.topPercent, fontSize: nearestSize(raw.caption.charHeightPercent) } : null,
+    title: raw.title
+      ? {
+          align: raw.title.align,
+          xPercent: raw.title.xPercent,
+          yPercent: raw.title.yPercent,
+          fontSizePx: Math.round(clamp((raw.title.charHeightPercent / 100) * 1920, 36, 110)),
+        }
+      : null,
+    frames: raw.frames && raw.frames.widthPercent >= 10 ? raw.frames : null,
+  };
+};
+
+/**
+ * 6. 見た目の手本がある時: 顔が手本の人物と同じ位置・同じ大きさに映るように寄せる。
+ * 拡大(1〜2倍)しかできないので、手本より顔が大きく映っている時は、位置だけ合わせる。ほとんど同じならnull(寄せない)。
+ */
+export const framingToMatch = (face: FaceBox, target: { xPercent: number; yPercent: number; heightPercent: number }): VideoFraming | null => {
+  let scale = Math.min(2, Math.max(1, target.heightPercent / Math.max(1, face.heightPercent)));
+  const moveX = Math.abs(face.xPercent - target.xPercent);
+  const moveY = Math.abs(face.yPercent - target.yPercent);
+  if (scale < 1.05) {
+    if (moveX <= 4 && moveY <= 4) return null;
+    // 位置を動かすには少し拡大が要る
+    scale = 1.15;
+  }
+  // 拡大の中心focusのとき、顔は focus + (face - focus) * scale に動く。それが手本の位置になる中心を求める
+  const focus = (position: number, goal: number) => Math.min(100, Math.max(0, (scale * position - goal) / (scale - 1)));
+  return { scale: round2(scale), focusXPercent: round2(focus(face.xPercent, target.xPercent)), focusYPercent: round2(focus(face.yPercent, target.yPercent)) };
+};
+
 /** 字幕を顎からどれだけ下げるか(%)と、字幕の下端の限界(%。下の決まった位置と同じ)。 */
 const CHIN_GAP_PERCENT = 1;
 const CAPTION_LOWEST_BOTTOM_PERCENT = 100 - (160 / 1920) * 100;
@@ -256,6 +320,19 @@ export const chinCaptionY = (
   const y = Math.round((chin + CHIN_GAP_PERCENT) * 10) / 10;
   const band = captionBox(sampleText, "top", look.style, look.fontSize);
   return y + (band.bottom - band.top) <= CAPTION_LOWEST_BOTTOM_PERCENT ? y : null;
+};
+
+/**
+ * 7. 見た目の手本がある時: 字幕を手本の字幕と同じ高さに固定する(画面の下の見える所に収まるように)。
+ */
+export const referenceCaptionY = (
+  topPercent: number,
+  look: { style: CaptionStyle; fontSize: CaptionFontSize },
+  sampleText = "テロップの高さの見本\n2行目"
+): number => {
+  const band = captionBox(sampleText, "top", look.style, look.fontSize);
+  const lowest = CAPTION_LOWEST_BOTTOM_PERCENT - (band.bottom - band.top);
+  return Math.round(Math.min(lowest, Math.max(TITLE_TOP_LIMIT_PERCENT, topPercent)) * 10) / 10;
 };
 
 /** テロップの帯の高さ(%)。2行のテロップが入る高さで見積もる。 */
@@ -346,26 +423,34 @@ export const buildObjects = (params: {
   captionBottomPercent?: number;
   accentColor: string;
   style?: ObjectStyle;
+  /** 見た目の手本から読み取った、タイトルと枠の位置・大きさ(無ければ決まった位置)。 */
+  placement?: Pick<ReferenceLayout, "title" | "frames">;
 }): { globalOverlays: TextOverlay[]; globalShapes: ShapeOverlay[] } => {
   const titleStyle = params.style?.title;
   const frameStyle = params.style?.frame;
   // タイトルは、左の余白から画面の右86%(TikTokの右側のボタンの手前)までに収める。長ければ文字を小さくする
   // (自動で2行にすると「看護/師」のように言葉の途中で切れたため、改行はAIが意味の切れ目に入れた時だけ)
-  const maxWidthPx = ((TITLE_RIGHT_LIMIT_PERCENT - TITLE_STYLE.xPercent) / 100) * 1080;
+  const placedTitle = params.placement?.title ?? null;
+  const centered = placedTitle?.align === "center";
+  // 左寄せは左端から、中央寄せは中心から、TikTokの右側のボタンの手前(86%)と左の余白までに収まる幅
+  const titleLeft = placedTitle && !centered ? Math.min(60, Math.max(3, placedTitle.xPercent)) : TITLE_STYLE.xPercent;
+  const titleCenter = centered ? Math.min(60, Math.max(20, placedTitle.xPercent)) : 0;
+  const maxWidthPx =
+    ((centered ? 2 * Math.min(titleCenter - 3, TITLE_RIGHT_LIMIT_PERCENT - titleCenter) : TITLE_RIGHT_LIMIT_PERCENT - titleLeft) / 100) * 1080;
   const titleText = params.title;
   // 幅は、チェック項目(隠れる所に出ていないか)と同じ見積もりで測る: 半角は全角の半分、帯がある時は左右の余白0.8文字ぶん、
   // 帯が無い時も縁取りの分0.3文字ぶんを足す(以前は余白を入れずに置いていて、帯付きの長いタイトルの左端が隠れる所にかかった)
   const longestEm = estimateTextWidthPx(titleText, 1);
   const paddingEm = titleStyle?.bandColor ? 0.8 : 0.3;
-  const fontSizePx = Math.max(36, Math.min(TITLE_STYLE.fontSizePx, Math.floor(maxWidthPx / (longestEm + paddingEm))));
+  const fontSizePx = Math.max(36, Math.min(placedTitle?.fontSizePx ?? TITLE_STYLE.fontSizePx, Math.floor(maxWidthPx / (longestEm + paddingEm))));
   // 上の端が、TikTokの検索欄で隠れる所(画面の上8%)より下に来るように置く
   const titleHalfHeight = (titleText.split("\n").length * fontSizePx * 1.2 + fontSizePx * 0.2) * 100 / 1920 / 2;
   const title: TextOverlay = {
     text: titleText,
     startOffsetSeconds: 0,
     xPercent: TITLE_STYLE.xPercent,
-    yPercent: round2(Math.max(TITLE_STYLE.yPercent, TITLE_TOP_LIMIT_PERCENT + titleHalfHeight)),
-    textAlign: "left",
+    yPercent: round2(Math.max(placedTitle?.yPercent ?? TITLE_STYLE.yPercent, TITLE_TOP_LIMIT_PERCENT + titleHalfHeight)),
+    textAlign: centered ? "center" : "left",
     fontSizePx,
     color: titleStyle?.textColor ?? "#FFFFFF",
     strokeColor: titleStyle ? (titleStyle.strokeColor ?? undefined) : "#000000",
@@ -378,7 +463,7 @@ export const buildObjects = (params: {
   };
   // 左寄せの文字は、xPercentを文字の中心として扱う描画に合わせ、文字幅の半分だけ右へずらす
   const titleWidthPercent = ((longestEm + paddingEm) * fontSizePx * 100) / 1080;
-  title.xPercent = round2(TITLE_STYLE.xPercent + titleWidthPercent / 2);
+  title.xPercent = round2(centered ? titleCenter : titleLeft + titleWidthPercent / 2);
   if (params.layout === "compare") {
     const titleBottom = title.yPercent + (titleText.split("\n").length * fontSizePx * 1.3 * 100) / 1920 / 2 + 3;
     return { globalOverlays: [title], globalShapes: compareCards({ ...params, top: titleBottom, frameStyle }) };
@@ -409,6 +494,9 @@ export const buildObjects = (params: {
       y += frameHeight + FRAME_GAP_PERCENT;
     }
   }
+  // 枠の横の位置・幅は、見た目の手本があれば手本に合わせる(画面の左右の見える所に収める)
+  const frameWidth = Math.min(60, Math.max(20, params.placement?.frames?.widthPercent ?? FRAME_WIDTH_PERCENT));
+  const frameX = Math.min(TITLE_RIGHT_LIMIT_PERCENT - frameWidth / 2, Math.max(3 + frameWidth / 2, params.placement?.frames?.xPercent ?? FRAME_X_PERCENT));
   const shapes: ShapeOverlay[] = [];
   const labels: TextOverlay[] = [];
   for (let i = 0; i < centers.length; i++) {
@@ -416,9 +504,9 @@ export const buildObjects = (params: {
     shapes.push({
       kind: "rect",
       startOffsetSeconds: 0,
-      xPercent: FRAME_X_PERCENT,
+      xPercent: round2(frameX),
       yPercent: y,
-      widthPercent: FRAME_WIDTH_PERCENT,
+      widthPercent: round2(frameWidth),
       heightPercent: round2(frameHeight),
       borderColor: frameStyle?.borderColor ?? params.accentColor,
       borderWidthPx: frameStyle?.borderWidthPx ?? 6,
@@ -430,7 +518,7 @@ export const buildObjects = (params: {
     labels.push({
       text: String(i + 1),
       startOffsetSeconds: 0,
-      xPercent: FRAME_X_PERCENT - FRAME_WIDTH_PERCENT / 2 + 3,
+      xPercent: round2(frameX - frameWidth / 2 + 3),
       yPercent: y,
       fontSizePx: Math.max(32, Math.min(56, Math.round((frameHeight / 100) * 1920 * 0.45))),
       color: frameStyle?.numberColor ?? params.accentColor,
@@ -560,10 +648,11 @@ export const emphasisEffects = (segments: ProjectSegment[]): { segments: Project
   return { segments: result, count };
 };
 
-/** 枠の中の項目名の横位置(%)。左の番号の右から、枠の右端までの真ん中。 */
-export const FRAME_FILL_X_PERCENT = FRAME_X_PERCENT + 3;
-/** 枠の中で項目名に使える幅(px。横1080pxの画面)。 */
-const FRAME_FILL_WIDTH_PX = ((FRAME_WIDTH_PERCENT - 8) / 100) * 1080;
+/** 枠の中の項目名の横位置(%)。左の番号の右から、枠の右端までの真ん中(枠の中心から3%右)。 */
+const FRAME_FILL_OFFSET_PERCENT = 3;
+export const FRAME_FILL_X_PERCENT = FRAME_X_PERCENT + FRAME_FILL_OFFSET_PERCENT;
+/** 枠の中で項目名に使える幅(px。横1080pxの画面)。枠の幅から番号と余白の分(8%)を引く。 */
+const frameFillWidthPx = (rect: ShapeOverlay) => ((rect.widthPercent - 8) / 100) * 1080;
 
 /**
  * ランキング・「〇選」の枠に、項目名を入れる(その項目を言い始めた時から最後まで出したままにする)。
@@ -579,7 +668,8 @@ export const placeFrameFills = (state: StepState): StepState => {
   const isFill = (overlay: TextOverlay) =>
     sideBySide
       ? rects.some((rect) => rect.xPercent === overlay.xPercent && rect.yPercent === overlay.yPercent)
-      : fills.some((fill) => fill.label === overlay.text) && overlay.xPercent === FRAME_FILL_X_PERCENT;
+      : fills.some((fill) => fill.label === overlay.text) &&
+        rects.some((rect) => overlay.xPercent === round2(rect.xPercent + FRAME_FILL_OFFSET_PERCENT));
   const base = state.globalOverlays.filter((overlay) => !isFill(overlay));
   if (fills.length === 0) return { ...state, globalOverlays: base };
   // 完成の動画で、各クリップが始まる時刻
@@ -608,11 +698,11 @@ export const placeFrameFills = (state: StepState): StepState => {
     const number = base.find((overlay) => overlay.text === String(fill.frame) && Math.abs(overlay.yPercent - rect.yPercent) < 0.01);
     const heightPx = (rect.heightPercent / 100) * 1920;
     const chars = Math.max(1, [...fill.label].length);
-    const widthPx = sideBySide ? ((rect.widthPercent - 4) / 100) * 1080 : FRAME_FILL_WIDTH_PX;
+    const widthPx = sideBySide ? ((rect.widthPercent - 4) / 100) * 1080 : frameFillWidthPx(rect);
     labels.push({
       text: fill.label,
       startOffsetSeconds: round2(start),
-      xPercent: sideBySide ? rect.xPercent : FRAME_FILL_X_PERCENT,
+      xPercent: sideBySide ? rect.xPercent : round2(rect.xPercent + FRAME_FILL_OFFSET_PERCENT),
       yPercent: rect.yPercent,
       fontSizePx: Math.max(24, Math.min(sideBySide ? 80 : 56, Math.round(heightPx * 0.42), Math.floor(widthPx / chars))),
       // 番号の無いカードでは、枠の線の色で書く
@@ -624,6 +714,13 @@ export const placeFrameFills = (state: StepState): StepState => {
   }
   return { ...state, globalOverlays: [...base, ...labels] };
 };
+
+/**
+ * カードの文字の色。塗りがあれば、塗りの上で読める黒か白(以前は線の色で書いていて、灰色の線の時に白いカードの上で薄くて読めなかった)。
+ * 塗りが無ければ線の色。
+ */
+const cardTextColor = (rect: ShapeOverlay): string =>
+  rect.fillColor ? (luminance(rect.fillColor) > 0.5 ? "#111111" : "#FFFFFF") : (rect.borderColor ?? "#111111");
 
 /**
  * 比べる動画の2枚のカードに入れる文字。1つ目は比べる物の名前(1行)。2つ目からは話題ごとの中身で、
@@ -661,7 +758,7 @@ const compareCardTexts = (
         yPercent: rect.yPercent,
         // 2行の時は、カードの高さに2行が入る大きさにする
         fontSizePx: Math.max(24, Math.min(80, Math.round(heightPx * (lines.length === 1 ? 0.42 : 0.3)), Math.floor(widthPx / chars))),
-        color: rect.borderColor ?? "#111111",
+        color: cardTextColor(rect),
         fontFamily,
         rotationDeg: 0,
         // 名前の後の中身は、名前が動かないよう、出し直しの動きを付けない

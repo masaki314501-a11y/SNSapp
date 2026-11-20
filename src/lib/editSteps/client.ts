@@ -18,6 +18,8 @@ export const withState = (project: VideoProject, state: StepState): VideoProject
   segments: state.segments,
   framing: state.framing ?? undefined,
   captionYPercent: state.captionYPercent ?? undefined,
+  // 字幕の大きさは、工程7で見た目の手本に合わせた時だけ変える
+  ...(state.captionFontSize ? { fontSize: state.captionFontSize } : {}),
   videoAdjust: state.videoAdjust ?? undefined,
   // 基本テロップの見た目は工程10で決める(それより前は、プロジェクトの設定のまま)
   ...(state.captionLook
