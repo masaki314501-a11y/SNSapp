@@ -76,6 +76,10 @@ const requestSchema = z.object({
     figure: z.any().nullable().optional(),
     figureImages: z.array(z.any()).optional(),
     figureTexts: z.array(z.any()).optional(),
+    // 型の字幕の置き方(工程7)と、型で作ったタイトル(工程8→10で枠を並べ直す時に使う)。
+    // ここに無いと受け取る時に捨てられ、工程8以降で字幕が真ん中・下端固定なしに戻っていた
+    captionLayout: z.any().nullable().optional(),
+    templateTitle: z.string().optional(),
   }),
   /** 完成動画の長さの上限(秒)。お客様の指定が無ければ30秒。 */
   targetSeconds: z.number().positive().optional(),
