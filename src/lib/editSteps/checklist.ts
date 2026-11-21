@@ -247,7 +247,8 @@ export const runChecklist = (input: ChecklistInput): { state: StepState; items: 
   for (const overlay of [...state.globalOverlays, ...segments.flatMap((segment) => segment.overlays ?? [])]) {
     if (!inZone(estimateOverlayBox(overlay))) outside.push(`文字「${overlay.text.replace(/\n/g, "")}」`);
   }
-  for (const shape of state.globalShapes) {
+  // タイトルの後ろの帯など、画面の端から端までの飾りは数えない(帯の上の文字は、上で文字として確かめる)
+  for (const shape of state.globalShapes.filter((item) => !item.decorative)) {
     const box = {
       left: shape.xPercent - shape.widthPercent / 2,
       right: shape.xPercent + shape.widthPercent / 2,

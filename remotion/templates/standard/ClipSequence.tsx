@@ -1,7 +1,7 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
 import type { ClipProps } from "./schema";
-import type { CaptionFontFamily, CaptionFontSize, CaptionPosition, CaptionStyle, VideoAdjust, VideoFraming } from "../../shared/schema";
+import type { CaptionFontFamily, CaptionFontSize, CaptionLayout, CaptionPosition, CaptionStyle, VideoAdjust, VideoFraming } from "../../shared/schema";
 import { resolveFontFamilyStack } from "../../shared/schema";
 import { TextOverlays } from "../../shared/TextOverlays";
 import { ImageOverlays } from "../../shared/ImageOverlays";
@@ -24,6 +24,8 @@ type Props = ClipProps & {
   captionFontPinned?: boolean;
   /** 字幕の上端の高さ(%)。動画全体で固定する時だけ。 */
   captionYPercent?: number;
+  /** 字幕の横の位置・幅・文字の色(見た目の手本の型に合わせる時)。 */
+  captionLayout?: CaptionLayout;
   /** 映像の明るさ・コントラスト・彩度(光の補正)。 */
   videoAdjust?: VideoAdjust;
   keywordHighlights?: { word: string; color: string }[];
@@ -78,6 +80,7 @@ export const ClipSequence: React.FC<Props> = ({
   captionTextStyleId,
   captionFontPinned,
   captionYPercent,
+  captionLayout,
   videoAdjust,
   keywordHighlights,
   wordSync,
@@ -114,6 +117,7 @@ export const ClipSequence: React.FC<Props> = ({
         position={clipCaptionPosition ?? captionPosition}
         // このクリップだけ位置を変えた時は、その位置(上・中央・下)を使う
         yPercent={clipCaptionPosition ? undefined : captionYPercent}
+        layout={captionLayout}
         fontSize={clipFontSize ?? fontSize}
         emphasisWords={emphasisWords}
         emphasisColor={emphasisColor}

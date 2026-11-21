@@ -1,0 +1,39 @@
+{
+  "name": "こんな歯になりたいランキング",
+  "referenceIds": ["e386cce911f2c3b19f1641858fa10352"],
+  "kind": "ranking",
+  "face": { "xPercent": 68, "yPercent": 33, "heightPercent": 14 },
+  "caption": {
+    "topPercent": 49.5,
+    "xPercent": 71,
+    "maxWidthPercent": 50,
+    "fontSize": "large",
+    "fontFamily": "M PLUS Rounded 1c",
+    "style": "outline",
+    "textColor": "#33ABC4",
+    "accentColor": "#FFFFFF"
+  },
+  "emphasis": { "fontFamily": "Noto Serif JP", "textColor": "#FFFFFF", "bandColor": null, "strokeColor": "#000000" },
+  "title": {
+    "align": "center",
+    "xPercent": 50,
+    "yPercent": 11.7,
+    "fontSizePx": 48,
+    "maxWidthPercent": 86,
+    "lineCount": 2,
+    "lines": [{ "fontFamily": "Noto Sans JP", "color": "#FFFFFF", "strokeColor": "#111111", "strokeWidthPx": 5 }],
+    "band": { "color": "#C4C232", "topPercent": 7.9, "heightPercent": 7.9 }
+  },
+  "frames": {
+    "xPercent": 24.8,
+    "widthPercent": 34.4,
+    "topPercent": 17.4,
+    "bottomPercent": 90.6,
+    "gapPercent": 1.9,
+    "maxHeightPercent": 13.3,
+    "defaultCount": 5,
+    "shape": { "borderColor": "#111111", "borderWidthPx": 8, "fillOpacity": 1, "cornerRadiusPx": 28 },
+    "number": { "format": "{n}位", "fontSizePx": 44, "look": { "fontFamily": "Noto Sans JP", "color": "#FFFFFF", "strokeColor": "#111111", "strokeWidthPx": 5 } },
+    "label": { "fontSizePx": 52, "look": { "fontFamily": "Noto Sans JP", "color": "#111111", "bandColor": "#FFFFFF" } }
+  }
+}

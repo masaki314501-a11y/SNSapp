@@ -1,0 +1,105 @@
+{
+  "name": "矯正治療どちらがおすすめ",
+  "referenceIds": [
+    "fca723fcd9e15b5143cf1643e80d07e0"
+  ],
+  "kind": "compare",
+  "face": {
+    "xPercent": 50,
+    "yPercent": 34,
+    "heightPercent": 15
+  },
+  "caption": {
+    "topPercent": 45,
+    "xPercent": 50,
+    "maxWidthPercent": 84,
+    "fontSize": "xlarge",
+    "fontFamily": "Noto Serif JP",
+    "style": "outline",
+    "textColor": "#FFFFFF",
+    "accentColor": "#000000",
+    "bottomPercent": 51
+  },
+  "emphasis": {
+    "fontFamily": "M PLUS Rounded 1c",
+    "textColor": "#FFFFFF",
+    "bandColor": null,
+    "strokeColor": "#1A62C8"
+  },
+  "title": {
+    "align": "center",
+    "xPercent": 31,
+    "yPercent": 12.7,
+    "fontSizePx": 50,
+    "maxWidthPercent": 50,
+    "lineCount": 2,
+    "lines": [
+      {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#1A4A9C",
+        "strokeColor": "#FFFFFF",
+        "strokeWidthPx": 5
+      },
+      {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#262626",
+        "strokeColor": "#FFFFFF",
+        "strokeWidthPx": 5
+      }
+    ],
+    "intro": {
+      "seconds": 1.3,
+      "xPercent": 50,
+      "yPercent": 49,
+      "fontSizePx": 100
+    }
+  },
+  "compare": {
+    "cards": [
+      {
+        "xPercent": 28,
+        "yPercent": 71,
+        "widthPercent": 41,
+        "heightPercent": 22
+      },
+      {
+        "xPercent": 72,
+        "yPercent": 71,
+        "widthPercent": 41,
+        "heightPercent": 22
+      }
+    ],
+    "shape": {
+      "borderColor": "#A8A8A8",
+      "borderWidthPx": 6,
+      "fillColor": "#FFFFFF",
+      "fillOpacity": 1,
+      "cornerRadiusPx": 0
+    },
+    "name": {
+      "fontSizePx": 60,
+      "fromBottomPercent": 3.2,
+      "look": {
+        "fontFamily": "Noto Sans JP",
+        "color": "#111111"
+      }
+    },
+    "content": {
+      "fontSizePx": 76,
+      "look": {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#1A62C8"
+      }
+    },
+    "topic": {
+      "xPercent": 50,
+      "yPercent": 55.7,
+      "fontSizePx": 56,
+      "look": {
+        "fontFamily": "Noto Sans JP",
+        "color": "#111111",
+        "bandColor": "#FFFFFF"
+      }
+    }
+  }
+}

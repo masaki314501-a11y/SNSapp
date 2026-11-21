@@ -120,6 +120,7 @@ export const StepsScreen: React.FC<{ step?: number }> = ({ step: pageStep }) => 
             framing: project.framing,
             captionTextStyleId: project.captionTextStyleId,
             captionYPercent: project.captionYPercent,
+            captionLayout: project.captionLayout,
             videoAdjust: project.videoAdjust,
           })
         : null,

@@ -136,6 +136,11 @@ export const themeSchema = z.object({
    * (自動編集が、話している人の顎のすぐ下に決める)。クリップごとに位置を変えたクリップ(clipCaptionPosition)はそちらが優先。
    */
   captionYPercent: z.number().min(0).max(100).optional(),
+  /**
+   * 字幕の横の位置・幅・文字の色(見た目の手本の型に合わせる時。ランキングの枠を避けて右寄りに出す等)。
+   * 省略時は、画面の真ん中・画面の幅の74%まで・白い文字。
+   */
+  captionLayout: z.lazy(() => captionLayoutSchema).optional(),
   /** 映像の明るさ・コントラスト・彩度(光の補正)。省略時はそのまま。 */
   videoAdjust: z.lazy(() => videoAdjustSchema).optional(),
   /** 字幕を話している言葉に合わせて見せるか(wordSync.ts)。省略時は合わせない。 */
@@ -230,6 +235,8 @@ export const textOverlaySchema = z.object({
    * 文字のスタイル(textStylePresets.tsのid)。指定した時は、色・縁取り・光・帯・書体の代わりにスタイルの見た目で描く。
    */
   textStyleId: z.string().optional(),
+  /** 工程の中で付ける目印(型どおりに入れた項目名など。入れ直す時に、前に入れた物を見分けて外すため)。画面には出ない。 */
+  tag: z.string().optional(),
   /**
    * 出る時に、この位置・大きさから今の位置・大きさへ動いてくる(冒頭に中央へ大きく出したタイトルが、縮みながら上へ移る等)。
    * 指定した時は出現アニメーション(animation)の代わりにこの動きを使う。
@@ -302,6 +309,8 @@ export const shapeOverlaySchema = z.object({
   fillOpacity: z.number().min(0).max(1).default(1),
   cornerRadiusPx: z.number().min(0).max(200).default(24),
   animation: captionAnimationSchema,
+  /** 飾り(タイトルの後ろの帯など)。ランキングの枠・比べるカードとして数えない。 */
+  decorative: z.boolean().optional(),
 });
 
 export type ShapeOverlay = z.infer<typeof shapeOverlaySchema>;
@@ -318,6 +327,19 @@ export const videoFramingSchema = z.object({
 });
 
 export type VideoFraming = z.infer<typeof videoFramingSchema>;
+
+export const captionLayoutSchema = z.object({
+  /** 字幕の中心の横位置(左端0〜右端100)。 */
+  xPercent: z.number().min(0).max(100).optional(),
+  /** 字幕の下の端の高さ(%)。指定した時は、下の端をここに固定し、行が増えると上へ伸びる(上端の固定より優先)。 */
+  bottomPercent: z.number().min(0).max(100).optional(),
+  /** 字幕の1行の最大幅(画面の幅に対する%)。 */
+  maxWidthPercent: z.number().min(20).max(100).optional(),
+  /** 字幕の文字の色(縁取り文字・帯の字幕)。 */
+  textColor: zColor().optional(),
+});
+
+export type CaptionLayout = z.infer<typeof captionLayoutSchema>;
 
 /** 映像の明るさ・コントラスト・彩度(1=そのまま)。人が明るく見えるように整える(光の補正)。 */
 export const videoAdjustSchema = z.object({

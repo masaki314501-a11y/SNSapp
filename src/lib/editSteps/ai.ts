@@ -525,6 +525,8 @@ export const decideObjects = async (input: {
   references?: StyleReferenceFile[];
   /** 図を描く箱の縦の大きさ(横は1000)。図を置ける所が無ければ null。 */
   figureViewBoxHeight: number | null;
+  /** 見た目の手本の型がある時: タイトルの行数と、置く物の型(見た目と置き方は型どおりにするので、AIには文言と数だけを考えてもらう)。 */
+  template?: { titleLines: number; kind: "ranking" | "compare" | "none" };
 }): Promise<{
   title: string;
   layout: ObjectLayout;
@@ -547,6 +549,21 @@ export const decideObjects = async (input: {
       { text: "【ここから、今回編集する動画】" },
       part,
       { text: OBJECTS_PROMPT(input.figureViewBoxHeight, references.length > 0) },
+      ...(input.template
+        ? [
+            {
+              text: `【この手本には決まった型があります】見た目と置き方は、こちらで手本どおりにします。
+- title は、手本と同じ${input.template.titleLines}行で書いてください(行の切れ目に改行\nを入れる。言葉の途中で切らない)。
+${
+  input.template.kind === "ranking"
+    ? "- layout は ranking にし、frameCount は、この動画で挙げる項目の数(ランキングの順位の数)にしてください。"
+    : input.template.kind === "compare"
+      ? "- layout は compare にしてください。"
+      : "- layout は none にしてください。"
+}`,
+            },
+          ]
+        : []),
     ],
     schema: {
       type: Type.OBJECT,
@@ -637,7 +654,7 @@ export const decideObjects = async (input: {
 
 /** 工程8で画面に置いた物(工程10で、中身を話に合わせて入れていくため)。 */
 export type PlacedObjects =
-  | { kind: "frames"; layout: "ranking" | "compare"; frameCount: number }
+  | { kind: "frames"; layout: "ranking" | "compare"; frameCount: number; topicHeading?: boolean }
   | { kind: "figure"; idea: string; viewBoxHeight: number; base: FigureLayer }
   | { kind: "none" };
 
@@ -651,7 +668,16 @@ const objectsSection = (objects: PlacedObjects): string => {
 を frameItems で答えてください。
 話が進んで、比べる中身(費用・期間・方法など)を話題ごとに言う時は、同じカードに続けて答えてください
 (index: その物のその中身を言う字幕の番号、label: その中身だけを全角8文字以内で。例「約100万円」)。
-カードの上の行には名前が残り、下の行の中身が話題ごとに入れ替わります。言っていない中身は入れない。
+カードの上の行には名前が残り、下の行の中身が話題ごとに入れ替わります。言っていない中身は入れない。${
+      objects.topicHeading
+        ? `
+また、カードの上には「今どの話題か」の見出しが出ます。話題(費用・期間・痛みなど)が変わるごとに、
+- frame: 3(見出し)
+- index: その話題を話し始める字幕の番号
+- label: 話題の名前を全角8文字以内で(例「費用」「治療期間」)
+も frameItems に答えてください。`
+        : ""
+    }
 figureItems は空の配列で答えてください。`;
   }
   if (objects.kind === "frames") {
@@ -819,7 +845,8 @@ export const pickEmphasis = async (input: {
   });
   // 枠に入れる項目: 番号が範囲外・同じ枠に2つ目・字幕の番号が範囲外の物は外す。長すぎる言葉は8文字で切る。
   // 比べるカードは、名前の後に話題ごとの中身を続けて入れるので、同じカードに何個か入れてよい(同じ字幕の2つ目は外す)
-  const frameCount = input.objects.kind === "frames" ? input.objects.frameCount : 0;
+  const frameCount =
+    input.objects.kind === "frames" ? input.objects.frameCount + (input.objects.topicHeading ? 1 : 0) : 0;
   const isCompare = input.objects.kind === "frames" && input.objects.layout === "compare";
   const used = new Set<string>();
   const perFrame = new Map<number, number>();

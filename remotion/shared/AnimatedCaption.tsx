@@ -7,6 +7,7 @@ import type {
   CaptionEmphasis,
   CaptionFontFamily,
   CaptionFontSize,
+  CaptionLayout,
   CaptionPosition,
   CaptionStyle,
 } from "./schema";
@@ -27,6 +28,8 @@ type Props = {
   position?: CaptionPosition;
   /** 字幕の上端を、画面の上からこの%の高さに固定する(指定時はpositionより優先)。 */
   yPercent?: number;
+  /** 字幕の横の位置・幅・文字の色(見た目の手本の型に合わせる時)。省略時は真ん中・画面の74%まで・白い文字。 */
+  layout?: CaptionLayout;
   fontSize?: CaptionFontSize;
   /** テロップ中で色を変えて大きく見せる単語。 */
   emphasisWords?: string[];
@@ -100,6 +103,7 @@ export const AnimatedCaption: React.FC<Props> = ({
   fontFamily: baseFontFamily = "Noto Sans JP",
   position = "bottom",
   yPercent,
+  layout,
   fontSize = "medium",
   emphasisWords,
   emphasisColor = "#FFE600",
@@ -129,6 +133,14 @@ export const AnimatedCaption: React.FC<Props> = ({
   }
 
   const fontFamilyStack = resolveFontFamilyStack(fontFamily);
+  // 字幕の横の範囲(px)。型で横の位置・幅を決めた時は、その中心・幅にする(画面からはみ出さないよう左右の余白は0以上)
+  const baseTextColor = layout?.textColor ?? "white";
+  const maxWidthPx = layout?.maxWidthPercent !== undefined ? (layout.maxWidthPercent / 100) * 1080 : CAPTION_MAX_WIDTH_PX;
+  const centerPx = layout?.xPercent !== undefined ? (layout.xPercent / 100) * 1080 : 540;
+  const sidePadding =
+    layout?.xPercent !== undefined || layout?.maxWidthPercent !== undefined
+      ? { left: Math.max(0, centerPx - maxWidthPx / 2), right: Math.max(0, 1080 - centerPx - maxWidthPx / 2) }
+      : { left: CAPTION_SIDE_PADDING, right: CAPTION_SIDE_PADDING };
   const sizeScale = CAPTION_FONT_SIZE_SCALE[fontSize] * (emphasis ? EMPHASIZED_CAPTION_SCALE : 1);
   // 色を変える語: このクリップで選んだ強調する語と、全体の重大ワード(言葉ごとの色)。
   const wordColors = new Map<string, string>();
@@ -153,7 +165,7 @@ export const AnimatedCaption: React.FC<Props> = ({
     : captionStyle === "outline"
       ? {
           display: "inline-block",
-          color: emphasis?.textColor ?? "white",
+          color: emphasis?.textColor ?? baseTextColor,
           // 縁取りの内側半分は文字に隠れるので、見える太さはこの半分(文字の約9%)。以前の2.5px固定では
           // 細すぎて、ショート動画でよく見る太い縁取りの字幕にならなかった。
           WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18)}px ${emphasis?.strokeColor ?? accentColor}`,
@@ -169,7 +181,7 @@ export const AnimatedCaption: React.FC<Props> = ({
       : {
           display: "inline-block",
           backgroundColor: accentColor,
-          color: emphasis?.textColor ?? "white",
+          color: emphasis?.textColor ?? baseTextColor,
           fontFamily: fontFamilyStack,
           fontSize: 44 * sizeScale,
           fontWeight: 800,
@@ -180,7 +192,7 @@ export const AnimatedCaption: React.FC<Props> = ({
         };
   const fontSizePx = preset ? 48 * sizeScale : Number(textStyle.fontSize);
   const hasBox = !preset && (emphasis?.band || captionStyle === "pill");
-  const lines = breakIntoLines(text, fontSizePx, CAPTION_MAX_WIDTH_PX - (hasBox ? 64 : 0), highlightWords, EMPHASIS_SCALE);
+  const lines = breakIntoLines(text, fontSizePx, Math.min(maxWidthPx, 1080 - sidePadding.left - sidePadding.right) - (hasBox ? 64 : 0), highlightWords, EMPHASIS_SCALE);
   // 話に合わせる時の、今話している言葉のかたまり(全行をつないだ文字の位置)。
   const current =
     wordSync === "none"
@@ -222,12 +234,14 @@ export const AnimatedCaption: React.FC<Props> = ({
   return (
     <AbsoluteFill
       style={{
-        ...(yPercent !== undefined
+        ...(layout?.bottomPercent !== undefined && yPercent !== undefined
+          ? { justifyContent: "flex-end", paddingTop: 0, paddingBottom: ((100 - layout.bottomPercent) / 100) * VIDEO_HEIGHT }
+          : yPercent !== undefined
           ? { justifyContent: "flex-start", paddingTop: (yPercent / 100) * VIDEO_HEIGHT, paddingBottom: 0 }
           : POSITION_STYLE[position]),
         alignItems: "center",
-        paddingLeft: CAPTION_SIDE_PADDING,
-        paddingRight: CAPTION_SIDE_PADDING,
+        paddingLeft: sidePadding.left,
+        paddingRight: sidePadding.right,
       }}
     >
       <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>

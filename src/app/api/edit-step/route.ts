@@ -33,6 +33,8 @@ import {
   type StepState,
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
+import { buildTemplateObjects, placeTemplateFills, templateCaption, type ReferenceTemplate } from "@/lib/editSteps/template";
+import { findReferenceTemplate } from "@/lib/editSteps/templateStore";
 import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
 import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
 import {
@@ -135,6 +137,13 @@ export async function POST(request: Request) {
       )
     ).filter((file): file is NonNullable<typeof file> => file !== null);
 
+  // 見た目の手本の型(手本ごとに測って作った見た目・置き方)。あれば工程6〜10は型どおりにし、AIには中身だけを決めてもらう
+  const template: ReferenceTemplate | null = await findReferenceTemplate(
+    (parsed.data.styleReferences ?? []).filter(isStyleReferencePath)
+  );
+  // 枠・カードに項目を入れる(型があれば型どおりに)
+  const fillsFor = (next: StepState): StepState => (template ? placeTemplateFills(next, template) : placeFrameFills(next));
+
   try {
     const run = async (): Promise<{ state: StepState; note: string; details?: string[]; checks?: CheckItem[] }> => {
       switch (step) {
@@ -183,8 +192,8 @@ export async function POST(request: Request) {
         case 6: {
           const face = await detectFace({ absolutePath: video.absolutePath, mimeType: video.mimeType });
           if (!face) return { state: { ...state, framing: null }, note: "顔が見つからなかったため、拡大しませんでした" };
-          // 見た目の手本があれば、手本の人物と同じ位置・大きさに映るように寄せる
-          const target = (await readReferenceLayout(await resolveReferences()))?.face;
+          // 見た目の手本があれば、手本の人物と同じ位置・大きさに映るように寄せる(型があれば、型に測っておいた位置)
+          const target = template ? template.face : (await readReferenceLayout(await resolveReferences()))?.face;
           if (target) {
             const matched = framingToMatch(face, target);
             return {
@@ -203,6 +212,20 @@ export async function POST(request: Request) {
           };
         }
         case 7: {
+          if (template) {
+            const placed = templateCaption(template);
+            const sizeLabel = { small: "小", medium: "中", large: "大", xlarge: "特大" }[placed.fontSize];
+            return {
+              state: {
+                ...state,
+                captionYPercent: placed.yPercent,
+                captionFontSize: placed.fontSize,
+                captionLayout: placed.layout,
+                segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })),
+              },
+              note: `見た目の手本「${template.name}」の型どおりに、字幕を画面の上から${placed.yPercent}%・横${placed.layout.xPercent}%の所に、大きさ「${sizeLabel}」で固定しました`,
+            };
+          }
           // 見た目の手本があれば、手本の字幕と同じ高さ・大きさにする
           const reference = (await readReferenceLayout(await resolveReferences()))?.caption;
           if (reference) {
@@ -214,6 +237,7 @@ export async function POST(request: Request) {
                 ...state,
                 captionYPercent: y,
                 captionFontSize: reference.fontSize,
+                captionLayout: null,
                 segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })),
               },
               note: `見た目の手本に合わせて、字幕を画面の上から${y}%の所に、大きさ「${sizeLabel}」で固定しました`,
@@ -222,7 +246,12 @@ export async function POST(request: Request) {
           const face = segments.find((segment) => segment.faceBox)?.faceBox;
           const y = face ? chinCaptionY(face, state.framing, captionLook) : null;
           return {
-            state: { ...state, captionYPercent: y, segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })) },
+            state: {
+              ...state,
+              captionYPercent: y,
+              captionLayout: null,
+              segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })),
+            },
             note: y !== null ? `字幕を演者の顎の少し下(画面の上から${y}%)に固定しました` : "顎の下に字幕が収まらないため、画面の下に固定しました",
           };
         }
@@ -238,16 +267,40 @@ export async function POST(request: Request) {
             faceBottomPercent: face ? faceOnScreen(face, state.framing, undefined).bottom : undefined,
           });
           const references = await resolveReferences();
-          const referenceLayout = await readReferenceLayout(references);
+          const referenceLayout = template ? null : await readReferenceLayout(references);
           const objects = await decideObjects({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             references,
-            figureViewBoxHeight: area ? figureViewBoxHeight(area) : null,
+            // 型がある時は、図は描かない(型の置き方どおりにする)
+            figureViewBoxHeight: area && !template ? figureViewBoxHeight(area) : null,
+            template: template ? { titleLines: template.title.lineCount, kind: template.kind } : undefined,
           });
           // タイトルの指定があれば、文言はそれを使う(見た目と枠の数はAIの案のまま)
           const fixedTitle = parsed.data.title?.trim();
           if (fixedTitle) objects.title = fixedTitle;
+          if (template) {
+            const built = buildTemplateObjects({ template, title: objects.title, frameCount: objects.frameCount });
+            const frameTotal = built.globalShapes.filter((shape) => !shape.decorative).length;
+            return {
+              state: placeFigure({
+                ...state,
+                globalOverlays: built.globalOverlays,
+                globalShapes: built.globalShapes,
+                frameFills: [],
+                figure: null,
+                templateTitle: objects.title,
+              }),
+              note: `見た目の手本「${template.name}」の型どおりに、タイトル「${objects.title.replace(/\n/g, "")}」を置きました${
+                template.kind === "ranking"
+                  ? `。ランキングの枠を${frameTotal}個並べました(数は話している項目の数に合わせました)`
+                  : template.kind === "compare"
+                    ? "。比べるカードを2枚並べました"
+                    : ""
+              }`,
+              details: ["書体・色・帯・位置・大きさは型どおり。文言と枠の数だけ、この動画の話に合わせました", objects.reason],
+            };
+          }
           const built = buildObjects({
             title: objects.title,
             layout: objects.layout,
@@ -318,10 +371,21 @@ export async function POST(request: Request) {
           const tooLong = tooLongCaptions(split);
           const shortened = await shortenCaptions(tooLong.map((run) => ({ text: run.text, maxChars: run.maxChars })));
           const replacements = new Map(tooLong.flatMap((run, index) => (shortened[index] !== run.text ? [[run.text, shortened[index]] as const] : [])));
-          const captioned = replaceCaptions(split, replacements);
+          const replaced = replaceCaptions(split, replacements);
+          // 型で、冒頭に真ん中へ大きくタイトルを出す時は、その間は字幕を出さない(手本と同じく、タイトルだけを見せる)
+          const introSeconds = template?.title.intro?.seconds ?? 0;
+          let elapsed = 0;
+          let hidden = 0;
+          const captioned = replaced.map((segment) => {
+            const start = elapsed;
+            elapsed += segment.durationInSeconds;
+            if (start >= introSeconds || !segment.caption.trim()) return segment;
+            hidden++;
+            return { ...segment, caption: "" };
+          });
           return {
             state: { ...state, segments: captioned },
-            note: `字幕を${captioned.filter((segment) => segment.caption.trim()).length}個入れました(位置は工程7で固定)${replacements.size > 0 ? `。話すのが速い所の${replacements.size}個は、読める長さに短くしました` : ""}`,
+            note: `字幕を${captioned.filter((segment) => segment.caption.trim()).length}個入れました(位置は工程7で固定)${replacements.size > 0 ? `。話すのが速い所の${replacements.size}個は、読める長さに短くしました` : ""}${hidden > 0 ? `。冒頭の${introSeconds}秒は、見た目の手本の型どおりタイトルだけを大きく出すので、その間の字幕${hidden}個は出しません` : ""}`,
             details: [...replacements].map(([before, after]) => `「${before.replace(/\n/g, "")}」→「${after.replace(/\n/g, "")}」`),
           };
         }
@@ -341,8 +405,10 @@ export async function POST(request: Request) {
                 .map((value) => value.toUpperCase())
             ),
           ];
-          const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
-          const objects: PlacedObjects = state.figure
+          const rects = state.globalShapes.filter((shape) => shape.kind === "rect" && !shape.decorative);
+          const objects: PlacedObjects = template?.kind === "compare" && rects.length === 2
+            ? { kind: "frames", layout: "compare", frameCount: 2, topicHeading: Boolean(template.compare?.topic) }
+            : state.figure
             ? { kind: "figure", idea: state.figure.idea, viewBoxHeight: state.figure.viewBoxHeight, base: state.figure.base }
             : rects.length >= 2
               ? {
@@ -351,7 +417,7 @@ export async function POST(request: Request) {
                   frameCount: rects.length,
                 }
               : { kind: "none" };
-          const { picks, look: chosen, lookReason, frameItems, figureItems } = await pickEmphasis({
+          const { picks, look: aiLook, lookReason: aiLookReason, frameItems, figureItems } = await pickEmphasis({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
@@ -359,6 +425,19 @@ export async function POST(request: Request) {
             objects,
             references: await resolveReferences(),
           });
+          // 型がある時は、字幕の見た目は型どおり(AIが決めるのは、どの字幕を強調するかと、枠に入れる項目だけ)
+          const chosen = template
+            ? {
+                base: { fontFamily: template.caption.fontFamily, style: template.caption.style, accentColor: template.caption.accentColor },
+                emphasis: {
+                  fontFamily: template.emphasis.fontFamily,
+                  textColor: template.emphasis.textColor,
+                  bandColor: template.emphasis.bandColor,
+                  ...(template.emphasis.strokeColor ? { strokeColor: template.emphasis.strokeColor } : {}),
+                },
+              }
+            : aiLook;
+          const lookReason = template ? `字幕の見た目は、見た目の手本「${template.name}」の型どおりにしました` : aiLookReason;
           // 同じ字幕が続くクリップ(カットの切れ目の後)も、そろえて強調する
           const keys = withContinuedKeys(segments, new Set(picks.map((pick) => withCaption[pick.index].key)));
           // ランキング・「〇選」の枠に、項目名を入れる(言い始めた時から最後まで出す)
@@ -368,6 +447,12 @@ export async function POST(request: Request) {
             sourceSeconds: withCaption[item.index].startFromSeconds,
             label: item.label,
           }));
+          // 型のランキングで、工程8で並べた枠が、話した項目より多い時は、項目の数に合わせて並べ直す(空の枠を残さない)
+          const usedFrames = Math.max(0, ...frameFills.map((fill) => fill.frame));
+          const regrown =
+            template?.kind === "ranking" && state.templateTitle && usedFrames >= 2 && usedFrames < rects.length
+              ? buildTemplateObjects({ template, title: state.templateTitle, frameCount: usedFrames })
+              : null;
           // 図に、話に合わせて部品を足す(その中身を言う字幕の時から最後まで出す)
           const figure: FigureDraft | null = state.figure
             ? {
@@ -384,15 +469,16 @@ export async function POST(request: Request) {
           const fontLabel = (value: string) => CAPTION_FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? value;
           return {
             state: placeFigure(
-              placeFrameFills({
+              fillsFor({
                 ...state,
+                ...(regrown ? { globalOverlays: regrown.globalOverlays, globalShapes: regrown.globalShapes } : {}),
                 segments: applyEmphasis(segments, keys, chosen.emphasis, chosen.base),
                 captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
                 frameFills,
                 figure,
               })
             ),
-            note: `${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${new Set(frameFills.map((fill) => fill.frame)).size}個に項目名を入れました${frameFills.length > new Set(frameFills.map((fill) => fill.frame)).size ? `(話題ごとの中身も入れて、合わせて${frameFills.length}回)` : ""}` : ""}${figure && figure.parts.length > 0 ? `。図に、話に合わせて${figure.parts.length}個の部品を足しました` : ""}`,
+            note: `${regrown ? `話していた項目が${usedFrames}個だったので、ランキングの枠を${usedFrames}個に並べ直しました。` : ""}${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${new Set(frameFills.map((fill) => fill.frame)).size}個に項目名を入れました${frameFills.length > new Set(frameFills.map((fill) => fill.frame)).size ? `(話題ごとの中身も入れて、合わせて${frameFills.length}回)` : ""}` : ""}${figure && figure.parts.length > 0 ? `。図に、話に合わせて${figure.parts.length}個の部品を足しました` : ""}`,
             details: [
               ...(figure && figure.parts.length > 0
                 ? [`図に足した部品: ${figure.parts.map((part) => `「${part.label}」`).join("・")}`]
@@ -436,7 +522,7 @@ export async function POST(request: Request) {
           const kept = segments.filter((segment) => !removeKeys.has(segment.key));
           return {
             // 場面を外すと後ろの時刻がずれるので、枠の項目名・図の部品が出る時刻を合わせ直す
-            state: placeFigure(placeFrameFills({ ...state, segments: markContinuedCaptions(kept) })),
+            state: placeFigure(fillsFor({ ...state, segments: markContinuedCaptions(kept) })),
             note: `${removals.length}個の場面を外し、${fmt(total)}を${fmt(totalSeconds(kept))}にしました${totalSeconds(kept) > target ? `(まだ${target}秒を超えています。「やり直す」を押すか、編集画面で短くしてください)` : ""}`,
             details: removals.map((removal) => `「${captioned[removal.index].caption.replace(/\n/g, "")}」 ${removal.reason}`),
           };
@@ -486,7 +572,7 @@ export async function POST(request: Request) {
           const fixedOverlays = state.globalOverlays.map((overlay) => ({ ...overlay, text: fix(String(overlay.text)) }));
           const fixLayer = <L extends FigureLayer>(layer: L): L => ({ ...layer, texts: layer.texts.map((text) => ({ ...text, text: fix(text.text) })) });
           // 枠・カードの中身を直したら、画面の文字も入れ直す(placeFrameFills)
-          const adjusted: StepState = placeFigure(placeFrameFills({
+          const adjusted: StepState = placeFigure(fillsFor({
             ...state,
             figure: state.figure ? { ...state.figure, base: fixLayer(state.figure.base), parts: state.figure.parts.map(fixLayer) } : state.figure,
             segments: fixedSegments,

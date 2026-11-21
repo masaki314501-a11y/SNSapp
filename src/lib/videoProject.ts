@@ -14,6 +14,7 @@ import {
   type ShapeOverlay,
   type TextOverlay,
   type VideoAdjust,
+  type CaptionLayout,
   type VideoFraming,
 } from "@video/shared/schema";
 import { MAX_SFX_CLIPS, type StandardVideoProps } from "@video/templates/standard/schema";
@@ -169,6 +170,8 @@ export type VideoProject = {
   captionFontPinned?: boolean;
   /** 字幕の上端の高さ(画面の%)。自動編集が顎のすぐ下に決め、動画全体で固定する。未指定ならcaptionPositionの位置。 */
   captionYPercent?: number;
+  /** 字幕の横の位置・幅・文字の色(工程ごとの編集で、見た目の手本の型に合わせた時)。未指定なら真ん中・白い文字。 */
+  captionLayout?: CaptionLayout;
   /** 映像の明るさ・コントラスト・彩度(光の補正)。工程ごとの編集のチェックで測って決め、編集画面で手でも直せる。 */
   videoAdjust?: VideoAdjust;
   /** 工程ごとの編集の工程13で入れるBGM(画面で選んだ曲)。 */
@@ -360,6 +363,7 @@ export const buildStandardVideoProps = (params: {
   captionTextStyleId?: string;
   captionFontPinned?: boolean;
   captionYPercent?: number;
+  captionLayout?: CaptionLayout;
   videoAdjust?: VideoAdjust;
   keywordHighlights?: VideoProject["keywordHighlights"];
   speechSpans?: VideoProject["speechSpans"];
@@ -416,6 +420,7 @@ export const buildStandardVideoProps = (params: {
       captionTextStyleId: params.captionTextStyleId,
       captionFontPinned: params.captionFontPinned,
       captionYPercent: params.captionYPercent,
+      captionLayout: params.captionLayout,
       videoAdjust: params.videoAdjust,
       keywordHighlights: params.keywordHighlights?.filter((highlight) => highlight.word.trim().length > 0),
       captionWordSync: resolveWordSync(params.captionWordSync, params.speechSpans),

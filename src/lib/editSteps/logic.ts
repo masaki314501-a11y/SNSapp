@@ -4,6 +4,7 @@ import type {
   CaptionEmphasis,
   CaptionFontFamily,
   CaptionFontSize,
+  CaptionLayout,
   CaptionStyle,
   ClipZoom,
   FaceBox,
@@ -32,6 +33,10 @@ export type StepState = {
   captionYPercent: number | null;
   /** 基本テロップの大きさ(工程7で、見た目の手本の字幕の大きさに合わせた時だけ)。無ければプロジェクトの設定のまま。 */
   captionFontSize?: CaptionFontSize | null;
+  /** 基本テロップの横の位置・幅・文字の色(工程7で、見た目の手本の型に合わせた時だけ)。 */
+  captionLayout?: CaptionLayout | null;
+  /** 型どおりに置いたタイトルの文言(工程10で、項目の数に合わせて枠を並べ直す時に使う)。 */
+  templateTitle?: string;
   globalShapes: ShapeOverlay[];
   globalOverlays: TextOverlay[];
   /** 映像の明るさ・コントラスト・彩度(工程14のチェックで、光の補正として決める)。 */
@@ -288,15 +293,20 @@ export const toReferenceLayout = (raw: {
  * 6. 見た目の手本がある時: 顔が手本の人物と同じ位置・同じ大きさに映るように寄せる。
  * 拡大(1〜2倍)しかできないので、手本より顔が大きく映っている時は、位置だけ合わせる。ほとんど同じならnull(寄せない)。
  */
+/** 顔の位置を手本に合わせるための拡大の上限(倍)。 */
+const MAX_POSITION_SCALE = 1.5;
+
 export const framingToMatch = (face: FaceBox, target: { xPercent: number; yPercent: number; heightPercent: number }): VideoFraming | null => {
   let scale = Math.min(2, Math.max(1, target.heightPercent / Math.max(1, face.heightPercent)));
   const moveX = Math.abs(face.xPercent - target.xPercent);
   const moveY = Math.abs(face.yPercent - target.yPercent);
-  if (scale < 1.05) {
-    if (moveX <= 4 && moveY <= 4) return null;
-    // 位置を動かすには少し拡大が要る
-    scale = 1.15;
-  }
+  if (scale < 1.05 && moveX <= 4 && moveY <= 4) return null;
+  // 顔を手本の位置まで動かすのに要る倍率(拡大の中心を画面の端に置いた時に届く倍率)。以前は1.15倍で止めていて、
+  // 真ん中の人を手本どおり右寄りに動かせなかった。顔が大きくなりすぎないよう、位置のための拡大は1.5倍まで
+  const reach = (position: number, goal: number) =>
+    goal > position ? goal / Math.max(1, position) : goal < position ? (100 - goal) / Math.max(1, 100 - position) : 1;
+  const forPosition = Math.min(MAX_POSITION_SCALE, Math.max(reach(face.xPercent, target.xPercent), reach(face.yPercent, target.yPercent)));
+  scale = Math.min(2, Math.max(scale, forPosition, 1.15));
   // 拡大の中心focusのとき、顔は focus + (face - focus) * scale に動く。それが手本の位置になる中心を求める
   const focus = (position: number, goal: number) => Math.min(100, Math.max(0, (scale * position - goal) / (scale - 1)));
   return { scale: round2(scale), focusXPercent: round2(focus(face.xPercent, target.xPercent)), focusYPercent: round2(focus(face.yPercent, target.yPercent)) };
@@ -607,12 +617,13 @@ export const emphasisStrokeColor = (textColor: string, baseStrokeColor: string):
 export const applyEmphasis = (
   segments: ProjectSegment[],
   keys: Set<string>,
-  look?: { fontFamily?: CaptionFontFamily; textColor: string; bandColor: string | null },
+  look?: { fontFamily?: CaptionFontFamily; textColor: string; bandColor: string | null; strokeColor?: string },
   /** 基本の字幕の見た目(縁取り文字の時、強調字幕の縁取りが読める色かを確かめるため)。 */
   baseLook?: { style: "outline" | "pill"; accentColor: string }
 ): ProjectSegment[] => {
   const strokeColor =
-    look && look.bandColor === null && baseLook?.style === "outline" ? emphasisStrokeColor(look.textColor, baseLook.accentColor) : undefined;
+    look?.strokeColor ??
+    (look && look.bandColor === null && baseLook?.style === "outline" ? emphasisStrokeColor(look.textColor, baseLook.accentColor) : undefined);
   const emphasis: CaptionEmphasis = look
     ? {
         band: look.bandColor !== null,
@@ -661,7 +672,7 @@ const frameFillWidthPx = (rect: ShapeOverlay) => ((rect.widthPercent - 8) / 100)
  */
 export const placeFrameFills = (state: StepState): StepState => {
   const fills = state.frameFills ?? [];
-  const rects = state.globalShapes.filter((shape) => shape.kind === "rect");
+  const rects = state.globalShapes.filter((shape) => shape.kind === "rect" && !shape.decorative);
   // 比べる動画の2枚のカード(横に並ぶ)では、項目名をカードの真ん中に入れる
   const sideBySide = rects.length === 2 && rects[0].yPercent === rects[1].yPercent;
   // 前に入れた項目名(入れ直すので外す)。カードでは「名前\n中身」の形でも入れるので、カードの真ん中にある文字は全部外す
