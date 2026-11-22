@@ -29,13 +29,14 @@ export const withState = (project: VideoProject, state: StepState): VideoProject
     : {}),
   // BGMは工程13で入れる(それより前の工程では、前から入っていた物をそのままにする)
   bgm: state.bgm === undefined ? project.bgm : state.bgm,
-  globalShapes: state.globalShapes,
+  // 型どおりに置いた丸(選ばれた方の印)も足す
+  globalShapes: [...state.globalShapes, ...(state.templateShapes ?? [])],
   // AIが描いた図は、線・塗りを画像、文字を画面に出す文字として足す
   globalOverlays: [...state.globalOverlays, ...(state.figureTexts ?? [])],
   // 工程ごとの編集では、冒頭の見出し・締めの一言は付けない。画像はAIが描いた図だけ。効果音は強調テロップの物だけ(クリップに付いている)
   hook: null,
   cta: null,
-  globalImages: state.figureImages ?? [],
+  globalImages: [...(state.figureImages ?? []), ...(state.templateImages ?? [])],
   sfx: [],
 });
 

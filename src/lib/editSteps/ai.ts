@@ -293,6 +293,8 @@ const askJson = async <T>(params: {
   schema: Schema;
   parse: z.ZodType<T>;
   label: string;
+  /** 1回の答えを待つ時間(ミリ秒)。絵をたくさん見せる時は長めにする。 */
+  timeoutMs?: number;
 }): Promise<T> => {
   const ai = client();
   let lastError: unknown;
@@ -305,11 +307,17 @@ const askJson = async <T>(params: {
             contents: [{ role: "user", parts: params.parts }],
             config: { responseMimeType: "application/json", responseSchema: params.schema },
           }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Gemini API timeout")), TIMEOUT_MS)),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Gemini API timeout")), params.timeoutMs ?? TIMEOUT_MS)),
         ])
       );
       const parsed = params.parse.safeParse(JSON.parse(response.text ?? "{}"));
-      if (!parsed.success) throw new Error(`${params.label}: AIの答えの形が違いました`);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        lastError = new Error(`${params.label}: AIの答えの形が違いました(${issue ? `${issue.path.join(".")}: ${issue.message}` : "不明"})`);
+        // 答えの形が違うのは、たまたまのことが多いので、もう一度だけ聞き直す
+        if (attempt < Math.min(2, MAX_ATTEMPTS)) continue;
+        throw lastError;
+      }
       return parsed.data;
     } catch (error) {
       lastError = error;
@@ -518,6 +526,19 @@ const cleanFigureLayer = (layer: { svg: string; texts: z.infer<typeof figureText
     .filter((text) => text.text),
 });
 
+/** 工程8で、見た目の手本から読み取った型がある時に足す指示文。 */
+export const TEMPLATE_OBJECTS_NOTE = (template: { titleLines: number; kind: "ranking" | "compare" | "none"; wording?: string; hasCta: boolean }) => `
+【見た目の手本から読み取った型があります】書体・色・帯・位置・大きさ・出方は、こちらで手本どおりにします。あなたは中身(文言と数)だけを決めてください。
+- title: 手本と同じ${template.titleLines}行で書く(行の切れ目に改行\\nを入れる。言葉の途中で切らない)。${template.wording ? `言い回しの形も手本に合わせる(手本の形: ${template.wording})。手本の文言・題材は持ち込まず、今回の動画で話している内容で書く。` : ""}
+- layout: 今回の動画の話の内容から選ぶ。手本の出し方は「${{ ranking: "ranking(ランキングの枠)", compare: "compare(比べるカード)", none: "none(枠なし)" }[template.kind]}」。
+  話の内容が手本の出し方に合う時はそれを選ぶ。合わない時(手本はランキングなのに、話は2つを比べている等)は、話の内容に合う物を選ぶ(話の内容を優先する)。
+- frameCount: ranking なら挙げる項目の数(順位の数)。compare なら比べている物の数(2〜4。表側と裏側なら2)。
+${template.hasCta
+  ? `- cta: 動画の最後に出す一言(手本と同じ役目の、見ている人への案内。例: 予約・相談・フォローへの誘い)。全角24文字以内、改行\\nを1つまで。
+  今回の動画の最後で話している案内があれば、それに合わせる。言っていない約束(「無料」「今だけ」など)は入れない。`
+  : "- cta: 空の文字で答える。"}
+`.trim();
+
 /** 8. 左上のタイトルと、画面に置く物(ランキングの枠・比べるカード・図)を決める。 */
 export const decideObjects = async (input: {
   absolutePath: string;
@@ -525,14 +546,16 @@ export const decideObjects = async (input: {
   references?: StyleReferenceFile[];
   /** 図を描く箱の縦の大きさ(横は1000)。図を置ける所が無ければ null。 */
   figureViewBoxHeight: number | null;
-  /** 見た目の手本の型がある時: タイトルの行数と、置く物の型(見た目と置き方は型どおりにするので、AIには文言と数だけを考えてもらう)。 */
-  template?: { titleLines: number; kind: "ranking" | "compare" | "none" };
+  /** 見た目の手本の型がある時: タイトルの行数・言い回しの形と、手本の出し方(見た目と置き方は型どおりにするので、AIには文言と数だけを考えてもらう)。 */
+  template?: { titleLines: number; kind: "ranking" | "compare" | "none"; wording?: string; hasCta: boolean };
 }): Promise<{
   title: string;
   layout: ObjectLayout;
   frameCount: number;
   look: ObjectLook;
   figure: { idea: string; base: FigureLayer } | null;
+  /** 最後の一言(型に最後の一言がある時だけ。無ければ空)。 */
+  cta: string;
   reason: string;
 }> => {
   const part = await videoPart(client(), input.absolutePath, input.mimeType);
@@ -549,21 +572,7 @@ export const decideObjects = async (input: {
       { text: "【ここから、今回編集する動画】" },
       part,
       { text: OBJECTS_PROMPT(input.figureViewBoxHeight, references.length > 0) },
-      ...(input.template
-        ? [
-            {
-              text: `【この手本には決まった型があります】見た目と置き方は、こちらで手本どおりにします。
-- title は、手本と同じ${input.template.titleLines}行で書いてください(行の切れ目に改行\nを入れる。言葉の途中で切らない)。
-${
-  input.template.kind === "ranking"
-    ? "- layout は ranking にし、frameCount は、この動画で挙げる項目の数(ランキングの順位の数)にしてください。"
-    : input.template.kind === "compare"
-      ? "- layout は compare にしてください。"
-      : "- layout は none にしてください。"
-}`,
-            },
-          ]
-        : []),
+      ...(input.template ? [{ text: TEMPLATE_OBJECTS_NOTE(input.template) }] : []),
     ],
     schema: {
       type: Type.OBJECT,
@@ -599,9 +608,10 @@ ${
           properties: { idea: { type: Type.STRING }, svg: { type: Type.STRING }, texts: figureTextsSchema },
           required: ["idea", "svg", "texts"],
         },
+        cta: { type: Type.STRING },
         reason: { type: Type.STRING },
       },
-      required: ["title", "titleLook", "layout", "frameCount", "frameLook", "figure", "reason"],
+      required: ["title", "titleLook", "layout", "frameCount", "frameLook", "figure", "cta", "reason"],
     },
     parse: z.object({
       title: z.string(),
@@ -623,6 +633,7 @@ ${
         animation: z.enum(ANIMATION_VALUES),
       }),
       figure: z.object({ idea: z.string(), svg: z.string(), texts: figureTextsParse }).nullable().default(null),
+      cta: z.string().default(""),
       reason: z.string(),
     }),
   });
@@ -638,8 +649,10 @@ ${
   return {
     title: result.title.trim().slice(0, 20),
     layout,
-    frameCount: layout === "ranking" ? clamp(result.frameCount, 2, 10) : layout === "compare" ? 2 : 0,
+    // 比べるカードの数: 型がある時は比べている物の数(2〜4)。型が無い時は今まで通り2枚
+    frameCount: layout === "ranking" ? clamp(result.frameCount, 2, 10) : layout === "compare" ? (input.template ? clamp(result.frameCount, 2, 4) : 2) : 0,
     figure,
+    cta: input.template?.hasCta ? [...result.cta.trim()].slice(0, 30).join("") : "",
     look: {
       title: result.titleLook,
       frame: {
@@ -654,28 +667,56 @@ ${
 
 /** 工程8で画面に置いた物(工程10で、中身を話に合わせて入れていくため)。 */
 export type PlacedObjects =
-  | { kind: "frames"; layout: "ranking" | "compare"; frameCount: number; topicHeading?: boolean }
+  | {
+      kind: "frames";
+      layout: "ranking" | "compare";
+      frameCount: number;
+      topicHeading?: boolean;
+      /** 比べるカードの中身(型がある時)。text の時だけ、話題ごとの中身の文字を入れる。無ければ今まで通り(text)。 */
+      cardContent?: "image" | "text" | "none";
+      /** 選ばれた方に丸を付ける(型にある時)。 */
+      marker?: boolean;
+    }
   | { kind: "figure"; idea: string; viewBoxHeight: number; base: FigureLayer }
   | { kind: "none" };
 
+/** 比べるカードで、今の話題の見出しを入れる番号(template.ts の TOPIC_FRAME と同じ)。 */
+const COMPARE_TOPIC_FRAME = 9;
+
 const objectsSection = (objects: PlacedObjects): string => {
   if (objects.kind === "frames" && objects.layout === "compare") {
+    const n = objects.frameCount;
+    const sides = n === 2 ? "左(1)・右(2)" : `左から1〜${n}`;
+    const withContents = (objects.cardContent ?? "text") === "text";
     return `
-画面の下には、比べる2つを入れるカードが、左(1)・右(2)に並んでいます。比べる2つそれぞれについて、
-- frame: 入れるカード(1=左、2=右)。話に出てくる順に1から。
+画面の下には、比べる物を入れるカードが${n}枚、${sides}に並んでいます。比べる物それぞれについて、
+- frame: 入れるカード(1〜${n})。話に出てくる順に1から。
 - index: その物の名前が初めて出てくる字幕の番号(上の一覧の番号)。
 - label: カードに入れる短い言葉。比べる物の名前を、そのまま全角8文字以内で。
-を frameItems で答えてください。
+を frameItems で答えてください。${
+      withContents
+        ? `
 話が進んで、比べる中身(費用・期間・方法など)を話題ごとに言う時は、同じカードに続けて答えてください
 (index: その物のその中身を言う字幕の番号、label: その中身だけを全角8文字以内で。例「約100万円」)。
-カードの上の行には名前が残り、下の行の中身が話題ごとに入れ替わります。言っていない中身は入れない。${
+カードの上の行には名前が残り、下の行の中身が話題ごとに入れ替わります。言っていない中身は入れない。`
+        : `
+カードには名前と、その物の絵だけを出します(手本どおり)。話題ごとの中身は答えない(名前だけを答える)。`
+    }${
       objects.topicHeading
         ? `
 また、カードの上には「今どの話題か」の見出しが出ます。話題(費用・期間・痛みなど)が変わるごとに、
-- frame: 3(見出し)
+- frame: ${COMPARE_TOPIC_FRAME}(見出し)
 - index: その話題を話し始める字幕の番号
 - label: 話題の名前を全角8文字以内で(例「費用」「治療期間」)
 も frameItems に答えてください。`
+        : ""
+    }${
+      objects.marker
+        ? `
+話題ごとに「この話題ではこちらが良い・勝ち」と言い切った所では、選ばれた方のカードに丸が出ます。その所ごとに、
+- frame: 選ばれた方のカードの番号(1〜${n})
+- index: 選ばれた方の名前を言い切る字幕の番号(その字幕を出している間だけ丸が出る。この字幕は強調テロップにも選ぶ)
+を marks で答えてください。どちらとも言っていない話題・「同じくらい」の話題には付けない。`
         : ""
     }
 figureItems は空の配列で答えてください。`;
@@ -761,14 +802,19 @@ export const pickEmphasis = async (input: {
   /** 工程8で画面に置いた物(枠・カード・図)。 */
   objects: PlacedObjects;
   references?: StyleReferenceFile[];
+  /** 見た目の手本の型の、強調した字幕の見た目の種類(役割)。2つ以上ある時は、選んだ字幕ごとにどれを使うかも決めてもらう。 */
+  emphasisRoles?: string[];
 }): Promise<{
-  picks: { index: number; reason: string }[];
+  /** style は emphasisRoles の番号(0始まり。種類が1つ以下なら0)。 */
+  picks: { index: number; reason: string; style: number }[];
   look: CaptionLook;
   lookReason: string;
   /** 枠に入れる項目(index は0始まりの字幕の番号)。 */
   frameItems: { frame: number; index: number; label: string }[];
   /** 図に足す部品(index は0始まりの字幕の番号)。 */
   figureItems: (FigureLayer & { index: number; label: string })[];
+  /** 比べるカードで、選ばれた方に丸を付ける所(index は0始まりの字幕の番号)。 */
+  marks: { frame: number; index: number }[];
 }> => {
   const { captions } = input;
   const examples = await exampleParts(input.absolutePath, input.mimeType);
@@ -777,15 +823,37 @@ export const pickEmphasis = async (input: {
   const colorsLine = input.objectColors?.length && references.length === 0
     ? `- タイトル・枠・図ですでに白・黒のほかに ${input.objectColors.join("・")} を使っているので、字幕(と図に足す部品)もこの色(か白・黒)から選ぶと3色以内に収まる。`
     : "";
+  const roles = input.emphasisRoles ?? [];
+  const rolesNote =
+    roles.length >= 2
+      ? `\n\n【強調テロップの見た目は、見た目の手本どおり${roles.length}種類あります】選んだ字幕ごとに、どの見た目にするかを styles(picksと同じ順。番号)で答えてください。\n${roles
+          .map((role, index) => `${index + 1}: ${role}`)
+          .join("\n")}\n手本でその見た目を使っている役割に合う字幕に使う。迷ったら1。`
+      : "";
   const result = await askJson({
     model: STEP_MODEL,
     label: "強調テロップ",
-    parts: [...examples, ...guide, ...references, { text: "【ここから、今回編集する動画】" }, { text: EMPHASIS_PROMPT(captions, colorsLine, input.objects, references.length > 0) }],
+    parts: [
+      ...examples,
+      ...guide,
+      ...references,
+      { text: "【ここから、今回編集する動画】" },
+      { text: EMPHASIS_PROMPT(captions, colorsLine, input.objects, references.length > 0) + rolesNote },
+    ],
     schema: {
       type: Type.OBJECT,
       properties: {
         picks: { type: Type.ARRAY, items: { type: Type.INTEGER } },
         reasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+        styles: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+        marks: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: { frame: { type: Type.INTEGER }, index: { type: Type.INTEGER } },
+            required: ["frame", "index"],
+          },
+        },
         baseLook: {
           type: Type.OBJECT,
           properties: {
@@ -822,11 +890,13 @@ export const pickEmphasis = async (input: {
           },
         },
       },
-      required: ["picks", "reasons", "baseLook", "emphasisLook", "lookReason", "frameItems", "figureItems"],
+      required: ["picks", "reasons", "styles", "marks", "baseLook", "emphasisLook", "lookReason", "frameItems", "figureItems"],
     },
     parse: z.object({
       picks: z.array(z.number().int()),
       reasons: z.array(z.string()),
+      styles: z.array(z.number().int()).default([]),
+      marks: z.array(z.object({ frame: z.number().int(), index: z.number().int() })).default([]),
       baseLook: z.object({ fontFamily: z.enum(FONT_VALUES), style: z.enum(["outline", "pill"]), accentColor: color }),
       emphasisLook: z.object({ fontFamily: z.enum(FONT_VALUES), textColor: color, bandColor: nullableColor }),
       lookReason: z.string(),
@@ -841,21 +911,28 @@ export const pickEmphasis = async (input: {
     const index = pick - 1;
     if (index < 0 || index >= captions.length || seen.has(index)) return [];
     seen.add(index);
-    return [{ index, reason: result.reasons[i] ?? "" }];
+    const style = (result.styles[i] ?? 1) - 1;
+    return [{ index, reason: result.reasons[i] ?? "", style: style >= 0 && style < roles.length ? style : 0 }];
   });
   // 枠に入れる項目: 番号が範囲外・同じ枠に2つ目・字幕の番号が範囲外の物は外す。長すぎる言葉は8文字で切る。
   // 比べるカードは、名前の後に話題ごとの中身を続けて入れるので、同じカードに何個か入れてよい(同じ字幕の2つ目は外す)
-  const frameCount =
-    input.objects.kind === "frames" ? input.objects.frameCount + (input.objects.topicHeading ? 1 : 0) : 0;
+  const frameCount = input.objects.kind === "frames" ? input.objects.frameCount : 0;
   const isCompare = input.objects.kind === "frames" && input.objects.layout === "compare";
+  // 比べるカードの見出し(今の話題)は、カードの番号と別の番号で入れる
+  const topicAllowed = isCompare && input.objects.kind === "frames" && Boolean(input.objects.topicHeading);
+  // カードに名前だけを出す型では、話題ごとの中身は入れない(同じカードの2つ目からは外す)
+  const namesOnly = isCompare && input.objects.kind === "frames" && input.objects.cardContent !== undefined && input.objects.cardContent !== "text";
   const used = new Set<string>();
   const perFrame = new Map<number, number>();
   const frameItems = result.frameItems.flatMap((item) => {
     const index = item.index - 1;
     const label = [...item.label.replace(/\s+/g, "")].slice(0, 8).join("");
     const usedKey = isCompare ? `${item.frame}:${index}` : String(item.frame);
-    if (item.frame < 1 || item.frame > frameCount || used.has(usedKey)) return [];
-    if ((perFrame.get(item.frame) ?? 0) >= (isCompare ? MAX_COMPARE_CARD_ITEMS : 1)) return [];
+    const isTopic = topicAllowed && item.frame === COMPARE_TOPIC_FRAME;
+    if (!isTopic && (item.frame < 1 || item.frame > frameCount)) return [];
+    if (used.has(usedKey)) return [];
+    const perFrameLimit = isTopic ? MAX_COMPARE_CARD_ITEMS : isCompare ? (namesOnly ? 1 : MAX_COMPARE_CARD_ITEMS) : 1;
+    if ((perFrame.get(item.frame) ?? 0) >= perFrameLimit) return [];
     if (index < 0 || index >= captions.length || !label) return [];
     used.add(usedKey);
     perFrame.set(item.frame, (perFrame.get(item.frame) ?? 0) + 1);
@@ -871,7 +948,51 @@ export const pickEmphasis = async (input: {
           if (index < 0 || index >= captions.length || (!layer.svg && layer.texts.length === 0)) return [];
           return [{ ...layer, index, label: item.label.trim().slice(0, 30) }];
         });
-  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason, frameItems, figureItems };
+  // 丸: 丸を付ける型の時だけ。カード・字幕の番号が範囲外の物は外す
+  const marks =
+    isCompare && input.objects.kind === "frames" && input.objects.marker
+      ? result.marks.flatMap((mark) => {
+          const index = mark.index - 1;
+          if (mark.frame < 1 || mark.frame > frameCount || index < 0 || index >= captions.length) return [];
+          return [{ frame: mark.frame, index }];
+        })
+      : [];
+  return { picks, look: { base: result.baseLook, emphasis: result.emphasisLook }, lookReason: result.lookReason, frameItems, figureItems, marks };
+};
+
+/** 画像の棚から、項目に合う画像を選ばせる指示文。 */
+export const LIBRARY_PICK_PROMPT = (items: string[], library: { name: string; description: string }[]) => `
+ショート動画のランキングの枠・比べるカードに、項目の絵を入れます。次の画像の棚から、それぞれの項目に一番合う画像を選んでください。
+【項目】
+${items.map((item, index) => `${index + 1}: ${item}`).join("\n")}
+【画像の棚】(番号: 名前 - 何が描いてあるか)
+${library.map((image, index) => `${index + 1}: ${image.name} - ${image.description}`).join("\n")}
+
+- その項目そのものが描いてある画像を選ぶ(症状なら、その症状の口元の絵。国・地域なら、その国旗)。
+- 同じ画像を2つの項目に使わない。合う画像が無い項目は 0 にする(違う物を無理に選ばない)。
+項目の順に、選んだ画像の番号(picks)を答えてください。
+`.trim();
+
+/** 10. 枠・カードに入れる項目ごとに、画像の棚から合う画像を選ぶ(合う物が無ければ null)。 */
+export const pickLibraryImages = async (
+  items: string[],
+  library: { name: string; description: string }[]
+): Promise<(number | null)[]> => {
+  if (items.length === 0 || library.length === 0) return [];
+  const result = await askJson({
+    model: STEP_MODEL,
+    label: "枠に入れる画像",
+    parts: [{ text: LIBRARY_PICK_PROMPT(items, library) }],
+    schema: { type: Type.OBJECT, properties: { picks: { type: Type.ARRAY, items: { type: Type.INTEGER } } }, required: ["picks"] },
+    parse: z.object({ picks: z.array(z.number().int()) }),
+  });
+  const used = new Set<number>();
+  return items.map((_, i) => {
+    const pick = (result.picks[i] ?? 0) - 1;
+    if (pick < 0 || pick >= library.length || used.has(pick)) return null;
+    used.add(pick);
+    return pick;
+  });
 };
 
 /** 工程12(チェック)の誤字・脱字の確認の指示文。 */
@@ -1007,3 +1128,6 @@ export const pickRemovals = async (input: {
     return [{ index, reason: result.reasons[i] ?? "" }];
   });
 };
+
+/** 見た目の手本から型を読み取る処理(templateExtract.ts)でも使う部品。 */
+export { STEP_MODEL, askJson, client as geminiClient, referenceMedia, FONT_VALUES, FONT_HINTS, color as colorParse, nullableColor as nullableColorParse, colorSchema, nullableColorSchema };

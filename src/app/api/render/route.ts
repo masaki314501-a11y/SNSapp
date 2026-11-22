@@ -3,7 +3,7 @@ import path from "node:path";
 import { NextResponse, after } from "next/server";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { getServeUrl } from "@/lib/remotion/bundle";
-import { getBrowserInstance } from "@/lib/remotion/browser";
+import { discardBrowserInstance, getBrowserInstance } from "@/lib/remotion/browser";
 import {
   createRenderJob,
   updateRenderJob,
@@ -18,6 +18,26 @@ import {
 export const runtime = "nodejs";
 
 const DELAY_RENDER_TIMEOUT_IN_MILLISECONDS = 90000;
+
+/**
+ * 構成の解決(selectComposition)を待つ上限。ブラウザが固まると selectComposition 自身の
+ * 時間切れが働かずに止まり続けたため、外側でも時間を区切り、超えたらブラウザを捨てて再試行させる。
+ */
+const SELECT_COMPOSITION_LIMIT_IN_MILLISECONDS = 3 * 60 * 1000;
+
+const withLimit = async <T,>(promise: Promise<T>, limit: number, message: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), limit);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 /**
  * <OffthreadVideo>のフレームキャッシュは既定だと空きメモリの半分まで膨らむ。Render無料プラン
@@ -116,13 +136,21 @@ export async function POST(request: Request) {
     const puppeteerInstance = await getBrowserInstance();
 
     updateRenderJob(jobId, { status: "starting", progress: 0, message: "動画の構成を解決中..." });
-    const composition = await selectComposition({
-      serveUrl,
-      id: template.compositionId,
-      inputProps,
-      puppeteerInstance,
-      timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
-      ...MEMORY_SAVING_OPTIONS,
+    const composition = await withLimit(
+      selectComposition({
+        serveUrl,
+        id: template.compositionId,
+        inputProps,
+        puppeteerInstance,
+        timeoutInMilliseconds: DELAY_RENDER_TIMEOUT_IN_MILLISECONDS,
+        ...MEMORY_SAVING_OPTIONS,
+      }),
+      SELECT_COMPOSITION_LIMIT_IN_MILLISECONDS,
+      "動画の構成の解決が3分で終わりませんでした(ブラウザが固まった可能性)"
+    ).catch(async (error: unknown) => {
+      // 固まったブラウザを使い続けると再試行も同じく止まるので、捨てて次は新しく起動させる
+      await discardBrowserInstance();
+      throw error;
     });
 
     const outDir = path.join(process.cwd(), "public", "renders");

@@ -1,13 +1,20 @@
-import type { CaptionFontFamily, CaptionFontSize, CaptionLayout, ShapeOverlay, TextOverlay } from "@video/shared/schema";
+import type {
+  CaptionFontFamily,
+  CaptionFontSize,
+  CaptionLayout,
+  ImageOverlay,
+  ShapeOverlay,
+  TextOverlay,
+} from "@video/shared/schema";
 import { estimateTextWidthPx } from "@video/shared/textWrap";
 import type { FrameFill, StepState } from "./logic";
 
 /**
- * 見た目の手本ごとの「型」。手本の画面から測った、文字・帯・枠・カードの見た目と置き方。
- * 手本に型がある時は、工程6〜10の見た目・置き方をAIに任せず、型どおりにする(AIが決めるのは中身だけ:
- * タイトルの文言・ランキングの数・枠に入れる項目・強調する字幕)。
- * AIに手本を見せて真似させるやり方では、色・位置が毎回ずれて、手本と別物になったため(2026-11 先方確認)。
- * 型は data/reference-templates/ に、手本1本につき1つのJSONで置く(templateStore.ts で読む)。
+ * 見た目の手本の「型」。お客様が添付した手本動画から、アプリが自動で読み取る(templateExtract.ts)。
+ * 型には、手本の見た目と「並べ方・出し方の決まり」だけを入れる。動画ごとに変わる物(タイトルの文言・項目の数と名前・
+ * 枠に入れる画像・強調する字幕・丸を付けるカード・最後の一言の文言)は、型には入れず、今回の動画の話からAIが決める。
+ * 手本と話の内容が合わない時(手本はランキングなのに話は比べる内容など)は、話の内容を優先する(route.ts の工程8)。
+ * AIに手本を見せて真似させるだけのやり方では、色・位置が毎回ずれて手本と別物になったため(2026-11 先方確認)。
  */
 
 /** 文字の見た目。 */
@@ -18,6 +25,8 @@ export type TemplateTextLook = {
   strokeWidthPx?: number;
   /** 文字の後ろの帯の色(帯が無ければ省く)。 */
   bandColor?: string;
+  /** 文字の周りの光(にじみ)の色。 */
+  glowColor?: string;
 };
 
 /** 箱(中心の位置と大きさ。画面に対する%)。 */
@@ -32,12 +41,23 @@ export type TemplateShape = {
   cornerRadiusPx: number;
 };
 
+/** 強調した字幕の見た目の1種類。手本に何種類かある時は、役割(何を言う時に使うか)ごとに持つ。 */
+export type TemplateEmphasisStyle = {
+  /** どんな字幕に使うか(例「比べた結果、選ばれた方の名前」「強い言葉・決め台詞」)。AIが字幕ごとに選ぶ時に見る。 */
+  role: string;
+  fontFamily: CaptionFontFamily;
+  textColor: string;
+  bandColor: string | null;
+  strokeColor?: string;
+  glowColor?: string;
+};
+
 export type ReferenceTemplate = {
   /** 型の名前(手本の名前)。 */
   name: string;
   /** この型を使う手本(保存した手本のファイル名から拡張子を除いた物。YouTubeは動画のID)。 */
   referenceIds: string[];
-  /** 出し方: ranking=枠を縦に並べて項目を入れていく、compare=2枚のカードで比べる、none=タイトルだけ。 */
+  /** 出し方: ranking=枠を縦に並べて項目を入れていく、compare=カードを横に並べて比べる、none=タイトルだけ。 */
   kind: "ranking" | "compare" | "none";
   /** 手本の人物の顔(中心の位置と顔の高さ。%)。 */
   face?: { xPercent: number; yPercent: number; heightPercent: number };
@@ -55,8 +75,8 @@ export type ReferenceTemplate = {
     /** 縁取り(outline)か帯(pill)の色。 */
     accentColor: string;
   };
-  /** 強調した字幕。 */
-  emphasis: { fontFamily: CaptionFontFamily; textColor: string; bandColor: string | null; strokeColor?: string };
+  /** 強調した字幕の見た目(1つ目がふだん使う物。手本に何種類かあれば役割ごとに)。 */
+  emphasisStyles: TemplateEmphasisStyle[];
   title: {
     align: "left" | "center";
     /** 中央寄せは中心、左寄せは左端の横位置(%)。 */
@@ -70,6 +90,8 @@ export type ReferenceTemplate = {
     lineCount: number;
     /** 行ごとの見た目(1行目・2行目…。行が多い時は最後の見た目を使う)。 */
     lines: TemplateTextLook[];
+    /** 言い回しの型(例「1行目に話題、2行目に問いかけ」)。手本の文言は持ち込まず、言い回しの形だけまねる。 */
+    wording?: string;
     /** 画面の端から端までの帯(タイトルの後ろ)。 */
     band?: { color: string; topPercent: number; heightPercent: number };
     /** 冒頭に、画面の真ん中あたりへ大きく出してから、いつもの位置へ縮みながら動く。 */
@@ -85,25 +107,35 @@ export type ReferenceTemplate = {
     gapPercent: number;
     /** 枠1つの高さの上限(%)。項目が少ない時に大きくしすぎない。 */
     maxHeightPercent: number;
-    /** AIが数を決められなかった時の枠の数(手本の数)。 */
+    /** AIが数を決められなかった時の枠の数。 */
     defaultCount: number;
     shape: TemplateShape;
-    /** 番号。{n}を番号に置き換える(例「{n}位」)。枠の左下に置く。 */
-    number: { format: string; fontSizePx: number; look: TemplateTextLook };
-    /** 枠に入れる項目名(枠の真ん中)。 */
+    /** 番号。{n}を番号に置き換える(例「{n}位」)。枠の左下に置く。looks は順位ごとの見た目(足りない順位は最後の見た目)。 */
+    number: { format: string; fontSizePx: number; looks: TemplateTextLook[] };
+    /** 枠の中身: image=項目の絵・写真を枠いっぱいに入れる、text=項目名の文字を入れる。 */
+    content: "image" | "text";
+    /** 項目名の文字(content=text の時と、合う画像が無かった時に使う)。 */
     label: { fontSizePx: number; look: TemplateTextLook };
+    /** 項目を言った時に、まずこの所に大きく出してから、縮みながら枠へ入る(無ければ、いきなり枠に出す)。 */
+    popup?: TemplateBox & { seconds: number; name?: { fontSizePx: number; look: TemplateTextLook; yPercent: number } };
   };
-  /** 比べる2枚のカード(kind=compare)。 */
+  /** 横に並べて比べるカード(kind=compare)。カードの数は話の内容で決め、この範囲に等しい幅で並べる。 */
   compare?: {
-    cards: [TemplateBox, TemplateBox];
+    row: { yPercent: number; heightPercent: number; leftPercent: number; rightPercent: number; gapPercent: number };
     shape: TemplateShape;
+    /** カードの中身: image=比べる物の絵(名前の上)、text=話題ごとの中身の文字、none=名前だけ。 */
+    content: "image" | "text" | "none";
     /** 比べる物の名前(カードの下の方。カードの下端からこの%だけ上に、文字の中心を置く)。 */
     name: { fontSizePx: number; look: TemplateTextLook; fromBottomPercent: number };
-    /** 話題ごとの中身(カードの名前より上の所)。 */
-    content: { fontSizePx: number; look: TemplateTextLook };
+    /** 話題ごとの中身の文字(content=text の時)。 */
+    contentText?: { fontSizePx: number; look: TemplateTextLook };
     /** 今の話題の見出し(カードの上。話題ごとに入れ替わる)。 */
     topic?: { xPercent: number; yPercent: number; fontSizePx: number; look: TemplateTextLook };
+    /** 選ばれた方のカードの絵に重ねる丸(話題ごとに、どちらが良いか言い切った時だけ、その字幕の間だけ出す)。 */
+    marker?: { color: string; strokeWidthPx: number };
   };
+  /** 最後の一言(予約への案内など)。文言は動画ごとにAIが決める。 */
+  cta?: { xPercent: number; yPercent: number; fontSizePx: number; look: TemplateTextLook; seconds: number; maxWidthPercent: number };
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -133,11 +165,12 @@ const textOverlay = (
   startOffsetSeconds: 0,
   xPercent: round2(at.xPercent),
   yPercent: round2(at.yPercent),
-  fontSizePx: Math.round(at.fontSizePx),
+  fontSizePx: Math.round(Math.min(220, Math.max(20, at.fontSizePx))),
   color: look.color,
   ...(look.strokeColor ? { strokeColor: look.strokeColor } : {}),
   ...(look.strokeColor ? { strokeWidthPx: look.strokeWidthPx ?? Math.max(3, Math.round(at.fontSizePx * 0.08)) } : {}),
   ...(look.bandColor ? { backgroundColor: look.bandColor } : {}),
+  ...(look.glowColor ? { glowColor: look.glowColor } : {}),
   ...(look.fontFamily ? { fontFamily: look.fontFamily } : {}),
   rotationDeg: 0,
   animation: "fade",
@@ -160,6 +193,20 @@ const shapeOf = (box: TemplateBox, shape: TemplateShape, extra: Partial<ShapeOve
   ...extra,
 });
 
+const imageOf = (src: string, box: TemplateBox, extra: Partial<ImageOverlay> = {}): ImageOverlay => ({
+  src,
+  startOffsetSeconds: 0,
+  xPercent: round2(box.xPercent),
+  yPercent: round2(box.yPercent),
+  widthPercent: round2(Math.max(5, box.widthPercent)),
+  heightPercent: round2(Math.max(2, box.heightPercent)),
+  rotationDeg: 0,
+  cornerRadiusPx: 0,
+  animation: "pop",
+  fit: "contain",
+  ...extra,
+});
+
 /** 文字の高さ(%)。 */
 const lineStepPercent = (fontSizePx: number) => ((fontSizePx * LINE_HEIGHT) / VIDEO_HEIGHT) * 100;
 
@@ -175,16 +222,52 @@ export const templateFrameBoxes = (frames: NonNullable<ReferenceTemplate["frames
   }));
 };
 
+/** 比べるカードの箱(左から順)。手本の並べ方の範囲に、数に合わせて等しい幅で並べる。 */
+export const templateCardBoxes = (compare: NonNullable<ReferenceTemplate["compare"]>, count: number): TemplateBox[] => {
+  const n = Math.max(2, Math.min(4, count));
+  const { row } = compare;
+  const width = (row.rightPercent - row.leftPercent - row.gapPercent * (n - 1)) / n;
+  return Array.from({ length: n }, (_, i) => ({
+    xPercent: row.leftPercent + width / 2 + i * (width + row.gapPercent),
+    yPercent: row.yPercent,
+    widthPercent: width,
+    heightPercent: row.heightPercent,
+  }));
+};
+
+/** カードの中で、名前の文字の中心の高さ(%)と、その上の絵を入れる所。 */
+const cardInside = (compare: NonNullable<ReferenceTemplate["compare"]>, card: TemplateBox, nameSize: number) => {
+  const top = card.yPercent - card.heightPercent / 2;
+  const nameY = card.yPercent + card.heightPercent / 2 - compare.name.fromBottomPercent;
+  const nameHalf = ((nameSize * 0.7) / VIDEO_HEIGHT) * 100;
+  const imageTop = top + card.heightPercent * 0.06;
+  const imageBottom = nameY - nameHalf - card.heightPercent * 0.03;
+  const image: TemplateBox = {
+    xPercent: card.xPercent,
+    yPercent: (imageTop + imageBottom) / 2,
+    widthPercent: card.widthPercent * 0.86,
+    heightPercent: Math.max(2, imageBottom - imageTop),
+  };
+  return { nameY, image };
+};
+
+/** その動画で使う出し方(工程8で、話の内容が手本と合わなかった時は none にしてある)。 */
+export const effectiveKind = (state: Pick<StepState, "templateKind">, template: ReferenceTemplate): ReferenceTemplate["kind"] =>
+  state.templateKind ?? template.kind;
+
 /**
  * 8. 型どおりに、タイトル(と帯)・ランキングの枠と番号・比べるカードを置く。
- * 文言(タイトル)と数(枠の数)だけが動画ごとに変わる。
+ * 文言(タイトル)と数(枠・カードの数)だけが動画ごとに変わる。
  */
 export const buildTemplateObjects = (params: {
   template: ReferenceTemplate;
   title: string;
   frameCount: number;
+  /** 話の内容に合わせた出し方(手本と違う時は none)。省略時は手本どおり。 */
+  kind?: ReferenceTemplate["kind"];
 }): { globalOverlays: TextOverlay[]; globalShapes: ShapeOverlay[] } => {
   const { template } = params;
+  const kind = params.kind ?? template.kind;
   const title = template.title;
   const lines = params.title.split("\n").map((line) => line.trim()).filter(Boolean);
   const lookOf = (index: number) => title.lines[Math.min(index, title.lines.length - 1)];
@@ -228,19 +311,20 @@ export const buildTemplateObjects = (params: {
     });
   });
 
-  if (template.kind === "ranking" && template.frames) {
+  if (kind === "ranking" && template.frames) {
     const frames = template.frames;
     const count = Math.min(10, Math.max(2, params.frameCount >= 2 ? params.frameCount : frames.defaultCount));
     const boxes = templateFrameBoxes(frames, count);
     boxes.forEach((box, index) => {
       shapes.push(shapeOf(box, frames.shape));
       const label = frames.number.format.replace("{n}", String(index + 1));
+      const look = frames.number.looks[Math.min(index, frames.number.looks.length - 1)];
       const size = Math.min(frames.number.fontSizePx, Math.round((box.heightPercent / 100) * VIDEO_HEIGHT * 0.4));
-      const width = (widthEm(label, frames.number.look) * size * 100) / VIDEO_WIDTH;
+      const width = (widthEm(label, look) * size * 100) / VIDEO_WIDTH;
       const left = box.xPercent - box.widthPercent / 2;
       const bottom = box.yPercent + box.heightPercent / 2;
       overlays.push(
-        textOverlay(label, frames.number.look, {
+        textOverlay(label, look, {
           xPercent: left + 1.5 + width / 2,
           yPercent: bottom - ((size * 0.65) / VIDEO_HEIGHT) * 100 - 0.4,
           fontSizePx: size,
@@ -248,8 +332,9 @@ export const buildTemplateObjects = (params: {
       );
     });
   }
-  if (template.kind === "compare" && template.compare) {
-    for (const card of template.compare.cards) shapes.push(shapeOf(card, template.compare.shape));
+  if (kind === "compare" && template.compare) {
+    const compare = template.compare;
+    for (const card of templateCardBoxes(compare, params.frameCount)) shapes.push(shapeOf(card, compare.shape));
   }
   return { globalOverlays: overlays, globalShapes: shapes };
 };
@@ -267,7 +352,7 @@ export const templateCaption = (template: ReferenceTemplate): { yPercent: number
 });
 
 /** 完成の動画で、各項目を出し始める時刻(秒)。言い始めのクリップが外されていたら、その後の最初のクリップから。 */
-export const fillStartSeconds = (state: StepState): ((fill: FrameFill) => number | undefined) => {
+export const fillStartSeconds = (state: StepState): ((fill: Pick<FrameFill, "key" | "sourceSeconds">) => number | undefined) => {
   const starts = new Map<string, number>();
   let t = 0;
   for (const segment of state.segments) {
@@ -282,26 +367,42 @@ export const fillStartSeconds = (state: StepState): ((fill: FrameFill) => number
   };
 };
 
-/** 比べるカードで、見出し(今の話題)を入れる番号。カード1・2の後の3。 */
-export const TOPIC_FRAME = 3;
+/** その字幕(と、カットの切れ目の後に同じ字幕が続くクリップ。出し直しの動きをしない物)を出している長さ(秒)。 */
+const captionSeconds = (state: StepState, key: string): number => {
+  const index = state.segments.findIndex((segment) => segment.key === key);
+  if (index < 0) return 1;
+  let total = state.segments[index].durationInSeconds;
+  for (
+    let i = index + 1;
+    i < state.segments.length && state.segments[i].caption === state.segments[index].caption && state.segments[i].captionAnimation === "none";
+    i++
+  ) {
+    total += state.segments[i].durationInSeconds;
+  }
+  return total;
+};
+
+/** 比べるカードで、見出し(今の話題)を入れる番号。カードの番号(1〜)と重ならないよう、大きな番号にする。 */
+export const TOPIC_FRAME = 9;
+
+/** 動画の長さ(秒)。 */
+const totalSeconds = (state: StepState) => state.segments.reduce((sum, segment) => sum + segment.durationInSeconds, 0);
 
 /**
- * 10・12. 型どおりに、枠・カードへ項目を入れる(前に入れた物は外して入れ直す)。
- * ランキング: 枠の真ん中に項目名(言い始めた時から最後まで)。
- * 比べる: カードの下に名前(最初に出てから最後まで)、名前の上に話題ごとの中身(次の中身が出たら入れ替わる)、
- * カードの上に今の話題の見出し(次の見出しが出たら入れ替わる)。
+ * 10・12・14. 型どおりに、枠・カードへ項目を入れ、丸・最後の一言を置く(前に入れた物は外して入れ直す)。
+ * ランキング: 項目を言った時に、手本どおり大きく出してから枠へ入れる(絵が無ければ項目名の文字)。
+ * 比べる: カードの下に名前、その上に比べる物の絵(か話題ごとの中身の文字)、カードの上に今の話題の見出し、
+ * 選ばれた方の絵に丸(言い切った字幕の間だけ)。
  */
 export const placeTemplateFills = (state: StepState, template: ReferenceTemplate): StepState => {
   const base = state.globalOverlays.filter((overlay) => overlay.tag !== TEMPLATE_FILL_TAG);
   const fills = state.frameFills ?? [];
-  if (fills.length === 0) return { ...state, globalOverlays: base };
+  const kind = effectiveKind(state, template);
   const startOf = fillStartSeconds(state);
-  const rects = state.globalShapes.filter((shape) => shape.kind === "rect" && !shape.decorative);
-  const placed = fills
-    .map((fill) => ({ fill, start: startOf(fill) }))
-    .filter((item): item is { fill: FrameFill; start: number } => item.start !== undefined)
-    .sort((a, b) => a.start - b.start);
+  const imageOfLabel = (label: string) => state.fillImageSrcs?.[label];
   const texts: TextOverlay[] = [];
+  const images: ImageOverlay[] = [];
+  const marks: ShapeOverlay[] = [];
   const tagged = (overlay: TextOverlay, start: number, end?: number): TextOverlay => ({
     ...overlay,
     startOffsetSeconds: round2(start),
@@ -309,12 +410,39 @@ export const placeTemplateFills = (state: StepState, template: ReferenceTemplate
     animation: "pop",
     tag: TEMPLATE_FILL_TAG,
   });
+  const placed = fills
+    .map((fill) => ({ fill, start: startOf(fill) }))
+    .filter((item): item is { fill: FrameFill; start: number } => item.start !== undefined)
+    .sort((a, b) => a.start - b.start);
+  const rects = state.globalShapes.filter((shape) => shape.kind === "rect" && !shape.decorative);
 
-  if (template.kind === "ranking" && template.frames) {
-    const label = template.frames.label;
+  if (kind === "ranking" && template.frames) {
+    const frames = template.frames;
     for (const { fill, start } of placed) {
       const rect = rects[fill.frame - 1];
       if (!rect) continue;
+      const src = frames.content === "image" ? imageOfLabel(fill.label) : undefined;
+      if (src) {
+        // 枠の線(線だけの図形は画像の上に描かれる)の内側に、枠いっぱいに収める
+        const inFrame = imageOf(src, rect, { fit: "cover", cornerRadiusPx: frames.shape.cornerRadiusPx });
+        const popup = frames.popup;
+        if (popup) {
+          images.push(imageOf(src, popup, { startOffsetSeconds: round2(start), durationInSeconds: popup.seconds, cornerRadiusPx: frames.shape.cornerRadiusPx, fit: "cover" }));
+          images.push({
+            ...inFrame,
+            startOffsetSeconds: round2(start + popup.seconds),
+            moveFrom: { xPercent: popup.xPercent, yPercent: popup.yPercent, widthPercent: popup.widthPercent, heightPercent: popup.heightPercent },
+          });
+          if (popup.name) {
+            const size = fitFontSize([{ text: fill.label, look: popup.name.look }], popup.name.fontSizePx, Math.max(30, popup.widthPercent + 4));
+            texts.push(tagged(textOverlay(fill.label, popup.name.look, { xPercent: popup.xPercent, yPercent: popup.name.yPercent, fontSizePx: size }), start, start + popup.seconds));
+          }
+        } else {
+          images.push({ ...inFrame, startOffsetSeconds: round2(start) });
+        }
+        continue;
+      }
+      const label = frames.label;
       const size = Math.min(
         fitFontSize([{ text: fill.label, look: label.look }], label.fontSizePx, rect.widthPercent - 6, 24),
         Math.round((rect.heightPercent / 100) * VIDEO_HEIGHT * 0.35)
@@ -323,36 +451,40 @@ export const placeTemplateFills = (state: StepState, template: ReferenceTemplate
     }
   }
 
-  if (template.kind === "compare" && template.compare) {
+  if (kind === "compare" && template.compare) {
     const compare = template.compare;
-    // 番号ごとに、出す順に並べる
     const byFrame = new Map<number, { fill: FrameFill; start: number }[]>();
     for (const item of placed) byFrame.set(item.fill.frame, [...(byFrame.get(item.fill.frame) ?? []), item]);
-    // 中身・見出しの文字の大きさは、そろえる(話題ごとに大きさが変わると落ち着かないため)
-    [1, 2].forEach((frame) => {
-      const card = compare.cards[frame - 1];
-      const items = byFrame.get(frame) ?? [];
-      if (!card || items.length === 0) return;
-      const [name, ...contents] = items;
-      const nameSize = fitFontSize([{ text: name.fill.label, look: compare.name.look }], compare.name.fontSizePx, card.widthPercent - 4);
-      const nameY = card.yPercent + card.heightPercent / 2 - compare.name.fromBottomPercent;
-      texts.push(tagged(textOverlay(name.fill.label, compare.name.look, { xPercent: card.xPercent, yPercent: nameY, fontSizePx: nameSize }), name.start));
-      if (contents.length === 0) return;
-      const contentSize = fitFontSize(
-        [...(byFrame.get(1) ?? []).slice(1), ...(byFrame.get(2) ?? []).slice(1)].map((item) => ({ text: item.fill.label, look: compare.content.look })),
-        compare.content.fontSizePx,
-        card.widthPercent - 6
-      );
-      const top = card.yPercent - card.heightPercent / 2;
-      const contentY = (top + nameY - ((nameSize * 0.7) / VIDEO_HEIGHT) * 100) / 2;
+    const cards = rects.map((rect) => ({ xPercent: rect.xPercent, yPercent: rect.yPercent, widthPercent: rect.widthPercent, heightPercent: rect.heightPercent }));
+    const names = cards.map((_, index) => byFrame.get(index + 1)?.[0]);
+    // 名前の文字の大きさは、カード同士でそろえる
+    const nameSize = Math.min(
+      ...cards.map((card, index) => {
+        const name = names[index];
+        return name ? fitFontSize([{ text: name.fill.label, look: compare.name.look }], compare.name.fontSizePx, card.widthPercent - 4) : compare.name.fontSizePx;
+      })
+    );
+    const topicStarts = (byFrame.get(TOPIC_FRAME) ?? []).map((item) => item.start);
+    cards.forEach((card, index) => {
+      const name = names[index];
+      if (!name) return;
+      const inside = cardInside(compare, card, nameSize);
+      // 名前と絵は、手本と同じく、カードが出た時から入れておく(言った時に出すと、それまでカードが空になる)
+      const shown = Math.min(name.start, rects[index].startOffsetSeconds ?? 0);
+      texts.push(tagged(textOverlay(name.fill.label, compare.name.look, { xPercent: card.xPercent, yPercent: inside.nameY, fontSizePx: nameSize }), shown));
+      const src = compare.content === "image" ? imageOfLabel(name.fill.label) : undefined;
+      if (src) images.push(imageOf(src, inside.image, { startOffsetSeconds: round2(shown) }));
+      const contents = (byFrame.get(index + 1) ?? []).slice(1);
+      if (compare.content !== "text" || !compare.contentText || contents.length === 0) return;
+      const contentText = compare.contentText;
+      const contentSize = fitFontSize(contents.map((item) => ({ text: item.fill.label, look: contentText.look })), contentText.fontSizePx, card.widthPercent - 6);
       // 中身は、次の中身が出るか、話題の見出しが次へ変わった時に消す(前の話題の中身が残らないように)
-      const topicStarts = (byFrame.get(TOPIC_FRAME) ?? []).map((item) => item.start);
-      contents.forEach((item, index) => {
+      contents.forEach((item, i) => {
         const nextTopic = topicStarts.find((start) => start > item.start + 0.2);
-        const ends = [contents[index + 1]?.start, nextTopic].filter((value): value is number => value !== undefined);
+        const ends = [contents[i + 1]?.start, nextTopic].filter((value): value is number => value !== undefined);
         texts.push(
           tagged(
-            textOverlay(item.fill.label, compare.content.look, { xPercent: card.xPercent, yPercent: contentY, fontSizePx: contentSize }),
+            textOverlay(item.fill.label, contentText.look, { xPercent: card.xPercent, yPercent: inside.image.yPercent, fontSizePx: contentSize }),
             item.start,
             ends.length > 0 ? Math.min(...ends) : undefined
           )
@@ -364,11 +496,50 @@ export const placeTemplateFills = (state: StepState, template: ReferenceTemplate
       const topic = compare.topic;
       const size = fitFontSize(topics.map((item) => ({ text: item.fill.label, look: topic.look })), topic.fontSizePx, 80);
       topics.forEach((item, index) => {
-        texts.push(
-          tagged(textOverlay(item.fill.label, topic.look, { xPercent: topic.xPercent, yPercent: topic.yPercent, fontSizePx: size }), item.start, topics[index + 1]?.start)
-        );
+        texts.push(tagged(textOverlay(item.fill.label, topic.look, { xPercent: topic.xPercent, yPercent: topic.yPercent, fontSizePx: size }), item.start, topics[index + 1]?.start));
       });
     }
+    // 選ばれた方の丸: 言い切った字幕を出している間だけ、そのカードの絵(名前の上)に重ねる
+    if (compare.marker) {
+      const marker = compare.marker;
+      for (const mark of state.templateMarks ?? []) {
+        const card = cards[mark.frame - 1];
+        const start = startOf(mark);
+        if (!card || start === undefined) continue;
+        const inside = cardInside(compare, card, nameSize);
+        const diameterPx = Math.min((card.widthPercent / 100) * VIDEO_WIDTH * 0.8, (inside.image.heightPercent / 100) * VIDEO_HEIGHT * 1.15);
+        marks.push({
+          kind: "circle",
+          startOffsetSeconds: round2(start),
+          durationInSeconds: round2(Math.max(0.6, captionSeconds(state, mark.key))),
+          xPercent: round2(inside.image.xPercent),
+          yPercent: round2(inside.image.yPercent),
+          widthPercent: round2((diameterPx / VIDEO_WIDTH) * 100),
+          heightPercent: round2((diameterPx / VIDEO_HEIGHT) * 100),
+          borderColor: marker.color,
+          borderWidthPx: marker.strokeWidthPx,
+          fillOpacity: 1,
+          cornerRadiusPx: 0,
+          animation: "pop",
+          decorative: true,
+        });
+      }
+    }
   }
-  return { ...state, globalOverlays: [...base, ...texts] };
+
+  // 最後の一言: 動画の終わりの手本と同じ秒数だけ、手本と同じ所に出す
+  const cta = template.cta;
+  const ctaText = state.templateCta?.trim();
+  if (cta && ctaText) {
+    const end = totalSeconds(state);
+    const start = Math.max(0, end - cta.seconds);
+    const lines = ctaText.split("\n").map((line) => line.trim()).filter(Boolean);
+    const size = fitFontSize(lines.map((text) => ({ text, look: cta.look })), cta.fontSizePx, cta.maxWidthPercent);
+    lines.forEach((line, index) => {
+      const offset = index - (lines.length - 1) / 2;
+      texts.push(tagged(textOverlay(line, cta.look, { xPercent: cta.xPercent, yPercent: cta.yPercent + offset * lineStepPercent(size), fontSizePx: size }), start));
+    });
+  }
+
+  return { ...state, globalOverlays: [...base, ...texts], templateImages: images, templateShapes: marks };
 };

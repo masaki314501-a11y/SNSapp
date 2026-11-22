@@ -52,6 +52,17 @@ export type StepState = {
   /** 図を画面に置いた物(placeFigureで作る。プロジェクトの画像・画面に出す文字に足して見せる)。 */
   figureImages?: ImageOverlay[];
   figureTexts?: TextOverlay[];
+  /** 見た目の手本の型で使う出し方(工程8。話の内容が手本の出し方と合わない時は none にして、話の内容に合う物を置く)。 */
+  templateKind?: "ranking" | "compare" | "none";
+  /** 型の最後の一言の文言(工程8でAIが今回の話に合わせて書く)。 */
+  templateCta?: string;
+  /** 枠・カードに入れる項目名ごとの画像(工程10で、画像の棚から選ぶ)。 */
+  fillImageSrcs?: Record<string, string>;
+  /** 比べる動画で、選ばれた方に丸を付ける所(工程10でAIが決める。frame はカードの番号、key は言い切った字幕のクリップ)。 */
+  templateMarks?: { frame: number; key: string; sourceSeconds: number }[];
+  /** 型どおりに置いた画像・丸(placeTemplateFillsで作る。プロジェクトの画像・図形に足して見せる)。 */
+  templateImages?: ImageOverlay[];
+  templateShapes?: ShapeOverlay[];
 };
 
 /** 工程8でAIが決める、画面に置く物の型。ranking=左に縦の枠、compare=下に比べるカード2枚、figure=AIが描く図、none=何も置かない。 */

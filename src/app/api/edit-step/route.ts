@@ -33,7 +33,7 @@ import {
   type StepState,
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
-import { buildTemplateObjects, placeTemplateFills, templateCaption, type ReferenceTemplate } from "@/lib/editSteps/template";
+import { buildTemplateObjects, effectiveKind, placeTemplateFills, templateCaption, TOPIC_FRAME, type ReferenceTemplate } from "@/lib/editSteps/template";
 import { findReferenceTemplate } from "@/lib/editSteps/templateStore";
 import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
 import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
@@ -42,6 +42,7 @@ import {
   detectFace,
   findMistakes,
   pickEmphasis,
+  pickLibraryImages,
   pickRemovals,
   proofreadTexts,
   readReferenceLayout,
@@ -49,6 +50,7 @@ import {
   type PlacedObjects,
 } from "@/lib/editSteps/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
+import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
 
@@ -80,7 +82,8 @@ const requestSchema = z.object({
     // ここに無いと受け取る時に捨てられ、工程8以降で字幕が真ん中・下端固定なしに戻っていた
     captionLayout: z.any().nullable().optional(),
     templateTitle: z.string().optional(),
-  }),
+    // 以下に無い項目も捨てずに受け取る(項目を足した時に、ここへ書き忘れて工程の間で消える事が続いたため)
+  }).passthrough(),
   /** 完成動画の長さの上限(秒)。お客様の指定が無ければ30秒。 */
   targetSeconds: z.number().positive().optional(),
   /** 工程13で入れるBGM(工程ごとの編集の画面で選んだ物)。 */
@@ -134,19 +137,34 @@ export async function POST(request: Request) {
   // 字幕の大きさは、工程7で見た目の手本に合わせた時はそれを使う
   const captionLook = { style: look.captionStyle as CaptionStyle, fontSize: (state.captionFontSize ?? look.fontSize) as CaptionFontSize };
   // 見た目の手本(工程8・10で使う)。見つからない物は外す
-  const resolveReferences = async () =>
+  const resolvePairs = async () =>
     (
       await Promise.all(
-        (parsed.data.styleReferences ?? []).filter(isStyleReferencePath).map((referencePath) => resolveStyleReference(referencePath))
+        (parsed.data.styleReferences ?? [])
+          .filter(isStyleReferencePath)
+          .map(async (referencePath) => ({ referencePath, file: await resolveStyleReference(referencePath) }))
       )
-    ).filter((file): file is NonNullable<typeof file> => file !== null);
+    ).flatMap((pair) => (pair.file ? [{ referencePath: pair.referencePath, file: pair.file }] : []));
+  const resolveReferences = async () => (await resolvePairs()).map((pair) => pair.file);
 
-  // 見た目の手本の型(手本ごとに測って作った見た目・置き方)。あれば工程6〜10は型どおりにし、AIには中身だけを決めてもらう
-  const template: ReferenceTemplate | null = await findReferenceTemplate(
-    (parsed.data.styleReferences ?? []).filter(isStyleReferencePath)
-  );
+  // 見た目の手本の型(手本から自動で読み取った見た目・並べ方・出し方)。あれば工程6〜10は型どおりにし、AIには中身だけを決めてもらう。
+  // 読み取りには時間がかかるので、型を使う工程(6〜14)の時だけ読む(同じ手本なら2回目からは覚えた物)
+  const template: ReferenceTemplate | null =
+    step >= 6
+      ? await resolvePairs().then((pairs) =>
+          findReferenceTemplate(
+            pairs.map((pair) => pair.file),
+            pairs.map((pair) => pair.referencePath)
+          )
+        )
+      : null;
   // 枠・カードに項目を入れる(型があれば型どおりに)
-  const fillsFor = (next: StepState): StepState => (template ? placeTemplateFills(next, template) : placeFrameFills(next));
+  // (型があっても、話の内容が手本の出し方と違って、話に合わせた枠を置いた時は、その枠は今までの入れ方。最後の一言だけ型どおり)
+  const fillsFor = (next: StepState): StepState => {
+    if (!template) return placeFrameFills(next);
+    const own = effectiveKind(next, template) === "none" && next.globalShapes.some((shape) => shape.kind === "rect" && !shape.decorative);
+    return placeTemplateFills(own ? placeFrameFills(next) : next, template);
+  };
 
   try {
     const run = async (): Promise<{ state: StepState; note: string; details?: string[]; checks?: CheckItem[] }> => {
@@ -227,7 +245,7 @@ export async function POST(request: Request) {
                 captionLayout: placed.layout,
                 segments: segments.map((segment) => ({ ...segment, clipCaptionPosition: undefined })),
               },
-              note: `見た目の手本「${template.name}」の型どおりに、字幕を画面の上から${placed.yPercent}%・横${placed.layout.xPercent}%の所に、大きさ「${sizeLabel}」で固定しました`,
+              note: `見た目の手本から読み取った型どおりに、字幕を画面の上から${placed.yPercent}%・横${placed.layout.xPercent}%の所に、大きさ「${sizeLabel}」で固定しました`,
             };
           }
           // 見た目の手本があれば、手本の字幕と同じ高さ・大きさにする
@@ -276,33 +294,63 @@ export async function POST(request: Request) {
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             references,
-            // 型がある時は、図は描かない(型の置き方どおりにする)
-            figureViewBoxHeight: area && !template ? figureViewBoxHeight(area) : null,
-            template: template ? { titleLines: template.title.lineCount, kind: template.kind } : undefined,
+            figureViewBoxHeight: area ? figureViewBoxHeight(area) : null,
+            template: template
+              ? { titleLines: template.title.lineCount, kind: template.kind, wording: template.title.wording, hasCta: Boolean(template.cta) }
+              : undefined,
           });
           // タイトルの指定があれば、文言はそれを使う(見た目と枠の数はAIの案のまま)
           const fixedTitle = parsed.data.title?.trim();
           if (fixedTitle) objects.title = fixedTitle;
           if (template) {
-            const built = buildTemplateObjects({ template, title: objects.title, frameCount: objects.frameCount });
+            // 話の内容が手本の出し方と合う時は、手本の型どおりに枠・カードを置く。
+            // 合わない時(手本はランキングなのに話は比べる内容など)は、話の内容を優先して、話に合う物を置く(タイトルと字幕の見た目は手本のまま)
+            const matches = objects.layout === template.kind;
+            const kind = matches ? template.kind : "none";
+            const built = buildTemplateObjects({ template, title: objects.title, frameCount: objects.frameCount, kind });
+            const own = !matches && objects.layout !== "none"
+              ? buildObjects({
+                  title: objects.title,
+                  layout: objects.layout,
+                  frameCount: objects.frameCount,
+                  captionTopPercent,
+                  captionBottomPercent,
+                  accentColor: look.primaryColor,
+                  style: objects.look,
+                })
+              : null;
+            const figure: FigureDraft | null =
+              !matches && objects.figure && area
+                ? { box: area, viewBoxHeight: figureViewBoxHeight(area), idea: objects.figure.idea, base: objects.figure.base, parts: [], fontFamily: objects.look.title.fontFamily }
+                : null;
             const frameTotal = built.globalShapes.filter((shape) => !shape.decorative).length;
+            const placedNote = matches
+              ? kind === "ranking"
+                ? `。ランキングの枠を${frameTotal}個並べました(数は話している項目の数に合わせました)`
+                : kind === "compare"
+                  ? `。比べるカードを${frameTotal}枚並べました(数は比べている物の数に合わせました)`
+                  : ""
+              : `。話の内容(${{ ranking: "ランキング", compare: "比べる", figure: "図で見せる", none: "枠なし" }[objects.layout]})が手本の出し方と違うため、話の内容に合わせて置きました`;
             return {
               state: placeFigure({
                 ...state,
-                globalOverlays: built.globalOverlays,
-                globalShapes: built.globalShapes,
+                // 話に合わせて置いた物のうち、タイトル(1つ目)は手本の型の物を使う
+                globalOverlays: [...built.globalOverlays, ...(own ? own.globalOverlays.slice(1) : [])],
+                globalShapes: [...built.globalShapes, ...(own?.globalShapes ?? [])],
                 frameFills: [],
-                figure: null,
+                figure,
                 templateTitle: objects.title,
+                templateKind: kind,
+                templateCta: template.cta ? objects.cta : undefined,
+                templateMarks: [],
+                fillImageSrcs: {},
               }),
-              note: `見た目の手本「${template.name}」の型どおりに、タイトル「${objects.title.replace(/\n/g, "")}」を置きました${
-                template.kind === "ranking"
-                  ? `。ランキングの枠を${frameTotal}個並べました(数は話している項目の数に合わせました)`
-                  : template.kind === "compare"
-                    ? "。比べるカードを2枚並べました"
-                    : ""
-              }`,
-              details: ["書体・色・帯・位置・大きさは型どおり。文言と枠の数だけ、この動画の話に合わせました", objects.reason],
+              note: `見た目の手本から読み取った型どおりに、タイトル「${objects.title.replace(/\n/g, "")}」を置きました${placedNote}`,
+              details: [
+                "書体・色・帯・位置・大きさ・出方は手本どおり。文言と数だけ、この動画の話に合わせました",
+                ...(template.cta && objects.cta ? [`最後の一言: 「${objects.cta.replace(/\n/g, "")}」(手本と同じ見た目で、動画の最後に出します)`] : []),
+                objects.reason,
+              ],
             };
           }
           const built = buildObjects({
@@ -410,8 +458,19 @@ export async function POST(request: Request) {
             ),
           ];
           const rects = state.globalShapes.filter((shape) => shape.kind === "rect" && !shape.decorative);
-          const objects: PlacedObjects = template?.kind === "compare" && rects.length === 2
-            ? { kind: "frames", layout: "compare", frameCount: 2, topicHeading: Boolean(template.compare?.topic) }
+          // 型どおりに置いた出し方(話の内容が手本と違った時は none になっていて、話に合わせて置いた枠を今まで通りに扱う)
+          const kind = template ? effectiveKind(state, template) : "none";
+          const objects: PlacedObjects = template && kind === "compare" && template.compare
+            ? {
+                kind: "frames",
+                layout: "compare",
+                frameCount: rects.length,
+                topicHeading: Boolean(template.compare.topic),
+                cardContent: template.compare.content,
+                marker: Boolean(template.compare.marker),
+              }
+            : template && kind === "ranking"
+            ? { kind: "frames", layout: "ranking", frameCount: rects.length }
             : state.figure
             ? { kind: "figure", idea: state.figure.idea, viewBoxHeight: state.figure.viewBoxHeight, base: state.figure.base }
             : rects.length >= 2
@@ -421,29 +480,56 @@ export async function POST(request: Request) {
                   frameCount: rects.length,
                 }
               : { kind: "none" };
-          const { picks, look: aiLook, lookReason: aiLookReason, frameItems, figureItems } = await pickEmphasis({
+          const { picks, look: aiLook, lookReason: aiLookReason, frameItems, figureItems, marks } = await pickEmphasis({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
             objectColors,
             objects,
             references: await resolveReferences(),
+            emphasisRoles: template?.emphasisStyles.map((style) => style.role),
           });
-          // 型がある時は、字幕の見た目は型どおり(AIが決めるのは、どの字幕を強調するかと、枠に入れる項目だけ)
+          // 型がある時は、字幕の見た目は型どおり(AIが決めるのは、どの字幕を強調するか・どの種類の見た目にするかと、枠に入れる項目だけ)
+          const emphasisLookOf = (style: number) => {
+            const chosenStyle = template?.emphasisStyles[style] ?? template?.emphasisStyles[0];
+            return chosenStyle
+              ? {
+                  fontFamily: chosenStyle.fontFamily,
+                  textColor: chosenStyle.textColor,
+                  bandColor: chosenStyle.bandColor,
+                  ...(chosenStyle.strokeColor ? { strokeColor: chosenStyle.strokeColor } : {}),
+                }
+              : aiLook.emphasis;
+          };
           const chosen = template
             ? {
                 base: { fontFamily: template.caption.fontFamily, style: template.caption.style, accentColor: template.caption.accentColor },
-                emphasis: {
-                  fontFamily: template.emphasis.fontFamily,
-                  textColor: template.emphasis.textColor,
-                  bandColor: template.emphasis.bandColor,
-                  ...(template.emphasis.strokeColor ? { strokeColor: template.emphasis.strokeColor } : {}),
-                },
+                emphasis: emphasisLookOf(0),
               }
             : aiLook;
-          const lookReason = template ? `字幕の見た目は、見た目の手本「${template.name}」の型どおりにしました` : aiLookReason;
-          // 同じ字幕が続くクリップ(カットの切れ目の後)も、そろえて強調する
+          const lookReason = template ? `字幕の見た目は、見た目の手本から読み取った型どおりにしました` : aiLookReason;
+          // 同じ字幕が続くクリップ(カットの切れ目の後)も、そろえて強調する。見た目の種類ごとに付ける
           const keys = withContinuedKeys(segments, new Set(picks.map((pick) => withCaption[pick.index].key)));
+          let emphasized = applyEmphasis(segments, keys, chosen.emphasis, chosen.base);
+          if (template && template.emphasisStyles.length >= 2) {
+            for (let style = 0; style < template.emphasisStyles.length; style++) {
+              const styleKeys = withContinuedKeys(
+                segments,
+                new Set(picks.filter((pick) => pick.style === style).map((pick) => withCaption[pick.index].key))
+              );
+              if (styleKeys.size === 0) continue;
+              const styled = applyEmphasis(segments, styleKeys, emphasisLookOf(style), chosen.base);
+              const glow = template.emphasisStyles[style].glowColor;
+              emphasized = emphasized.map((segment, i) =>
+                styleKeys.has(segment.key)
+                  ? { ...segment, captionEmphasis: styled[i].captionEmphasis, ...(glow ? { captionGlowColor: glow } : {}) }
+                  : segment
+              );
+            }
+          } else if (template?.emphasisStyles[0]?.glowColor) {
+            const glow = template.emphasisStyles[0].glowColor;
+            emphasized = emphasized.map((segment) => (keys.has(segment.key) ? { ...segment, captionGlowColor: glow } : segment));
+          }
           // ランキング・「〇選」の枠に、項目名を入れる(言い始めた時から最後まで出す)
           const frameFills: FrameFill[] = frameItems.map((item) => ({
             frame: item.frame,
@@ -451,12 +537,32 @@ export async function POST(request: Request) {
             sourceSeconds: withCaption[item.index].startFromSeconds,
             label: item.label,
           }));
+          // 比べる動画で、選ばれた方に丸を付ける所(言い切った字幕のクリップで覚える)
+          const templateMarks = marks.map((mark) => ({
+            frame: mark.frame,
+            key: withCaption[mark.index].key,
+            sourceSeconds: withCaption[mark.index].startFromSeconds,
+          }));
           // 型のランキングで、工程8で並べた枠が、話した項目より多い時は、項目の数に合わせて並べ直す(空の枠を残さない)
           const usedFrames = Math.max(0, ...frameFills.map((fill) => fill.frame));
           const regrown =
-            template?.kind === "ranking" && state.templateTitle && usedFrames >= 2 && usedFrames < rects.length
-              ? buildTemplateObjects({ template, title: state.templateTitle, frameCount: usedFrames })
+            template && kind === "ranking" && state.templateTitle && usedFrames >= 2 && usedFrames < rects.length
+              ? buildTemplateObjects({ template, title: state.templateTitle, frameCount: usedFrames, kind })
               : null;
+          // 枠・カードの中身が絵の型では、項目ごとに画像の棚から合う絵を選ぶ(合う物が無ければ、項目名の文字にする)
+          const wantsImages =
+            (kind === "ranking" && template?.frames?.content === "image") || (kind === "compare" && template?.compare?.content === "image");
+          const imageLabels = wantsImages
+            ? [...new Set(frameFills.filter((fill) => kind === "ranking" || fill.frame !== TOPIC_FRAME).filter((fill, _, all) => kind === "ranking" || all.find((other) => other.frame === fill.frame) === fill).map((fill) => fill.label))]
+            : [];
+          const library = imageLabels.length > 0 ? await loadImageLibrary().catch(() => []) : [];
+          const imagePicks = library.length > 0 ? await pickLibraryImages(imageLabels, library).catch(() => imageLabels.map(() => null)) : [];
+          const fillImageSrcs = Object.fromEntries(
+            imageLabels.flatMap((label, i) => {
+              const pick = imagePicks[i];
+              return pick !== null && pick !== undefined && library[pick] ? [[label, libraryImageSrc(library[pick])] as const] : [];
+            })
+          );
           // 図に、話に合わせて部品を足す(その中身を言う字幕の時から最後まで出す)
           const figure: FigureDraft | null = state.figure
             ? {
@@ -476,9 +582,11 @@ export async function POST(request: Request) {
               fillsFor({
                 ...state,
                 ...(regrown ? { globalOverlays: regrown.globalOverlays, globalShapes: regrown.globalShapes } : {}),
-                segments: applyEmphasis(segments, keys, chosen.emphasis, chosen.base),
+                segments: emphasized,
                 captionLook: { fontFamily: chosen.base.fontFamily, captionStyle: chosen.base.style, primaryColor: chosen.base.accentColor },
                 frameFills,
+                templateMarks,
+                fillImageSrcs,
                 figure,
               })
             ),
@@ -489,6 +597,12 @@ export async function POST(request: Request) {
                 : []),
               ...(frameFills.length > 0
                 ? [`枠に入れた項目: ${[...frameFills].sort((a, b) => a.frame - b.frame).map((fill) => `${fill.frame}「${fill.label}」`).join("・")}`]
+                : []),
+              ...(imageLabels.length > 0
+                ? [`枠・カードの絵: ${imageLabels.map((label) => `「${label}」${fillImageSrcs[label] ? "→画像の棚の絵" : "→合う絵が無いので文字"}`).join("・")}`]
+                : []),
+              ...(templateMarks.length > 0
+                ? [`選ばれた方の丸: ${templateMarks.map((mark) => `カード${mark.frame}(「${segments.find((segment) => segment.key === mark.key)?.caption.replace(/\n/g, "") ?? ""}」の間)`).join("・")}`]
                 : []),
               `ふつうの字幕の見た目: 書体「${fontLabel(chosen.base.fontFamily)}」・${chosen.base.style === "outline" ? "縁取り" : "帯"}${chosen.base.accentColor}`,
               `強調した字幕の見た目: 書体「${fontLabel(chosen.emphasis.fontFamily)}」・文字${chosen.emphasis.textColor}・帯${chosen.emphasis.bandColor ?? "なし"}`,

@@ -32,3 +32,20 @@ export const getBrowserInstance = (): Promise<HeadlessBrowser> => {
 
   return browserPromise;
 };
+
+/**
+ * 固まったブラウザを捨てる。ヘッドレスChromeが応答しなくなると、selectComposition の
+ * 時間切れ(timeoutInMilliseconds)まで届かずに待ち続けることがあった(30分以上「構成を解決中」のまま)。
+ * 捨てておけば、次の getBrowserInstance() で新しいブラウザが起動する。
+ */
+export const discardBrowserInstance = async (): Promise<void> => {
+  const current = browserPromise;
+  browserPromise = null;
+  if (!current) return;
+  try {
+    const browser = await current;
+    await Promise.race([browser.close({ silent: true }), new Promise((resolve) => setTimeout(resolve, 10000))]);
+  } catch {
+    // 起動に失敗していた・すでに終わっていた場合は何もしない
+  }
+};
