@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 14;
+const EXTRACT_VERSION = 19;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -1250,18 +1250,15 @@ export const measureInkHeight = (
 /** 字幕の数え方の指示文。 */
 export const CAPTION_SURVEY_PROMPT = (times: number[]) => `
 上は、見た目の手本の動画から、字幕が出る所を1秒ごとに切り抜いた絵です(【秒数】の次の絵。${times.length}枚)。
-字幕(話した言葉の文字)の見た目を、見た目ごとのグループに分けて、どの絵に出ているかを全部挙げてください。
-- 見た目が同じ(文字の色・縁取りの色・帯・光・書体が同じ)字幕は、同じグループ。文言は違ってよい。
-- 字幕が写っていない絵、TikTokのロゴ・投稿者名だけの絵は数えない。タイトル・枠の中の文字・見出しの帯も数えない(話した言葉の字幕だけ)。
-- 絵を1枚ずつ順に見て、字幕が写っていれば、その見た目のグループの appearsAt にその絵の秒数を入れる(1枚の絵は1つのグループだけ)。
-  数を答えるのではなく、写っていた絵の秒数を全部挙げる(ツールが数える。一番多いグループが、ふつうの字幕になる)。
-- グループごとに: appearsAt(写っていた絵の秒数を全部)、seconds(そのグループの字幕がはっきり写っている絵の秒数を1つ)、
-  examples(写っていた文言を2〜4個)、role(どんな言葉に使われているか。例「ふつうに話している言葉」「数字・金額」「問いかけ・否定」)、
-  look(fontFamily・color・strokeColor・bandColor・glowColor)、box(その秒の絵の中での字幕の箱。絵の幅・高さに対する%)。
+絵を1枚ずつ順に見て、写っている字幕(話した言葉の文字)を、絵ごとに1つずつ答えてください。グループに分けなくてよい(見た目が同じかどうかは、ツールが画面から測って分ける)。
+- 字幕が写っていない絵、TikTokのロゴ・投稿者名だけの絵は答えに入れない。タイトル・枠の中の文字・見出しの帯も字幕ではない(話した言葉の字幕だけ)。
+- 1枚の絵に見た目の違う字幕が2つあれば、文字の大きい方を1つだけ答える。
+- 絵ごとに: seconds(その絵の秒数)、text(写っている文字のまま)、role(どんな言葉か。例「ふつうに話している言葉」「項目の名前」「数字・金額」「問いかけ・否定」「強み・おすすめ」「呼びかけ」)、
+  look(fontFamily・color・strokeColor・bandColor・glowColor)、box(その絵の中での字幕の箱。絵の幅・高さに対する%)。
 - color は字の線の内側(真ん中)の色、strokeColor はその外側を囲む縁の色(取り違えない)。縁が二重なら、内側の縁を strokeColor、外側を glowColor。
+  字のまわりにぼんやり広がる光・影があれば、その色を glowColor(無ければ null)。字の色が濃淡(グラデーション)なら、一番多い色を color。
 - 書体は次から一番近い物: ${FONT_HINTS}
   飾りや崩しの無い、ふつうの太いゴシックは Noto Sans JP。明朝体は縦の線が太く横の線が細く、線の終わりに三角の飾りがある。丸ゴシックは線の端が丸い。
-写っていた絵が多い順に答えてください。
 `.trim();
 
 /** 冒頭のタイトルの出し方を聞き直す指示文。 */
@@ -1303,89 +1300,75 @@ const checkIntro = async (raw: ExtractedTemplate, file: StyleReferenceFile, dura
   };
 };
 
-type SurveyGroup = { color: string; edge: string | null; seconds: number; appearsAt: number[]; box?: RawLook["box"] };
+/** 1秒ごとに読んだ字幕(AIが答えた見た目と、その秒の画面で測った色)。 */
+export type SeenCaption = {
+  seconds: number;
+  text: string;
+  role: string;
+  look: Omit<RawLook, "seconds" | "box">;
+  box: RawLook["box"];
+  /** 測った字の中の色・縁(か帯)の色。測れなければ AIの答えた色。 */
+  fill: string;
+  edge: string | null;
+  /** 画面で2色とも見つかったか。 */
+  measured: boolean;
+  /** 色の重なりの順番で、どちらが字の中か決まったか。 */
+  oriented: boolean;
+};
+
+const SERIF_FONTS = new Set<string>(["Noto Serif JP", "Shippori Mincho"]);
 
 /**
- * 字幕の見た目ごとに、写っていた切り抜きの数を画素から数える。
- * 1. 見た目ごとに、その見本の切り抜きで実際に多い色に、文字の色と縁(か帯)の色を合わせる(AIの答えた色は、ずれや入れ替わりがある)。
- *    見本の切り抜きの中でさえ、その2色が隣り合っていなければ、測れない見た目として、AIの挙げた秒数で数える。
- * 2. 色の近い見た目どうし、文字の色と縁の色が入れ替わっただけの見た目どうしは、1つにまとめ、AIが多く挙げた方に数える。
- * 3. 切り抜きごとに、文字の色と縁の色が隣り合う画素が一番多い見た目に1つ数える。ただし、ある見た目の文字の色が、
- *    同時に写っている別の見た目の縁の色にすぎない時(水色の字の白い縁と、その外の黒い影を、白い字に黒い縁と数える等)は、別の見た目の方を採る。
- *    見本の切り抜きより、ずっと弱い一致(肌の色をたまたま縁の色と数えた等)は数えない。
+ * E40: その秒の切り抜きで、字幕の字の中の色と縁(か帯)の色を測る。
+ * AIの答えた色を、字幕の箱の中で実際に多い色に合わせ、どちらが字の中かは色の重なりの順番で決める。
  */
-export const countCaptionLooks = (groups: SurveyGroup[], crops: Map<string, Uint8Array>, width: number, height: number) => {
-  const MATCH = 0.004;
-  const TOLERANCE = 50;
-  const near = (a: string, b: string | null, limit = 80) => !!b && distance(hexToRgb(a), hexToRgb(b)) <= limit;
-  // 1. 見本の切り抜きで色を合わせる
-  const prepared = groups.map((group) => {
-    const key = [group.seconds, ...group.appearsAt].map((t) => t.toFixed(1)).find((t) => crops.has(t));
-    const own = key ? crops.get(key) : undefined;
-    if (!own || !group.edge) return { color: group.color, edge: group.edge, ownScore: 0, countable: false };
-    // 色は、その字幕の箱の中で測る(帯全体だと、字幕の文字の色は少なすぎて多い色に入らない)
-    const measured = dominantColors(own, width, height, group.box ?? FULL_BOX);
-    const found = (guess: string, exclude: Rgb[] = []) => {
-      const snapped = snapColor(guess, measured, exclude);
-      return measured.some((rgb) => rgbToHex(rgb) === snapped) ? snapped : null;
-    };
-    const color = found(group.color);
-    const edge = color ? found(group.edge, [hexToRgb(color)]) : null;
-    if (!color || !edge) return { color: group.color, edge: group.edge, ownScore: 0, countable: false };
-    const ownScore = edgePairScore(own, width, height, FULL_BOX, color, edge, TOLERANCE);
-    return { color, edge, ownScore, countable: ownScore >= MATCH };
-  });
-  // 2. 同じ見た目をまとめる(代表は、AIが多く挙げた方)
-  const leader = groups.map((_, index) => index);
-  const rootOf = (index: number): number => {
-    while (leader[index] !== index) index = leader[index];
-    return index;
+export const measureSeenCaption = (pixels: Uint8Array, width: number, height: number, look: SeenCaption["look"], box: RawLook["box"]) => {
+  const guessEdge = look.strokeColor ?? look.bandColor;
+  const measured = dominantColors(pixels, width, height, box);
+  const found = (guess: string, exclude: Rgb[] = []) => {
+    const snapped = snapColor(guess, measured, exclude);
+    return measured.some((rgb) => rgbToHex(rgb) === snapped) ? snapped : null;
   };
-  // 色は、合わせた色どうしか、AIの答えた色どうしで比べる(測れなかった見た目も、同じ見た目ならまとめる)
-  const sameLook = (a: { color: string; edge: string | null }, b: { color: string; edge: string | null }, limit: number) =>
-    !!a.edge && !!b.edge && ((near(a.color, b.color, limit) && near(a.edge, b.edge, limit)) || (near(a.color, b.edge, limit) && near(a.edge, b.color, limit)));
-  prepared.forEach((a, i) =>
-    prepared.forEach((b, j) => {
-      if (j <= i) return;
-      const same = (a.countable && b.countable && sameLook(a, b, 50)) || sameLook(groups[i], groups[j], 60);
-      if (!same) return;
-      const [ri, rj] = [rootOf(i), rootOf(j)];
-      if (ri === rj) return;
-      if (groups[ri].appearsAt.length >= groups[rj].appearsAt.length) leader[rj] = ri;
-      else leader[ri] = rj;
-    })
-  );
-  const roots = [...new Set(prepared.flatMap((p, i) => (p.countable ? [rootOf(i)] : [])))];
-  const ownScoreOf = (root: number) => Math.max(...prepared.map((p, i) => (p.countable && rootOf(i) === root ? p.ownScore : 0)));
-  // 3. 切り抜きごとに数える
-  const pixelCount = new Map<number, number>(roots.map((root) => [root, 0]));
-  for (const pixels of crops.values()) {
-    const matched = roots
-      .map((root) => {
-        const { color, edge } = prepared[root];
-        return { root, color, edge: edge ?? color, score: edge ? edgePairScore(pixels, width, height, FULL_BOX, color, edge, TOLERANCE) : 0 };
-      })
-      .filter((entry) => entry.score >= Math.max(MATCH, ownScoreOf(entry.root) * 0.25));
-    const kept = matched.filter((entry) => !matched.some((other) => other !== entry && near(entry.color, other.edge) && !near(entry.color, other.color)));
-    const best = (kept.length > 0 ? kept : matched).reduce<(typeof matched)[number] | null>((acc, entry) => (!acc || entry.score > acc.score ? entry : acc), null);
-    if (best) pixelCount.set(best.root, (pixelCount.get(best.root) ?? 0) + 1);
+  const fill = found(look.color);
+  const edge = fill && guessEdge ? found(guessEdge, [hexToRgb(fill)]) : null;
+  if (!fill || !edge) return { fill: look.color, edge: guessEdge, measured: false, oriented: false };
+  const order = look.bandColor ? null : innerColorSays(pixels, width, height, box, fill, edge);
+  const [inner, outer] = order === "swap" ? [edge, fill] : [fill, edge];
+  return { fill: inner, edge: outer, measured: true, oriented: order !== null };
+};
+
+/**
+ * E40: 1秒ごとに読んだ字幕を、見た目の同じ物どうしでまとめる(AIにグループ分けさせると、読むたびに分け方が変わり、
+ * 白い字に青い縁の「裏側矯正」と、青の濃淡に光の「当グループの強み」を同じグループにする等の取り違えがあったため)。
+ * 同じ見た目 = 明朝かどうか・光があるか・帯か縁か が同じで、字の中の色と縁の色が近い。
+ * どちらが字の中か両方とも決まっている時は、入れ替わりを認めない(白い字に青い縁と、青い字に白い縁は別)。
+ */
+export const groupSeenCaptions = (seen: SeenCaption[]): SeenCaption[][] => {
+  const near = (a: string | null, b: string | null, limit: number) => (!a || !b ? a === b : distance(hexToRgb(a), hexToRgb(b)) <= limit);
+  const sameLook = (a: SeenCaption, b: SeenCaption) => {
+    if (SERIF_FONTS.has(a.look.fontFamily) !== SERIF_FONTS.has(b.look.fontFamily)) return false;
+    if (!!a.look.glowColor !== !!b.look.glowColor) return false;
+    if (!!a.look.bandColor !== !!b.look.bandColor) return false;
+    const limit = a.measured && b.measured ? 50 : 70;
+    if (near(a.fill, b.fill, limit) && near(a.edge, b.edge, limit)) return true;
+    return !(a.oriented && b.oriented) && !!a.edge && !!b.edge && near(a.fill, b.edge, limit) && near(a.edge, b.fill, limit);
+  };
+  const groups: SeenCaption[][] = [];
+  // 測れた秒を先に並べ、グループの代表(最初の1つ)が測った色になるようにする
+  const ordered = [...seen].sort((a, b) => Number(b.measured) - Number(a.measured) || Number(b.oriented) - Number(a.oriented) || a.seconds - b.seconds);
+  for (const item of ordered) {
+    const group = groups.find((members) => sameLook(members[0], item));
+    if (group) group.push(item);
+    else groups.push([item]);
   }
-  const usePixels = [...pixelCount.values()].some((count) => count > 0);
-  // まとめた見た目は、代表だけに数える(残りは0にして、強調の見た目にも出さない)。
-  // 数は、画素から数えられた見た目はその数(AIは多めに挙げることがある)。数えられなかった見た目は、まとめた見た目のどれかにAIが挙げた秒数の数
-  const aiUnion = (root: number) =>
-    new Set(groups.flatMap((group, index) => (rootOf(index) === root ? group.appearsAt.map((t) => t.toFixed(1)).filter((t) => crops.has(t)) : []))).size;
-  // 代表の色は、色を合わせられた見た目の物を使う
-  const colorsOf = (root: number) => {
-    const index = prepared[root].countable ? root : prepared.findIndex((p, i) => p.countable && rootOf(i) === root);
-    return index >= 0 ? prepared[index] : prepared[root];
-  };
-  return groups.map((group, index) => {
-    if (rootOf(index) !== index) return { count: 0, color: prepared[index].color, edge: prepared[index].edge };
-    const { color, edge } = colorsOf(index);
-    const pixelRoot = roots.find((root) => rootOf(root) === index);
-    return { count: pixelRoot !== undefined && usePixels ? (pixelCount.get(pixelRoot) ?? 0) : aiUnion(index), color, edge };
-  });
+  return groups.sort((a, b) => b.length - a.length);
+};
+
+/** 一番多い答え(同じ数なら先に出た方)。 */
+const mostCommon = <T,>(values: T[]): T => {
+  const counts = new Map<T, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].reduce((best, entry) => (entry[1] > best[1] ? entry : best))[0];
 };
 
 /**
@@ -1402,6 +1385,7 @@ const captionBand = (raw: ExtractedTemplate) => {
 /**
  * 字幕の見た目を、1秒ごとの字幕の所を全部見て数える。一番多い見た目をふつうの字幕、それ以外を強調した字幕にする。
  * 場面の絵を何枚か見せるだけだと、強調した字幕をふつうの字幕と取り違えることがあったため。
+ * E40: AIには1秒ごとの字幕(文字・見た目・箱)だけを答えてもらい、色はその秒の画面で測って、見た目の同じ秒どうしをツールがまとめる。
  */
 const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, duration: number): Promise<ExtractedTemplate> => {
   if (file.kind !== "video" || duration <= 2) return raw;
@@ -1409,7 +1393,8 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
   const times = Array.from({ length: Math.min(70, Math.floor(Math.max(1, duration - 3))) }, (_, i) => i + 0.5);
   const parts: Part[] = [];
   const cropPixels = new Map<string, Uint8Array>();
-  const outWidth = 360;
+  // E40: 色の重なりの順番を測れるように、画面の元の幅(540)で切り抜く
+  const outWidth = SAMPLE_WIDTH;
   const outHeight = Math.max(32, Math.round((outWidth * band.heightPercent * 16) / (band.widthPercent * 9) / 2) * 2);
   for (const seconds of times) {
     const crop = `crop=iw:ih*${(band.heightPercent / 100).toFixed(4)}:0:ih*${((band.yPercent - band.heightPercent / 2) / 100).toFixed(4)}`;
@@ -1422,7 +1407,7 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     parts.push({ text: `【${seconds.toFixed(1)}秒】` }, { inlineData: { mimeType: "image/png", data: encodePng(pixels, outWidth, outHeight).toString("base64") } });
   }
   if (parts.length === 0) return raw;
-  const groupLook = obj({ fontFamily: str, color: colorSchema, strokeColor: nullableColorSchema, bandColor: nullableColorSchema, glowColor: nullableColorSchema });
+  const itemLook = obj({ fontFamily: str, color: colorSchema, strokeColor: nullableColorSchema, bandColor: nullableColorSchema, glowColor: nullableColorSchema });
   const survey = await askJson({
     model: STEP_MODEL,
     label: "見た目の手本の字幕",
@@ -1430,16 +1415,15 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     parts: [...parts, { text: CAPTION_SURVEY_PROMPT(times) }],
     schema: {
       type: Type.OBJECT,
-      properties: { groups: { type: Type.ARRAY, items: obj({ appearsAt: { type: Type.ARRAY, items: num }, seconds: num, examples: { type: Type.ARRAY, items: str }, role: str, look: groupLook, box: boxSchema }) } },
-      required: ["groups"],
+      properties: { captions: { type: Type.ARRAY, items: obj({ seconds: num, text: str, role: str, look: itemLook, box: boxSchema }) } },
+      required: ["captions"],
     },
     parse: z.object({
-      groups: z.array(
+      captions: z.array(
         z.object({
-          appearsAt: z.array(z.number()).catch([]),
           seconds: positive,
-          examples: z.array(z.string()).default([]),
-          role: z.string(),
+          text: z.string().catch(""),
+          role: z.string().catch(""),
           look: z.object({ fontFamily: fontParse, color: colorParse, strokeColor: nullableColorParse, bandColor: nullableColorParse, glowColor: nullableColorParse }),
           box: boxParse,
         })
@@ -1447,31 +1431,29 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     }),
   }).catch((error: unknown) => {
     console.warn("[referenceTemplate] 字幕の見た目を数えられませんでした", error);
-    return { groups: [] };
+    return { captions: [] };
   });
-  // 写っていた絵の数は、こちらで画素から数える(AIに数えさせると、答えるたびに一番多い見た目が変わった)
-  const counted = countCaptionLooks(
-    survey.groups.map((group) => ({ color: group.look.color, edge: group.look.strokeColor ?? group.look.bandColor, seconds: group.seconds, appearsAt: group.appearsAt, box: group.box })),
-    cropPixels,
-    outWidth,
-    outHeight
-  );
-  const groups = survey.groups
-    .map((group, index) => {
-      const { count, color, edge } = counted[index];
-      const look = { ...group.look, color };
-      if (edge && group.look.strokeColor) look.strokeColor = edge;
-      else if (edge && group.look.bandColor) look.bandColor = edge;
-      return { ...group, look, count };
-    })
-    .filter((group) => group.count > 0)
-    .sort((a, b) => b.count - a.count);
+  // 1秒ごとに、その秒の画面で色を測る(同じ秒を2度答えた時は、先の答えだけ)
+  const seen: SeenCaption[] = [];
+  for (const item of survey.captions) {
+    const key = item.seconds.toFixed(1);
+    const pixels = cropPixels.get(key);
+    if (!pixels || seen.some((s) => s.seconds.toFixed(1) === key)) continue;
+    seen.push({ seconds: item.seconds, text: item.text, role: item.role, look: item.look, box: item.box, ...measureSeenCaption(pixels, outWidth, outHeight, item.look, item.box) });
+  }
+  const grouped = groupSeenCaptions(seen);
+  if (process.env.EXACT_COPY_DEBUG)
+    console.info(`[exactCopy] 1秒ごとの字幕: ${seen.map((m) => `${m.seconds}「${m.text.replace(/\n/g, "")}」${m.look.fontFamily}・字${m.fill}・縁${m.edge}・光${m.look.glowColor}・${m.measured ? "測" : "AI"}${m.oriented ? "向" : ""}`).join(" / ")}`);
   console.info(
-    `[exactCopy] 字幕の見た目の組: ${survey.groups
-      .map((group, index) => `「${group.examples.slice(0, 2).join("・")}」(字${group.look.color}・縁${group.look.strokeColor ?? group.look.bandColor ?? "なし"}・${counted[index].count}回)`)
+    `[exactCopy] 字幕の見た目の組(1秒ごとに測ってまとめた): ${grouped
+      .map((members) => {
+        const lead = members[0];
+        const texts = [...new Set(members.map((m) => m.text))];
+        return `「${texts.slice(0, 3).join("・")}」(字${lead.fill}・縁${lead.edge ?? "なし"}・${lead.look.fontFamily}・光${lead.look.glowColor ?? "なし"}・${lead.measured ? (lead.oriented ? "測れた" : "測れた・向き不明") : "測れない"}・${members.length}回)`;
+      })
       .join(" / ")}`
   );
-  if (groups.length === 0) return raw;
+  if (grouped.length === 0) return raw;
   // 切り抜きの中の箱を、画面全体の箱に直す
   const toScreen = (box: RawLook["box"]): RawLook["box"] => ({
     xPercent: box.xPercent,
@@ -1479,20 +1461,33 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     widthPercent: box.widthPercent,
     heightPercent: (box.heightPercent / 100) * band.heightPercent,
   });
-  const lookOf = (group: (typeof groups)[number]): RawLook => ({ ...group.look, seconds: group.seconds, box: toScreen(group.box) });
-  const [normal, ...others] = groups;
+  // 代表(測れた秒)の見た目に、測った色を入れる。書体・光は、まとめた秒で一番多い答え。
+  // 縁か帯を画面で測れた見た目には、AIの答えた光を入れない(縁の外のもう1層は画面から測る。光を足すと、黄色い字の黒い縁が光に埋もれた)
+  const lookOf = (members: SeenCaption[]): RawLook => {
+    const lead = members[0];
+    const glows = lead.edge && lead.measured ? [] : members.map((m) => m.look.glowColor).filter((c): c is string => !!c);
+    return {
+      ...lead.look,
+      fontFamily: mostCommon(members.map((m) => m.look.fontFamily)),
+      color: lead.fill,
+      strokeColor: lead.look.bandColor ? null : lead.edge,
+      bandColor: lead.look.bandColor ? lead.edge : null,
+      glowColor: glows.length > 0 ? mostCommon(glows) : null,
+      seconds: lead.seconds,
+      box: toScreen(lead.box),
+    };
+  };
+  const roleOf = (members: SeenCaption[]) => {
+    const texts = [...new Set(members.map((m) => m.text).filter((t) => t.trim().length > 0))];
+    const role = mostCommon(members.map((m) => m.role)) || "強調した言葉";
+    return `${role}${texts.length > 0 ? `(手本では「${texts.slice(0, 2).join("」「")}」のような言葉)` : ""}`;
+  };
+  const [normal, ...others] = grouped;
   return {
     ...raw,
     caption: { ...raw.caption, look: lookOf(normal) },
-    emphasisStyles: others
-      .filter((group) => group.count >= 1)
-      // E40: 手本の強調は5種類以上あることがある(日韓は白字青縁・明朝白字黒影・明朝白字青光・黄字黒縁・赤字黄白縁・青濃淡明朝黄光)
-      .slice(0, 6)
-      .map((group) => ({
-        role: `${group.role}${group.examples.length > 0 ? `(手本では「${group.examples.slice(0, 2).join("」「")}」のような言葉)` : ""}`,
-        look: lookOf(group),
-        scale: 1,
-      })),
+    // 手本の強調は5種類以上あることがある(日韓は白字青縁・明朝白字黒影・明朝青濃淡光・明朝白字青光・黄字黒縁・赤字白縁)
+    emphasisStyles: others.slice(0, 10).map((members) => ({ role: roleOf(members), look: lookOf(members), scale: 1 })),
   };
 };
 

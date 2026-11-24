@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAPTION_SURVEY_PROMPT, LOOK_CHECK_PROMPT, TEMPLATE_EXTRACT_PROMPT, innerColorSays, sameCaption } from "./extract";
+import { CAPTION_SURVEY_PROMPT, LOOK_CHECK_PROMPT, TEMPLATE_EXTRACT_PROMPT, groupSeenCaptions, innerColorSays, sameCaption, type SeenCaption } from "./extract";
 import { LIBRARY_PICK_PROMPT, TEMPLATE_OBJECTS_NOTE } from "./ai";
 
 /** 試しに使っている手本・動画の中身(完全模倣の指示文に入れると、答えのヒントになる言葉)。 */
@@ -104,5 +104,27 @@ describe("完全模倣 E44 測った所の字幕が同じ物か", () => {
   });
   it("別の字幕は別とみなす", () => {
     expect(sameCaption("カウンセリングは無料ですか？", "プロフィールリンクからご予約ください！")).toBe(false);
+  });
+});
+
+describe("完全模倣 E40 1秒ごとに測った字幕を見た目でまとめる", () => {
+  const seen = (seconds: number, fill: string, edge: string | null, extra: Partial<SeenCaption["look"]> = {}, oriented = true): SeenCaption => ({
+    seconds,
+    text: `字幕${seconds}`,
+    role: "",
+    look: { fontFamily: "Noto Sans JP", color: fill, strokeColor: edge, bandColor: null, glowColor: null, ...extra },
+    box: { xPercent: 50, yPercent: 50, widthPercent: 80, heightPercent: 30 },
+    fill,
+    edge,
+    measured: true,
+    oriented,
+  });
+  it("明朝で光のある字幕は、色が近くてもゴシックの縁取りと別にする", () => {
+    const groups = groupSeenCaptions([seen(1, "#FFFFFF", "#1060D0"), seen(2, "#FFFFFF", "#1262CC"), seen(3, "#FFFFFF", "#1060D0", { fontFamily: "Noto Serif JP", glowColor: "#F0E060" })]);
+    expect(groups.map((g) => g.length)).toEqual([2, 1]);
+  });
+  it("字の中と縁の色が逆の字幕は、どちらも向きが分かっていれば別にする", () => {
+    expect(groupSeenCaptions([seen(1, "#FFFFFF", "#1060D0"), seen(2, "#1060D0", "#FFFFFF")])).toHaveLength(2);
+    expect(groupSeenCaptions([seen(1, "#FFFFFF", "#1060D0"), seen(2, "#1060D0", "#FFFFFF", {}, false)])).toHaveLength(1);
   });
 });
