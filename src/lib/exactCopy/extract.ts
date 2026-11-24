@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 13;
+const EXTRACT_VERSION = 14;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -656,6 +656,17 @@ export const innerColorSays = (
   if (strokeCount >= fillCount * 1.5) return "swap";
   if (fillCount >= strokeCount * 1.5) return "as-is";
   return null;
+};
+
+/** 2つの字幕が同じ物か(空白・記号を除き、片方がもう片方を含むか、3文字続きの同じ所があれば同じとみなす。読み違いを許すため)。 */
+export const sameCaption = (a: string, b: string): boolean => {
+  const clean = (text: string) => text.replace(/[\s、。！？!?「」()()・…ー〜~]/g, "");
+  const x = clean(a);
+  const y = clean(b);
+  if (!x || !y) return true;
+  if (x.includes(y) || y.includes(x)) return true;
+  for (let i = 0; i + 3 <= x.length; i++) if (y.includes(x.slice(i, i + 3))) return true;
+  return false;
 };
 
 /**
@@ -1653,6 +1664,15 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
     // 光(ぼんやりした外側の層)は、字そのものや影を取り違えやすく、色が手本と違った(赤い字に赤い光など)ので使わない
     if (outer.kind === "line") style.outerStroke = { color: outer.color, widthPx: Math.max(1, Math.min(30, outer.widthPx)) };
   });
+  // E44: 測った画面に写っていた文字が、その種類の手本の例と違う時は、別の字幕を測っている(色も別物になる)ので、その種類は入れない
+  const kept = refined.emphasisStyles.filter((style, i) => {
+    const seen = textOf.get(`emphasis${i + 1}`);
+    const examples = [...style.role.matchAll(/「([^」]+)」/g)].map((match) => match[1]);
+    if (!seen || examples.length === 0 || examples.some((example) => sameCaption(seen, example))) return true;
+    console.info(`[exactCopy] emphasis${i + 1}: 測った所の文字「${seen}」が、手本の例「${examples.join("」「")}」と違うので、この種類は入れない`);
+    return false;
+  });
+  refined.emphasisStyles = kept;
   // 4. カードの中の名前の高さを、画素から測る(AIはカードの下端からの高さを大きめに読み、絵を入れる所が狭くなった)
   const compare = refined.compare;
   if (compare) {

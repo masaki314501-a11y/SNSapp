@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAPTION_SURVEY_PROMPT, LOOK_CHECK_PROMPT, TEMPLATE_EXTRACT_PROMPT, innerColorSays } from "./extract";
+import { CAPTION_SURVEY_PROMPT, LOOK_CHECK_PROMPT, TEMPLATE_EXTRACT_PROMPT, innerColorSays, sameCaption } from "./extract";
 import { LIBRARY_PICK_PROMPT, TEMPLATE_OBJECTS_NOTE } from "./ai";
 
 /** 試しに使っている手本・動画の中身(完全模倣の指示文に入れると、答えのヒントになる言葉)。 */
@@ -94,5 +94,15 @@ describe("完全模倣 E44 字の中と縁の色", () => {
   it("2色が同じに近い時は決めない", () => {
     const { pixels, width, height } = draw(white, blue, white);
     expect(innerColorSays(pixels, width, height, box, "#FBFDFB", "#F0F0F0")).toBeNull();
+  });
+});
+
+describe("完全模倣 E44 測った所の字幕が同じ物か", () => {
+  it("読み違い・空白があっても、同じ字幕は同じとみなす", () => {
+    expect(sameCaption("上下裏側(フルリンガル)", "上下裏側 (フルリンガル)")).toBe(true);
+    expect(sameCaption("完全オーダーメイ", "完全オーダーメイド")).toBe(true);
+  });
+  it("別の字幕は別とみなす", () => {
+    expect(sameCaption("カウンセリングは無料ですか？", "プロフィールリンクからご予約ください！")).toBe(false);
   });
 });
