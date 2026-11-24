@@ -42,15 +42,15 @@ describe("完全模倣 EC-3 当てはめ", () => {
       new Set(["pop"])
     );
     expect(rows).toEqual([
-      { index: 0, emphasis: 1, animation: "pop", zoom: 1.15, sfx: "pop" },
-      { index: 1, emphasis: null, animation: "fade", zoom: null, sfx: null },
-      { index: 2, emphasis: null, animation: "pop", zoom: 1.5, sfx: null },
+      { index: 0, emphasis: 1, animation: "pop", zoom: 1.15, sfx: "pop", copyOf: null },
+      { index: 1, emphasis: null, animation: "fade", zoom: null, sfx: null, copyOf: null },
+      { index: 2, emphasis: null, animation: "pop", zoom: 1.5, sfx: null, copyOf: null },
     ]);
   });
 
   it("手本の字幕の長さの上限は、短い順に並べた8割の所", async () => {
     const { captionLimitOf } = await import("./imitate");
-    const event = (text: string) => ({ seconds: 0, kind: "caption" as const, spoken: "", trigger: "", text, look: "", motion: "", scale: null, sound: "" });
+    const event = (text: string) => ({ seconds: 0, kind: "caption" as const, spoken: "", trigger: "", text, look: "", motion: "", scale: null, sound: "", textColor: null, strokeColor: null });
     const texts = ["あいうえおかき", "あいうえおかきく", "あいうえおかきくけ", "あいうえおかきくけこ", "あいうえおかきくけこさしす"];
     expect(captionLimitOf({ seconds: 10, measuredChanges: [], events: texts.map(event), rules: { emphasis: "", captions: "", zoom: "", sfx: "", objects: "" } })).toBe(13);
   });

@@ -23,10 +23,15 @@ export type ImitationRow = {
   zoom: number | null;
   /** 鳴らす効果音のid(鳴らさないなら null)。 */
   sfx: string | null;
+  /** 見た目を写す、手本の強調(手本の強調の出来事の番号。0始まり。無ければ null)。EC-8 */
+  copyOf: number | null;
 };
 
 /** 工程11で付けるために、字幕のクリップのキーごとに覚えておく寄りと効果音。 */
 export type ExactEffects = Record<string, { zoom: number | null; sfx: string | null }>;
+
+/** 手本の強調の出来事(番号を付けてAIに見せ、見た目を写す元にする)。 */
+export const emphasisEvents = (events: ReferenceEvents) => events.events.filter((event) => event.kind === "emphasis");
 
 const fmtEvents = (events: ReferenceEvents) =>
   events.events
@@ -73,6 +78,8 @@ ${input.rows.map((row, index) => `${index + 1}: ${row.text.replace(/\n/g, "")} (
 字幕ごとに、次を答えてください(すべての字幕について、番号の順に)。
 - index: 字幕の番号。
 - emphasis: 手本で強調していた役目の字幕なら、強調の見た目の番号。強調しないなら 0。
+- copyOf: 強調する字幕は、手本の強調のうち、役目が一番近い物の番号(下の一覧)。その字の色・縁の色を写す。手本が強調ごとに色を変えている時は、手本と同じ順に色が変わるように選ぶ。強調しないなら 0。
+${emphasisEvents(input.events).map((event, index) => `  ${index + 1}: 「${event.text || event.spoken}」(${event.trigger}。${event.look})`).join("\n")}
 ${input.emphasisStyles.map((style, index) => `  ${index + 1}: ${style.role}(${style.look})`).join("\n")}
 - animation: その字幕が出る時の動き。手本のその役目の字幕の動きに一番近い物: ${CAPTION_ANIMATION_OPTIONS.map((option) => `${option.value}(${option.label})`).join(" / ")}
 - zoom: 手本でその役目の瞬間に寄っていたなら、その強さ(例 1.15)。寄らないなら 0。
@@ -100,9 +107,10 @@ export const planImitation = async (input: Parameters<typeof IMITATE_PROMPT>[0])
               animation: { type: Type.STRING, format: "enum", enum: [...ANIMATION_VALUES] },
               zoom: { type: Type.NUMBER },
               sfx: { type: Type.STRING },
+              copyOf: { type: Type.INTEGER },
               reason: { type: Type.STRING },
             },
-            required: ["index", "emphasis", "animation", "zoom", "sfx", "reason"],
+            required: ["index", "emphasis", "animation", "zoom", "sfx", "copyOf", "reason"],
           },
         },
       },
@@ -116,20 +124,22 @@ export const planImitation = async (input: Parameters<typeof IMITATE_PROMPT>[0])
           animation: z.enum(ANIMATION_VALUES).catch("pop"),
           zoom: z.number().catch(0),
           sfx: z.string().catch(""),
+          copyOf: z.number().int().catch(0),
           reason: z.string().catch(""),
         })
       ),
     }),
   });
-  return toRows(result.rows, input.rows.length, input.emphasisStyles.length, new Set(input.sounds.map((sound) => sound.id)));
+  return toRows(result.rows, input.rows.length, input.emphasisStyles.length, new Set(input.sounds.map((sound) => sound.id)), emphasisEvents(input.events).length);
 };
 
 /** AIの答えを、使える形に直す(範囲外の番号・知らない音は外す。寄りは1.05〜1.5倍)。 */
 export const toRows = (
-  raw: { index: number; emphasis: number; animation: CaptionAnimation; zoom: number; sfx: string }[],
+  raw: { index: number; emphasis: number; animation: CaptionAnimation; zoom: number; sfx: string; copyOf?: number }[],
   rowCount: number,
   styleCount: number,
-  sounds: Set<string>
+  sounds: Set<string>,
+  referenceEmphasisCount = 0
 ): ImitationRow[] => {
   const byIndex = new Map<number, ImitationRow>();
   for (const row of raw) {
@@ -141,6 +151,7 @@ export const toRows = (
       animation: row.animation,
       zoom: row.zoom >= 1.03 ? Math.min(1.5, Math.max(1.05, row.zoom)) : null,
       sfx: sounds.has(row.sfx) ? row.sfx : null,
+      copyOf: row.copyOf && row.copyOf >= 1 && row.copyOf <= referenceEmphasisCount && row.emphasis >= 1 ? row.copyOf - 1 : null,
     });
   }
   return [...byIndex.values()].sort((a, b) => a.index - b.index);

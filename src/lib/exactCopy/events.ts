@@ -14,7 +14,7 @@ import { STEP_MODEL, askJson, geminiClient, referenceMedia } from "./ai";
 import type { StyleReferenceFile } from "./ai";
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EVENTS_VERSION = 1;
+const EVENTS_VERSION = 2;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-events");
 /** AIに見せる手本の細かさ(1秒あたりの枚数)。テロップの出方・寄りの動きを見分けるため、ふつう(1枚)より細かくする。 */
 const VIDEO_FPS = 4;
@@ -94,6 +94,9 @@ export type ReferenceEvent = {
   scale: number | null;
   /** 効果音の感じ(短い高い音・重い音・ジャーン 等)。効果音以外は空。 */
   sound: string;
+  /** 文字の出来事(caption・emphasis・title)の、字の色と縁の色(#RRGGBB。無ければ null)。EC-8 */
+  textColor: string | null;
+  strokeColor: string | null;
 };
 
 export type ReferenceEvents = {
@@ -134,6 +137,7 @@ ${measured.length > 0 ? measured.map((t) => `${t.toFixed(1)}秒`).join("・") : 
 - motion: 出る時の動き・消える時の動き(例: ぱっと出る、拡大しながら出る、下から出る、横から流れる、ふわっと出る、揺れる、縮みながら別の所へ動く)。無ければ空。
 - scale: zoom-in・zoom-out の時だけ、寄りの強さ(寄っていない時の何倍か。例 1.15)。それ以外は null。
 - sound: sfx の時だけ、音の感じ(例: 短く高い音、ポンという軽い音、重い衝撃音、ジャーンという発表の音、シュッという音)。それ以外は空。
+- textColor・strokeColor: caption・emphasis・title の時だけ、字の線の内側(真ん中)の色と、その外側を囲む縁の色(#RRGGBB。縁が無ければ strokeColor は null)。2つを取り違えない。それ以外は null。
 
 ## 手本全体の決まり(rules)
 - emphasis: どんな言葉・瞬間を強調(目立つ字幕)にしているか。どのくらいの量か(例: 項目の名前は全部、答えは全部、1話題に1回 等)。強調の見た目が何種類かあれば、種類ごとの使い分け。
@@ -165,8 +169,10 @@ const EVENTS_SCHEMA: Schema = {
           motion: str,
           scale: { type: Type.NUMBER, nullable: true },
           sound: str,
+          textColor: { type: Type.STRING, nullable: true },
+          strokeColor: { type: Type.STRING, nullable: true },
         },
-        required: ["seconds", "kind", "spoken", "trigger", "text", "look", "motion", "scale", "sound"],
+        required: ["seconds", "kind", "spoken", "trigger", "text", "look", "motion", "scale", "sound", "textColor", "strokeColor"],
       },
     },
     rules: {
@@ -190,6 +196,8 @@ const EVENTS_PARSE = z.object({
       motion: z.string().catch(""),
       scale: z.number().nullable().catch(null),
       sound: z.string().catch(""),
+      textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().catch(null),
+      strokeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().catch(null),
     })
   ),
   rules: z.object({ emphasis: z.string(), captions: z.string(), zoom: z.string(), sfx: z.string(), objects: z.string() }),
