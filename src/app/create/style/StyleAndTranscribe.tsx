@@ -233,7 +233,8 @@ export const StyleAndTranscribe: React.FC = () => {
   /** カット画面で選んだ「使う範囲」(=カット結果の再生順)。まだ字幕は持たない。 */
   const keepRanges = project?.segments ?? [];
 
-  const goToAutoEdit = () => {
+  // 完全模倣は、手本の画面から別の画面(/create/exact-copy)へ進む。保存する中身は自動編集へ進む時と同じ
+  const goToAutoEdit = (destination: "/create/auto-edit" | "/create/exact-copy" = "/create/auto-edit") => {
     if (!project) return;
     saveProject({
       ...project,
@@ -250,7 +251,7 @@ export const StyleAndTranscribe: React.FC = () => {
       styleReferences: references,
       styleReferenceApplied: primaryColor !== null || Boolean(project.styleReferenceApplied),
     });
-    router.push("/create/auto-edit");
+    router.push(destination);
   };
 
   if (!hasCheckedProject) return null;
@@ -448,7 +449,7 @@ export const StyleAndTranscribe: React.FC = () => {
         <div className="bottom-action-row">
           {isBusy ? null : !hasAnyReference ? (
             // 手本を選んでいない(または読み込みに失敗した)時は、手本なしで進めるようにする
-            <button type="button" onClick={goToAutoEdit} className="btn-outline">
+            <button type="button" onClick={() => goToAutoEdit()} className="btn-outline">
               手本なしで進む
             </button>
           ) : canAddMore ? (
@@ -457,7 +458,12 @@ export const StyleAndTranscribe: React.FC = () => {
               手本を追加
             </label>
           ) : null}
-          <button type="button" onClick={goToAutoEdit} disabled={isBusy || !hasAnyReference} className="btn-primary">
+          {hasAnyReference && !isBusy ? (
+            <button type="button" onClick={() => goToAutoEdit("/create/exact-copy")} className="btn-outline">
+              完全模倣で作る
+            </button>
+          ) : null}
+          <button type="button" onClick={() => goToAutoEdit()} disabled={isBusy || !hasAnyReference} className="btn-primary">
             自動編集へ進む
           </button>
         </div>
