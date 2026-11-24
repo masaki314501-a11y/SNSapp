@@ -204,30 +204,6 @@ describe("見た目の手本の型", () => {
     expect(cta[0].glowColor).toBe("#1F5FC8");
   });
 
-  it("最後の一言と同じ高さの話題の見出しは、最後の一言が出る時に消す(名前は残す)", () => {
-    const withCta: ReferenceTemplate = { ...compare, cta: { xPercent: 50, yPercent: 56, fontSizePx: 64, look: { color: "#FFFFFF", strokeColor: "#000000" }, seconds: 1, maxWidthPercent: 90 } };
-    const state = baseState(buildTemplateObjects({ template: withCta, title: "タイトル", frameCount: 2 }));
-    const filled = placeTemplateFills(
-      {
-        ...state,
-        frameFills: [
-          { frame: 1, key: "a", sourceSeconds: 0, label: "日本" },
-          { frame: 2, key: "a", sourceSeconds: 0, label: "韓国" },
-          { frame: TOPIC_FRAME, key: "b", sourceSeconds: 2, label: "価格" },
-          { frame: TOPIC_FRAME, key: "d", sourceSeconds: 6, label: "期間" },
-        ],
-        templateCta: "プロフィールから予約",
-      },
-      withCta
-    );
-    const fills = filled.globalOverlays.filter((overlay) => overlay.tag === TEMPLATE_FILL_TAG);
-    const byText = (text: string) => fills.find((overlay) => overlay.text === text)!;
-    expect(byText("期間").durationInSeconds).toBe(1);
-    expect(byText("価格").durationInSeconds).toBe(4);
-    expect(byText("日本").durationInSeconds).toBeUndefined();
-    expect(byText("プロフィールから予約").startOffsetSeconds).toBe(7);
-  });
-
   it("顔の大きさが手本と同じでも、手本の位置(右寄り)まで届く倍率で寄せる", () => {
     const framing = framingToMatch({ xPercent: 50, yPercent: 30, widthPercent: 10, heightPercent: 14 }, { xPercent: 68, yPercent: 33, heightPercent: 14 });
     expect(framing?.scale).toBeCloseTo(1.36, 2);

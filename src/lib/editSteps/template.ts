@@ -535,16 +535,6 @@ export const placeTemplateFills = (state: StepState, template: ReferenceTemplate
     const start = Math.max(0, end - cta.seconds);
     const lines = ctaText.split("\n").map((line) => line.trim()).filter(Boolean);
     const size = fitFontSize(lines.map((text) => ({ text, look: cta.look })), cta.fontSizePx, cta.maxWidthPercent);
-    // 最後の一言と上下が重なる文字(話題の見出し・カードの中身など)は、最後の一言が出る時に消す
-    const half = (lines.length * lineStepPercent(size)) / 2;
-    for (let i = 0; i < texts.length; i++) {
-      const text = texts[i];
-      const from = text.startOffsetSeconds ?? 0;
-      const until = text.durationInSeconds !== undefined ? from + text.durationInSeconds : Infinity;
-      const reach = lineStepPercent(text.fontSizePx ?? size) / 2;
-      if (from >= start || until <= start || Math.abs(text.yPercent - cta.yPercent) >= half + reach) continue;
-      texts[i] = { ...text, durationInSeconds: round2(Math.max(0.2, start - from)) };
-    }
     lines.forEach((line, index) => {
       const offset = index - (lines.length - 1) / 2;
       texts.push(tagged(textOverlay(line, cta.look, { xPercent: cta.xPercent, yPercent: cta.yPercent + offset * lineStepPercent(size), fontSizePx: size }), start));
