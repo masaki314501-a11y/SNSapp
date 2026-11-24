@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 11;
+const EXTRACT_VERSION = 12;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -510,6 +510,135 @@ export const strokeLooksSwapped = (
   if (fillInside >= 0.25 && fillInside > strokeInside * 2) return false;
   // どちらも相手に囲まれている(縁の外側にさらに文字の色と同じ細い縁がある等)時は、外側から見て決める
   return outerLayerSays(classOf, x0, x1, y0, y1) === "fill-is-stroke";
+};
+
+/**
+ * E44: 縁取り文字の2色のうち、どちらが字の中の色かを、色のかたまりの重なりの順番で決める。
+ * 箱の中を同じ色のつながったかたまりに分け、箱の縁に触れる背景を0層目として、外から何層目にあるかを数える。
+ * 字の中の色は縁に囲まれているので、いちばん内側の層に出る(外側にもう1本細い縁がある3重の字でも、太さによらず決まる)。
+ * 戻り値: "swap"=入れ替えるべき・"as-is"=そのまま・null=はっきりしない。
+ */
+export const innerColorSays = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  box: { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number },
+  fill: string,
+  stroke: string
+): "swap" | "as-is" | null => {
+  const fillRgb = hexToRgb(fill);
+  const strokeRgb = hexToRgb(stroke);
+  if (distance(fillRgb, strokeRgb) < 60) return null;
+  // 字の外の背景が箱の縁に必ず出るよう、少し広げる
+  const x0 = Math.max(0, Math.floor(((box.xPercent - box.widthPercent * 0.6) / 100) * width));
+  const x1 = Math.min(width, Math.ceil(((box.xPercent + box.widthPercent * 0.6) / 100) * width));
+  const y0 = Math.max(0, Math.floor(((box.yPercent - box.heightPercent * 0.7) / 100) * height));
+  const y1 = Math.min(height, Math.ceil(((box.yPercent + box.heightPercent * 0.7) / 100) * height));
+  const bw = x1 - x0;
+  const bh = y1 - y0;
+  if (bw < 4 || bh < 4) return null;
+  const cls = new Uint8Array(bw * bh);
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const i = ((y0 + y) * width + x0 + x) * 3;
+      const rgb: Rgb = [pixels[i], pixels[i + 1], pixels[i + 2]];
+      const df = distance(rgb, fillRgb);
+      const ds = distance(rgb, strokeRgb);
+      cls[y * bw + x] = Math.min(df, ds) > 60 ? 0 : df <= ds ? 1 : 2;
+    }
+  }
+  const comp = new Int32Array(bw * bh).fill(-1);
+  const compCls: number[] = [];
+  const compSize: number[] = [];
+  const onBorder: boolean[] = [];
+  const NEIGHBORS = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+  for (let start = 0; start < bw * bh; start++) {
+    if (comp[start] >= 0) continue;
+    const id = compCls.length;
+    let size = 0;
+    let border = false;
+    const stack = [start];
+    comp[start] = id;
+    while (stack.length) {
+      const k = stack.pop()!;
+      size++;
+      const x = k % bw;
+      const y = (k - x) / bw;
+      if (x === 0 || y === 0 || x === bw - 1 || y === bh - 1) border = true;
+      for (const [dx, dy] of NEIGHBORS) {
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= bw || yy >= bh) continue;
+        const n = yy * bw + xx;
+        if (comp[n] < 0 && cls[n] === cls[start]) {
+          comp[n] = id;
+          stack.push(n);
+        }
+      }
+    }
+    compCls.push(cls[start]);
+    compSize.push(size);
+    onBorder.push(border);
+  }
+  const neighbors = compCls.map(() => new Set<number>());
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const k = y * bw + x;
+      if (x + 1 < bw && comp[k] !== comp[k + 1]) {
+        neighbors[comp[k]].add(comp[k + 1]);
+        neighbors[comp[k + 1]].add(comp[k]);
+      }
+      if (y + 1 < bh && comp[k] !== comp[k + bw]) {
+        neighbors[comp[k]].add(comp[k + bw]);
+        neighbors[comp[k + bw]].add(comp[k]);
+      }
+    }
+  }
+  const level = compCls.map(() => -1);
+  const queue: number[] = [];
+  compCls.forEach((c, id) => {
+    if (c === 0 && onBorder[id]) {
+      level[id] = 0;
+      queue.push(id);
+    }
+  });
+  for (let h = 0; h < queue.length; h++) {
+    for (const n of neighbors[queue[h]]) {
+      if (level[n] < 0) {
+        level[n] = level[queue[h]] + 1;
+        queue.push(n);
+      }
+    }
+  }
+  // 層ごとの、2色それぞれの画素数(色の混ざった境目の小さなくずは数えない)
+  const byLevel = new Map<number, [number, number]>();
+  let total = 0;
+  compCls.forEach((c, id) => {
+    if (c === 0 || compSize[id] < 8 || level[id] < 1) return;
+    const counts = byLevel.get(level[id]) ?? [0, 0];
+    counts[c - 1] += compSize[id];
+    byLevel.set(level[id], counts);
+    total += compSize[id];
+  });
+  if (total < 150) return null;
+  // ある程度の量(字の画素の8%以上)がある層のうち、いちばん内側の層で多い色を、字の中の色とする
+  const deepest = [...byLevel.keys()].sort((a, b) => b - a).find((key) => {
+    const [a, b] = byLevel.get(key)!;
+    return a + b >= total * 0.08;
+  });
+  if (deepest === undefined || deepest < 2) {
+    // 層が1つしかない(縁が途切れて字の中も背景に触れる)時は決めない
+    return null;
+  }
+  const [fillCount, strokeCount] = byLevel.get(deepest)!;
+  if (strokeCount >= fillCount * 1.5) return "swap";
+  if (fillCount >= strokeCount * 1.5) return "as-is";
+  return null;
 };
 
 /**
@@ -1351,10 +1480,13 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
     let color = snapColor(slot.look.color, measured);
     const used = [hexToRgb(color)];
     let strokeColor = slot.look.strokeColor ? snapColor(slot.look.strokeColor, measured, used) : null;
-    // 文字の色と縁取りの色が入れ替わっていたら直す
-    if (strokeColor && strokeLooksSwapped(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor)) {
+    // 文字の色と縁取りの色が入れ替わっていたら直す。
+    // E44: まず色のかたまりの重なりの順番で決め(innerColorSays)、はっきりしない時だけ今までの見分け方を使う
+    const layered = strokeColor ? innerColorSays(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor) : null;
+    if (strokeColor && (layered === "swap" || (layered === null && strokeLooksSwapped(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor)))) {
       [color, strokeColor] = [strokeColor, color];
     }
+    if (layered) console.info(`[exactCopy] ${slot.id}: 色の重なりの順番で、字の中は ${color}・縁は ${strokeColor}`);
     if (strokeColor) used.push(hexToRgb(strokeColor));
     const bandColor = slot.look.bandColor ? snapColor(slot.look.bandColor, measured, used) : null;
     slot.setLook({ ...slot.look, color, strokeColor, bandColor, glowColor: keepGlow(slot.look.glowColor, measured, [color, strokeColor, bandColor]) });
@@ -1380,6 +1512,7 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
         color,
         strokeColor,
         currentFont: slot.look.fontFamily,
+        orderFixed: layered !== null,
       }).catch((error: unknown) => {
         console.warn("[exactCopy] 書体を描いて比べられませんでした", error);
         return null;
@@ -1388,7 +1521,8 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
       if (tried) console.info(`[exactCopy] ${slot.id}「${text}」: 一番近いのは ${tried.fontFamily}${tried.swapped ? "(字と縁の色を入れ替え)" : ""}・似かた${tried.score.toFixed(2)}`);
       const match = tried && tried.score >= MIN_MATCH_SCORE ? tried : null;
       if (match) {
-        if (match.swapped && strokeColor) [color, strokeColor] = [strokeColor, color];
+        // E44: 重なりの順番で字の中の色が決まっている時は、描いて比べた結果で入れ替えない(太い縁の方が字の形に似て見えるため)
+        if (match.swapped && strokeColor && layered === null) [color, strokeColor] = [strokeColor, color];
         // 書体は、もとの(AIが答えた)書体より、はっきり(0.05より多く)似ている時だけ替える(描いて比べる結果はぶれるため)
         const fontFamily = match.scoreOfCurrent !== undefined && match.score - match.scoreOfCurrent <= 0.05 ? slot.look.fontFamily : match.fontFamily;
         slot.setLook({ ...slot.look, fontFamily, color, strokeColor, bandColor, glowColor: keepGlow(slot.look.glowColor, measured, [color, strokeColor, bandColor]) });

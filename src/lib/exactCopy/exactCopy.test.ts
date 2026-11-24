@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAPTION_SURVEY_PROMPT, LOOK_CHECK_PROMPT, TEMPLATE_EXTRACT_PROMPT } from "./extract";
+import { CAPTION_SURVEY_PROMPT, LOOK_CHECK_PROMPT, TEMPLATE_EXTRACT_PROMPT, innerColorSays } from "./extract";
 import { LIBRARY_PICK_PROMPT, TEMPLATE_OBJECTS_NOTE } from "./ai";
 
 /** 試しに使っている手本・動画の中身(完全模倣の指示文に入れると、答えのヒントになる言葉)。 */
@@ -66,5 +66,33 @@ describe("完全模倣 EC-7 先生の映り方", () => {
     const f = framingExact({ xPercent: 50, yPercent: 40, heightPercent: 10 }, { xPercent: 50, yPercent: 30, heightPercent: 20 })!;
     expect(f.scale).toBe(2);
     expect(f.focusYPercent + (40 - f.focusYPercent) * f.scale).toBeCloseTo(30, 1);
+  });
+});
+
+describe("完全模倣 E44 字の中と縁の色", () => {
+  // 灰色の背景に、細い白の外線・太い青の縁・白い字の中、の3重の「字」(太い棒)を描く
+  const draw = (inner: number[], edge: number[], outer: number[]) => {
+    const width = 100;
+    const height = 100;
+    const pixels = new Uint8Array(width * height * 3).fill(90);
+    const paint = (x0: number, y0: number, x1: number, y1: number, rgb: number[]) => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) pixels.set(rgb, (y * width + x) * 3);
+    };
+    paint(20, 30, 80, 70, outer);
+    paint(22, 32, 78, 68, edge);
+    paint(28, 38, 72, 62, inner);
+    return { pixels, width, height };
+  };
+  const box = { xPercent: 50, yPercent: 50, widthPercent: 70, heightPercent: 50 };
+  const white = [251, 253, 251];
+  const blue = [10, 91, 197];
+  it("縁が字の中より太くても、内側にある白を字の中の色とする", () => {
+    const { pixels, width, height } = draw(white, blue, white);
+    expect(innerColorSays(pixels, width, height, box, "#0A5BC5", "#FBFDFB")).toBe("swap");
+    expect(innerColorSays(pixels, width, height, box, "#FBFDFB", "#0A5BC5")).toBe("as-is");
+  });
+  it("2色が同じに近い時は決めない", () => {
+    const { pixels, width, height } = draw(white, blue, white);
+    expect(innerColorSays(pixels, width, height, box, "#FBFDFB", "#F0F0F0")).toBeNull();
   });
 });

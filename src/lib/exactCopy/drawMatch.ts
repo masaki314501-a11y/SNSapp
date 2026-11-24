@@ -246,11 +246,13 @@ export const bestLook = async (input: {
   strokeColor: string | null;
   /** もとの(AIが答えた)書体。 */
   currentFont?: string;
+  /** E44: 字の中と縁の色がもう決まっている時は true(入れ替えた形では比べない)。 */
+  orderFixed?: boolean;
 }): Promise<DrawMatch | null> => {
   const text = input.text.replace(/\s+/g, "");
   if (!text) return null;
   const hypotheses = [{ fill: input.color, wall: input.strokeColor, swapped: false }];
-  if (input.strokeColor) hypotheses.push({ fill: input.strokeColor, wall: input.color, swapped: true });
+  if (input.strokeColor && !input.orderFixed) hypotheses.push({ fill: input.strokeColor, wall: input.color, swapped: true });
   let best: DrawMatch | null = null;
   let currentScore = -1;
   for (const hypothesis of hypotheses) {
