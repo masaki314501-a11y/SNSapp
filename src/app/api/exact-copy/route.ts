@@ -557,6 +557,7 @@ export async function POST(request: Request) {
                   textColor: chosenStyle.textColor,
                   bandColor: chosenStyle.bandColor,
                   ...(chosenStyle.strokeColor ? { strokeColor: chosenStyle.strokeColor } : {}),
+                  ...(chosenStyle.outerStroke ? { outerStroke: chosenStyle.outerStroke } : {}),
                 }
               : aiLook.emphasis;
           };
@@ -580,11 +581,15 @@ export async function POST(request: Request) {
               const styled = applyEmphasis(segments, styleKeys, emphasisLookOf(style), chosen.base);
               const glow = template.emphasisStyles[style].glowColor;
               const scale = template.emphasisStyles[style].scale;
+              // E44: 縁の外側のもう1本の線(applyEmphasis は今までの作り方と共有なので、ここで付け足す)
+              const outerStroke = template.emphasisStyles[style].outerStroke;
               emphasized = emphasized.map((segment, i) =>
                 styleKeys.has(segment.key)
                   ? {
                       ...segment,
-                      captionEmphasis: styled[i].captionEmphasis && scale ? { ...styled[i].captionEmphasis, scale } : styled[i].captionEmphasis,
+                      captionEmphasis: styled[i].captionEmphasis
+                        ? { ...styled[i].captionEmphasis, ...(scale ? { scale } : {}), ...(outerStroke ? { outerStroke } : {}) }
+                        : undefined,
                       ...(glow ? { captionGlowColor: glow } : {}),
                     }
                   : segment
@@ -593,9 +598,10 @@ export async function POST(request: Request) {
           } else if (template?.emphasisStyles[0]?.scale) {
             const scale = template.emphasisStyles[0].scale;
             const glow = template.emphasisStyles[0].glowColor;
+            const outerStroke = template.emphasisStyles[0].outerStroke;
             emphasized = emphasized.map((segment) =>
               keys.has(segment.key) && segment.captionEmphasis
-                ? { ...segment, captionEmphasis: { ...segment.captionEmphasis, scale }, ...(glow ? { captionGlowColor: glow } : {}) }
+                ? { ...segment, captionEmphasis: { ...segment.captionEmphasis, scale, ...(outerStroke ? { outerStroke } : {}) }, ...(glow ? { captionGlowColor: glow } : {}) }
                 : segment
             );
           } else if (template?.emphasisStyles[0]?.glowColor) {

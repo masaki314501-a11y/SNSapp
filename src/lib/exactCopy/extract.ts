@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 12;
+const EXTRACT_VERSION = 13;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -230,7 +230,9 @@ const RESPONSE_PARSE = z.object({
     look: lookParse,
     lines: z.number().default(1),
   }),
-  emphasisStyles: z.array(z.object({ role: z.string(), look: lookParse, scale: z.number().default(1) })).default([]),
+  emphasisStyles: z
+    .array(z.object({ role: z.string(), look: lookParse, scale: z.number().default(1), outerStroke: z.object({ color: z.string(), widthPx: z.number() }).optional() }))
+    .default([]),
   title: z.object({
     align: z.enum(["left", "center"]),
     xPercent: percent,
@@ -512,20 +514,15 @@ export const strokeLooksSwapped = (
   return outerLayerSays(classOf, x0, x1, y0, y1) === "fill-is-stroke";
 };
 
-/**
- * E44: 縁取り文字の2色のうち、どちらが字の中の色かを、色のかたまりの重なりの順番で決める。
- * 箱の中を同じ色のつながったかたまりに分け、箱の縁に触れる背景を0層目として、外から何層目にあるかを数える。
- * 字の中の色は縁に囲まれているので、いちばん内側の層に出る(外側にもう1本細い縁がある3重の字でも、太さによらず決まる)。
- * 戻り値: "swap"=入れ替えるべき・"as-is"=そのまま・null=はっきりしない。
- */
-export const innerColorSays = (
+/** innerColorSays・measureOuterLayer の下ごしらえ: 箱の中を2色と背景に分け、同じ色のかたまりごとに外から何層目かを数える。 */
+const colorLayers = (
   pixels: Uint8Array,
   width: number,
   height: number,
   box: { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number },
   fill: string,
   stroke: string
-): "swap" | "as-is" | null => {
+) => {
   const fillRgb = hexToRgb(fill);
   const strokeRgb = hexToRgb(stroke);
   if (distance(fillRgb, strokeRgb) < 60) return null;
@@ -615,6 +612,26 @@ export const innerColorSays = (
       }
     }
   }
+  return { x0, y0, bw, bh, cls, comp, compCls, compSize, level };
+};
+
+/**
+ * E44: 縁取り文字の2色のうち、どちらが字の中の色かを、色のかたまりの重なりの順番で決める。
+ * 箱の中を同じ色のつながったかたまりに分け、箱の縁に触れる背景を0層目として、外から何層目にあるかを数える。
+ * 字の中の色は縁に囲まれているので、いちばん内側の層に出る(外側にもう1本細い縁がある3重の字でも、太さによらず決まる)。
+ * 戻り値: "swap"=入れ替えるべき・"as-is"=そのまま・null=はっきりしない。
+ */
+export const innerColorSays = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  box: { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number },
+  fill: string,
+  stroke: string
+): "swap" | "as-is" | null => {
+  const layers = colorLayers(pixels, width, height, box, fill, stroke);
+  if (!layers) return null;
+  const { compCls, compSize, level } = layers;
   // 層ごとの、2色それぞれの画素数(色の混ざった境目の小さなくずは数えない)
   const byLevel = new Map<number, [number, number]>();
   let total = 0;
@@ -639,6 +656,70 @@ export const innerColorSays = (
   if (strokeCount >= fillCount * 1.5) return "swap";
   if (fillCount >= strokeCount * 1.5) return "as-is";
   return null;
+};
+
+/**
+ * E44: 縁の外側にもう1層あるか(「白い字・青い縁・外に細い白の線」や「黄色い字・黒い縁・外に黄色い光」)を測る。
+ * 外側の層 = 字の中と同じ色で、背景に触れている1層目のかたまり。太さ = その画素数 ÷ 背景と接する長さ。
+ * 字の中の色が縁の切れ目から背景に触れているだけの時(ふつうの字幕)は、太さが字の線ほどあるので外す。
+ * 外側の層が縁より長く背景に接していれば、くっきりした線(line)。短ければ、ぼんやりした光(glow)。
+ * 戻り値の太さは、横1080pxの画面でのpx。
+ */
+export const measureOuterLayer = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  box: { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number },
+  fill: string,
+  stroke: string
+): { kind: "line" | "glow"; color: string; widthPx: number } | null => {
+  const layers = colorLayers(pixels, width, height, box, fill, stroke);
+  if (!layers) return null;
+  const { x0, y0, bw, bh, cls, comp, compSize, level } = layers;
+  let outer = 0;
+  let outerEdge = 0;
+  let strokeEdge = 0;
+  const sum = [0, 0, 0];
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const k = y * bw + x;
+      const id = comp[k];
+      if (level[id] !== 1 || compSize[id] < 8) continue;
+      const touchesBackground = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ].some(([dx, dy]) => {
+        const xx = x + dx;
+        const yy = y + dy;
+        return xx >= 0 && yy >= 0 && xx < bw && yy < bh && level[comp[yy * bw + xx]] === 0;
+      });
+      if (cls[k] === 1) {
+        outer++;
+        if (touchesBackground) outerEdge++;
+        const i = ((y0 + y) * width + x0 + x) * 3;
+        sum[0] += pixels[i];
+        sum[1] += pixels[i + 1];
+        sum[2] += pixels[i + 2];
+      } else if (cls[k] === 2 && touchesBackground) {
+        strokeEdge++;
+      }
+    }
+  }
+  if (outer < 100 || outerEdge === 0) return null;
+  // 本当の二重の縁なら、縁より内側(2層目より奥)に字の中の色がたくさんある。少ない時は、縁(影)がぼやけて背景と
+  // 見分けられず、字そのものが背景に触れているだけ(明朝の白い字に黒い影など)なので外す
+  let innerFill = 0;
+  layers.compCls.forEach((c, id) => {
+    if (c === 1 && level[id] >= 2 && compSize[id] >= 8) innerFill += compSize[id];
+  });
+  if (innerFill < outer) return null;
+  const thickness = outer / outerEdge;
+  // 太さ(540幅の絵で12画素より太い物は、外側の層ではなく字の中そのもの)と、背景と接する長さ(縁の15%以上)で見分ける
+  if (thickness > 12 || outerEdge < strokeEdge * 0.15) return null;
+  const color = `#${sum.map((value) => Math.round(value / outer).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+  return { kind: outerEdge > strokeEdge ? "line" : "glow", color, widthPx: Math.round(thickness * (1080 / width) * 10) / 10 };
 };
 
 /**
@@ -827,6 +908,8 @@ export const toReferenceTemplate = (raw: ExtractedTemplate, meta: { name: string
     ...(style.look.glowColor ? { glowColor: style.look.glowColor.toUpperCase() } : {}),
     // EC-9: 手本から測った強調の大きさ(基本の字幕に対する倍)
     ...(style.scale && Math.abs(style.scale - 1) > 0.02 ? { scale: Math.round(style.scale * 100) / 100 } : {}),
+    // E44: 縁の外側のもう1本の線
+    ...(style.outerStroke ? { outerStroke: style.outerStroke } : {}),
   }));
   return {
     name: meta.name,
@@ -1372,6 +1455,11 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     })
     .filter((group) => group.count > 0)
     .sort((a, b) => b.count - a.count);
+  console.info(
+    `[exactCopy] 字幕の見た目の組: ${survey.groups
+      .map((group, index) => `「${group.examples.slice(0, 2).join("・")}」(字${group.look.color}・縁${group.look.strokeColor ?? group.look.bandColor ?? "なし"}・${counted[index].count}回)`)
+      .join(" / ")}`
+  );
   if (groups.length === 0) return raw;
   // 切り抜きの中の箱を、画面全体の箱に直す
   const toScreen = (box: RawLook["box"]): RawLook["box"] => ({
@@ -1387,7 +1475,8 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     caption: { ...raw.caption, look: lookOf(normal) },
     emphasisStyles: others
       .filter((group) => group.count >= 1)
-      .slice(0, 4)
+      // E40: 手本の強調は5種類以上あることがある(日韓は白字青縁・明朝白字黒影・明朝白字青光・黄字黒縁・赤字黄白縁・青濃淡明朝黄光)
+      .slice(0, 6)
       .map((group) => ({
         role: `${group.role}${group.examples.length > 0 ? `(手本では「${group.examples.slice(0, 2).join("」「")}」のような言葉)` : ""}`,
         look: lookOf(group),
@@ -1418,6 +1507,7 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
   // 1. 拡大した切り抜きで、見た目を答え直してもらう(写っている文字も答えてもらい、5で描いて比べるのに使う)
   const textOf = new Map<string, string>();
   const inkOf = new Map<string, number>();
+  const outerOf = new Map<string, { kind: "line" | "glow"; color: string; widthPx: number }>();
   const crops: Part[] = [];
   const shown: LookSlot[] = [];
   for (const slot of slots) {
@@ -1529,6 +1619,14 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
         console.info(`[exactCopy] ${slot.id}「${text}」: 描いて比べて ${match.fontFamily}${match.swapped ? "・字と縁の色を入れ替え" : ""}(似かた${match.score.toFixed(2)})`);
       }
     }
+    // E44: 強調の縁の外側のもう1層(線か光)を測って覚える
+    if (slot.id.startsWith("emphasis") && strokeColor) {
+      const outer = measureOuterLayer(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor);
+      if (outer) {
+        outerOf.set(slot.id, outer);
+        console.info(`[exactCopy] ${slot.id}: 縁の外側にもう1層(${outer.kind === "line" ? "線" : "光"}・${outer.color}・太さ${outer.widthPx}px)`);
+      }
+    }
     // EC-9: 強調とふつうの字幕の字の高さを測って、強調の大きさ(倍)を出す
     if (slot.id === "caption" || slot.id.startsWith("emphasis")) {
       const inkHeight = measureInkHeight(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor ?? bandColor);
@@ -1548,6 +1646,13 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
     });
     console.info(`[exactCopy] 強調の大きさ(倍): ${refined.emphasisStyles.map((style) => style.scale.toFixed(2)).join("・")}`);
   }
+  // E44: 外側の線はそのまま、外側の光は(光の色が無ければ)光の色として入れる
+  refined.emphasisStyles.forEach((style, i) => {
+    const outer = outerOf.get(`emphasis${i + 1}`);
+    if (!outer) return;
+    // 光(ぼんやりした外側の層)は、字そのものや影を取り違えやすく、色が手本と違った(赤い字に赤い光など)ので使わない
+    if (outer.kind === "line") style.outerStroke = { color: outer.color, widthPx: Math.max(1, Math.min(30, outer.widthPx)) };
+  });
   // 4. カードの中の名前の高さを、画素から測る(AIはカードの下端からの高さを大きめに読み、絵を入れる所が狭くなった)
   const compare = refined.compare;
   if (compare) {

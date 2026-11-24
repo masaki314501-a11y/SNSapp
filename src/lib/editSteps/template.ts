@@ -52,6 +52,8 @@ export type TemplateEmphasisStyle = {
   glowColor?: string;
   /** 基本の字幕に対する文字の大きさ(倍)。完全模倣で手本から測った時だけ。無ければ描く部品の決まった倍率。 */
   scale?: number;
+  /** 縁の外側にもう1本ある、くっきりした線の色と太さ(横1080pxでのpx)。完全模倣で手本から測った時だけ。 */
+  outerStroke?: { color: string; widthPx: number };
 };
 
 export type ReferenceTemplate = {

@@ -244,7 +244,7 @@ export const AnimatedCaption: React.FC<Props> = ({
         paddingRight: sidePadding.right,
       }}
     >
-      <div style={{ transform, opacity, filter, maxWidth: "100%", textAlign: "center" }}>
+      <div style={{ transform, opacity, filter: withOuterStroke(filter, emphasis?.outerStroke), maxWidth: "100%", textAlign: "center" }}>
         {preset ? (
           <span style={{ display: "inline-block", clipPath }}>
             <StyledText preset={preset} fontSizePx={fontSizePx} lines={lineParts} fontFamily={fontFamily} />
@@ -277,4 +277,24 @@ export const AnimatedCaption: React.FC<Props> = ({
       </div>
     </AbsoluteFill>
   );
+};
+
+/** 縁の外側のもう1本の線(完全模倣だけ)。字(縁込み)を8方向へずらした影を重ねて、決まった太さの輪にする。無ければ元の filter のまま。 */
+const withOuterStroke = (filter: string | undefined, outer: { color: string; widthPx: number } | undefined): string | undefined => {
+  if (!outer) return filter;
+  const r = outer.widthPx;
+  const d = Math.round(r * 0.7071 * 10) / 10;
+  const ring = [
+    [r, 0],
+    [-r, 0],
+    [0, r],
+    [0, -r],
+    [d, d],
+    [d, -d],
+    [-d, d],
+    [-d, -d],
+  ]
+    .map(([x, y]) => `drop-shadow(${x}px ${y}px 0 ${outer.color})`)
+    .join(" ");
+  return filter && filter !== "none" ? `${filter} ${ring}` : ring;
 };

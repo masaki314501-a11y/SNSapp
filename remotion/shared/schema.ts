@@ -361,6 +361,8 @@ export const captionEmphasisSchema = z.object({
   textStyleId: z.string().optional(),
   /** 強調した字幕の文字の大きさ(倍。基本の字幕に対して)。無ければ決まった倍率(1.15倍)。完全模倣で手本の大きさに合わせる時に使う。 */
   scale: z.number().min(0.5).max(3).optional(),
+  /** 縁の外側にもう1本引く線(色と、横1080pxでの太さ)。完全模倣で手本に二重の縁がある時だけ。 */
+  outerStroke: z.object({ color: zColor(), widthPx: z.number().min(1).max(30) }).optional(),
 });
 
 export type CaptionEmphasis = z.infer<typeof captionEmphasisSchema>;
