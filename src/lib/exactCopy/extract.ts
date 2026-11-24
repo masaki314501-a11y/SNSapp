@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 10;
+const EXTRACT_VERSION = 11;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
