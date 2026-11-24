@@ -696,6 +696,8 @@ export const toReferenceTemplate = (raw: ExtractedTemplate, meta: { name: string
     bandColor: style.look.bandColor ? style.look.bandColor.toUpperCase() : null,
     ...(style.look.strokeColor ? { strokeColor: style.look.strokeColor.toUpperCase() } : {}),
     ...(style.look.glowColor ? { glowColor: style.look.glowColor.toUpperCase() } : {}),
+    // EC-9: 手本から測った強調の大きさ(基本の字幕に対する倍)
+    ...(style.scale && Math.abs(style.scale - 1) > 0.02 ? { scale: Math.round(style.scale * 100) / 100 } : {}),
   }));
   return {
     name: meta.name,
@@ -1286,6 +1288,7 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
   const secondsOf = (look: RawLook) => (file.kind === "video" ? Math.round(look.seconds * 10) / 10 : 0);
   // 1. 拡大した切り抜きで、見た目を答え直してもらう(写っている文字も答えてもらい、5で描いて比べるのに使う)
   const textOf = new Map<string, string>();
+  const inkOf = new Map<string, number>();
   const crops: Part[] = [];
   const shown: LookSlot[] = [];
   for (const slot of slots) {
@@ -1392,11 +1395,24 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
         console.info(`[exactCopy] ${slot.id}「${text}」: 描いて比べて ${match.fontFamily}${match.swapped ? "・字と縁の色を入れ替え" : ""}(似かた${match.score.toFixed(2)})`);
       }
     }
+    // EC-9: 強調とふつうの字幕の字の高さを測って、強調の大きさ(倍)を出す
+    if (slot.id === "caption" || slot.id.startsWith("emphasis")) {
+      const inkHeight = measureInkHeight(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor ?? bandColor);
+      if (inkHeight !== null && inkHeight >= 0.8 && inkHeight <= 15) inkOf.set(slot.id, inkHeight);
+    }
     if (slot.setCharHeight) {
       const ink = measureInkHeight(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor ?? bandColor);
       // 文字の大きさ(px)は字の高さより少し大きい。測った値がとんでもない時(背景を数えた等)は、AIの答えのまま
       if (ink !== null && ink >= 0.8 && ink <= 12) slot.setCharHeight(ink / INK_RATIO);
     }
+  }
+  const captionInk = inkOf.get("caption");
+  if (captionInk) {
+    refined.emphasisStyles.forEach((style, i) => {
+      const ink = inkOf.get(`emphasis${i + 1}`);
+      if (ink) style.scale = Math.min(2.2, Math.max(0.8, ink / captionInk));
+    });
+    console.info(`[exactCopy] 強調の大きさ(倍): ${refined.emphasisStyles.map((style) => style.scale.toFixed(2)).join("・")}`);
   }
   // 4. カードの中の名前の高さを、画素から測る(AIはカードの下端からの高さを大きめに読み、絵を入れる所が狭くなった)
   const compare = refined.compare;

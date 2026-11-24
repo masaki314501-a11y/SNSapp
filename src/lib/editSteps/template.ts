@@ -50,6 +50,8 @@ export type TemplateEmphasisStyle = {
   bandColor: string | null;
   strokeColor?: string;
   glowColor?: string;
+  /** 基本の字幕に対する文字の大きさ(倍)。完全模倣で手本から測った時だけ。無ければ描く部品の決まった倍率。 */
+  scale?: number;
 };
 
 export type ReferenceTemplate = {

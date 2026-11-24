@@ -141,7 +141,7 @@ export const AnimatedCaption: React.FC<Props> = ({
     layout?.xPercent !== undefined || layout?.maxWidthPercent !== undefined
       ? { left: Math.max(0, centerPx - maxWidthPx / 2), right: Math.max(0, 1080 - centerPx - maxWidthPx / 2) }
       : { left: CAPTION_SIDE_PADDING, right: CAPTION_SIDE_PADDING };
-  const sizeScale = CAPTION_FONT_SIZE_SCALE[fontSize] * (emphasis ? EMPHASIZED_CAPTION_SCALE : 1);
+  const sizeScale = CAPTION_FONT_SIZE_SCALE[fontSize] * (emphasis ? (emphasis.scale ?? EMPHASIZED_CAPTION_SCALE) : 1);
   // 色を変える語: このクリップで選んだ強調する語と、全体の重大ワード(言葉ごとの色)。
   const wordColors = new Map<string, string>();
   for (const word of emphasisWords ?? []) if (word.trim()) wordColors.set(word.trim(), emphasisColor);

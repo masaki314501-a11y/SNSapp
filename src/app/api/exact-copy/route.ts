@@ -54,7 +54,7 @@ import {
 } from "@/lib/exactCopy/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
-import { readReferenceEvents } from "@/lib/exactCopy/events";
+import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
 import { framingExact, holdPopups, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, emphasisEvents, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
@@ -515,11 +515,25 @@ export async function POST(request: Request) {
           // EC-3: 手本の出来事の一覧に沿って、字幕ごとの強調・出る時の動き・寄り・効果音を決め直す(手本の動画1本だけを見る)
           const firstPair = (await resolvePairs())[0];
           const events = firstPair && template ? await readReferenceEvents(firstPair.file, referenceIdOf(firstPair.referencePath)) : null;
+          // EC-11: 手本の丸の線の太さを画面から測って、型の丸に使う
+          const markerStroke =
+            events && firstPair && template?.compare?.marker ? await measureMarkerStroke(firstPair.file, events, template.compare.marker.color).catch(() => null) : null;
+          if (markerStroke && template?.compare?.marker) template.compare.marker = { ...template.compare.marker, strokeWidthPx: markerStroke };
           const plan =
             events && template
               ? await planImitation({
                   events,
-                  rows: withCaption.map((segment) => ({ text: segment.caption, seconds: segment.durationInSeconds })),
+                  // EC-10: 字幕ごとに、そこで起きる物(丸・項目の写真や名前・話題の見出し)も伝える(手本では、丸・強調・音が同時に出ていた)
+                  rows: withCaption.map((segment, index) => ({
+                    text: segment.caption,
+                    seconds: segment.durationInSeconds,
+                    objects: [
+                      ...(marks.some((mark) => mark.index === index) ? ["選ばれた方のカードに丸が付く"] : []),
+                      ...frameItems
+                        .filter((item) => item.index === index)
+                        .map((item) => (item.frame === TOPIC_FRAME ? `話題の見出し「${item.label}」が出る` : `項目「${item.label}」の絵・名前が出る`)),
+                    ],
+                  })),
                   totalSeconds: totalSeconds(segments),
                   emphasisStyles: template.emphasisStyles.map((style) => ({
                     role: style.role,
@@ -565,12 +579,25 @@ export async function POST(request: Request) {
               if (styleKeys.size === 0) continue;
               const styled = applyEmphasis(segments, styleKeys, emphasisLookOf(style), chosen.base);
               const glow = template.emphasisStyles[style].glowColor;
+              const scale = template.emphasisStyles[style].scale;
               emphasized = emphasized.map((segment, i) =>
                 styleKeys.has(segment.key)
-                  ? { ...segment, captionEmphasis: styled[i].captionEmphasis, ...(glow ? { captionGlowColor: glow } : {}) }
+                  ? {
+                      ...segment,
+                      captionEmphasis: styled[i].captionEmphasis && scale ? { ...styled[i].captionEmphasis, scale } : styled[i].captionEmphasis,
+                      ...(glow ? { captionGlowColor: glow } : {}),
+                    }
                   : segment
               );
             }
+          } else if (template?.emphasisStyles[0]?.scale) {
+            const scale = template.emphasisStyles[0].scale;
+            const glow = template.emphasisStyles[0].glowColor;
+            emphasized = emphasized.map((segment) =>
+              keys.has(segment.key) && segment.captionEmphasis
+                ? { ...segment, captionEmphasis: { ...segment.captionEmphasis, scale }, ...(glow ? { captionGlowColor: glow } : {}) }
+                : segment
+            );
           } else if (template?.emphasisStyles[0]?.glowColor) {
             const glow = template.emphasisStyles[0].glowColor;
             emphasized = emphasized.map((segment) => (keys.has(segment.key) ? { ...segment, captionGlowColor: glow } : segment));
@@ -598,7 +625,7 @@ export async function POST(request: Request) {
             });
             // 同じ字幕の続き(カットの切れ目の後)は、前のクリップと同じ強調の見た目にする
             emphasized = emphasized.map((segment, i, all) =>
-              segment.captionAnimation === "none" && segment.captionEmphasis && all[i - 1]?.captionEmphasis && all[i - 1].caption === segment.caption
+              segment.captionEmphasis && all[i - 1]?.captionEmphasis && all[i - 1].caption === segment.caption
                 ? { ...segment, captionEmphasis: all[i - 1].captionEmphasis }
                 : segment
             );

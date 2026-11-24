@@ -50,7 +50,7 @@ const fmtEvents = (events: ReferenceEvents) =>
 
 export const IMITATE_PROMPT = (input: {
   events: ReferenceEvents;
-  rows: { text: string; seconds: number }[];
+  rows: { text: string; seconds: number; objects?: string[] }[];
   totalSeconds: number;
   emphasisStyles: { role: string; look: string }[];
   sounds: { id: string; label: string }[];
@@ -68,12 +68,13 @@ ${fmtEvents(input.events)}
 - 効果音: ${input.events.rules.sfx}
 - オブジェクト: ${input.events.rules.objects}
 
-## これから編集する動画の字幕(番号: 字幕 (出ている秒数))。全体の長さは${input.totalSeconds.toFixed(1)}秒
-${input.rows.map((row, index) => `${index + 1}: ${row.text.replace(/\n/g, "")} (${row.seconds.toFixed(1)}秒)`).join("\n")}
+## これから編集する動画の字幕(番号: 字幕 (出ている秒数) [その時に画面に出る物])。全体の長さは${input.totalSeconds.toFixed(1)}秒
+${input.rows.map((row, index) => `${index + 1}: ${row.text.replace(/\n/g, "")} (${row.seconds.toFixed(1)}秒)${row.objects && row.objects.length > 0 ? ` [${row.objects.join("・")}]` : ""}`).join("\n")}
 
 ## やること
 手本で「ある役目の言葉・瞬間」(項目の名前を言った・答えを言い切った・強い言葉・話題が変わった・結論 等)に起きていた事を、
 この動画の同じ役目の言葉・瞬間に、同じように起こしてください。手本の秒数を写すのではなく、話の中身で対応させます。
+手本で、丸・絵・名前などの物が出る瞬間に、強調・寄り・効果音が一緒に起きていたら、この動画でも、同じ物が出る字幕([ ]の中)に同じ組み合わせで起こしてください。
 量(強調・寄り・効果音の回数)は、手本と同じ割合にします(動画の長さが違えば、その分だけ増減する)。手本で使っていない物は使わない。
 字幕ごとに、次を答えてください(すべての字幕について、番号の順に)。
 - index: 字幕の番号。
@@ -159,10 +160,12 @@ export const toRows = (
 
 /** 完全模倣の工程11: 覚えておいた寄りと効果音を、その字幕のクリップに付ける(ほかのクリップの寄り・効果音は外す)。 */
 export const applyExactEffects = (segments: ProjectSegment[], effects: ExactEffects): ProjectSegment[] =>
-  segments.map((segment) => {
+  segments.map((segment, i) => {
     const effect = effects[segment.key];
-    // 同じ字幕の続き(カットの切れ目の後)は、もう一度鳴らさない・寄りもそのまま続けない
-    if (!effect || segment.captionAnimation === "none") return { ...segment, zoom: undefined, emphasisSfxPresetId: undefined };
+    // 同じ字幕の続き(カットの切れ目の後)は、もう一度鳴らさない。続きかどうかは、前のクリップと字幕の文が同じかで見分ける
+    // (手本の字幕が「ぱっと出る」時は、出方を「動きなし(none)」にするので、出方では見分けられない)
+    const continued = i > 0 && segments[i - 1].caption.trim() !== "" && segments[i - 1].caption === segment.caption;
+    if (!effect || continued) return { ...segment, zoom: undefined, emphasisSfxPresetId: undefined };
     const zoom: ClipZoom | undefined = effect.zoom
       ? { scale: effect.zoom, style: "punch", focusXPercent: segment.faceBox?.xPercent ?? 50, focusYPercent: segment.faceBox?.yPercent ?? 40 }
       : undefined;

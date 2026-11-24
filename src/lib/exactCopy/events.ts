@@ -251,3 +251,42 @@ export const readReferenceEvents = (file: StyleReferenceFile, referenceId: strin
   memory.set(key, task);
   return task;
 };
+
+/**
+ * 手本の丸(選ばれた方の印)の線の太さを、画面から測る(EC-11)。丸が出た出来事の少し後の場面で、丸の色に近い画素の数と、
+ * その広がり(直径)から、太さ ≒ 画素の数 ÷(円周率 × 直径)で求め、横1080画素の時の太さ(px)で返す。測れなければ null。
+ * AIは丸の線を細めに答え、生成の丸が手本より細く見えたため。
+ */
+export const measureMarkerStroke = async (file: StyleReferenceFile, events: ReferenceEvents, color: string): Promise<number | null> => {
+  const event = events.events.find((item) => item.kind === "object-in" && /丸|〇|○|円/.test(`${item.look}${item.text}`));
+  if (!event || file.kind !== "video" || file.youtubeUrl) return null;
+  const width = 540;
+  const height = 960;
+  const result = await callFf("ffmpeg", [
+    "-v", "error", "-ss", String(event.seconds + 0.4), "-i", file.absolutePath, "-frames:v", "1", "-vf", `scale=${width}:${height}`,
+    "-pix_fmt", "rgb24", "-c:v", "rawvideo", "-f", "image2pipe", "-",
+  ]);
+  const pixels = Buffer.from(result.stdout as unknown as Uint8Array);
+  if (pixels.length < width * height * 3) return null;
+  const target = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  let count = 0;
+  let x0 = width;
+  let x1 = -1;
+  let y0 = height;
+  let y1 = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 3;
+      if (Math.hypot(pixels[i] - target[0], pixels[i + 1] - target[1], pixels[i + 2] - target[2]) > 90) continue;
+      count++;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+  }
+  const diameter = Math.min(x1 - x0, y1 - y0);
+  if (count < 50 || diameter < 20) return null;
+  const thickness = count / (Math.PI * diameter);
+  return Math.round(thickness * (1080 / width));
+};
