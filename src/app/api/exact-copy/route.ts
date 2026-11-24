@@ -57,6 +57,7 @@ import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
+import { holdPopups, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
@@ -171,7 +172,8 @@ export async function POST(request: Request) {
   const fillsFor = (next: StepState): StepState => {
     if (!template) return placeFrameFills(next);
     const own = effectiveKind(next, template) === "none" && next.globalShapes.some((shape) => shape.kind === "rect" && !shape.decorative);
-    return placeTemplateFills(own ? placeFrameFills(next) : next, template);
+    // EC-6: 項目の大きな写真を、手本と同じく次の項目が出るまで出したままにする
+    return holdPopups(placeTemplateFills(own ? placeFrameFills(next) : next, template), template, totalSeconds(next.segments as ProjectSegment[]));
   };
 
   try {
@@ -315,7 +317,7 @@ export async function POST(request: Request) {
             // 合わない時(手本はランキングなのに話は比べる内容など)は、話の内容を優先して、話に合う物を置く(タイトルと字幕の見た目は手本のまま)
             const matches = objects.layout === template.kind;
             const kind = matches ? template.kind : "none";
-            const built = buildTemplateObjects({ template, title: objects.title, frameCount: objects.frameCount, kind });
+            const built = withBandOpacity(buildTemplateObjects({ template, title: objects.title, frameCount: objects.frameCount, kind }), template);
             const own = !matches && objects.layout !== "none"
               ? buildObjects({
                   title: objects.title,
@@ -596,7 +598,7 @@ export async function POST(request: Request) {
           const usedFrames = Math.max(0, ...frameFills.map((fill) => fill.frame));
           const regrown =
             template && kind === "ranking" && state.templateTitle && usedFrames >= 2 && usedFrames < rects.length
-              ? buildTemplateObjects({ template, title: state.templateTitle, frameCount: usedFrames, kind })
+              ? withBandOpacity(buildTemplateObjects({ template, title: state.templateTitle, frameCount: usedFrames, kind }), template)
               : null;
           // 枠・カードの中身が絵の型では、項目ごとに画像の棚から合う絵を選ぶ(合う物が無ければ、項目名の文字にする)
           const wantsImages =

@@ -23,6 +23,7 @@ import {
   type StyleReferenceFile,
 } from "./ai";
 import { drawGrid, encodePng } from "@/lib/editSteps/gridImage";
+import { bestLook, MIN_MATCH_SCORE } from "./drawMatch";
 import { toReferenceLayout } from "@/lib/editSteps/logic";
 import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/template";
 
@@ -36,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 9;
+const EXTRACT_VERSION = 10;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -800,17 +801,43 @@ export const toReferenceTemplate = (raw: ExtractedTemplate, meta: { name: string
 };
 
 /** 文字ごとに、見た目を確かめ直す所の名前と、その見た目・文字の大きさの置き場所。 */
-type LookSlot = { id: string; what: string; look: RawLook; setLook: (look: RawLook) => void; setCharHeight?: (percent: number) => void };
+type LookSlot = {
+  id: string;
+  what: string;
+  look: RawLook;
+  setLook: (look: RawLook) => void;
+  setCharHeight?: (percent: number) => void;
+  /** その文字の高さ(%。分かる時だけ)。AIの答えた箱が字より低すぎる時に、箱を広げるのに使う。 */
+  charHeight?: number;
+};
+
+/**
+ * AIが答えた字の箱を直す(EC-5)。箱は中心の位置で答えるよう頼んでいるが、字幕や強調の箱を左端の位置で答えることがあり
+ * (x=10・幅80 など)、色を測る所が字幕から外れていた。箱が画面の外にはみ出す時は、左端・上端で答えたとみなして中心に直す。
+ * 高さが字の高さより低すぎる時は、字の高さの1.6倍に広げる。
+ */
+export const fixBox = (
+  box: { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number },
+  charHeight?: number
+): { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number } => {
+  let { xPercent, yPercent, heightPercent } = box;
+  const { widthPercent } = box;
+  if (xPercent - widthPercent / 2 < -2 && xPercent + widthPercent / 2 <= 102) xPercent += widthPercent / 2;
+  if (yPercent - heightPercent / 2 < -2) yPercent += heightPercent / 2;
+  if (charHeight && heightPercent < charHeight * 1.2) heightPercent = charHeight * 1.6;
+  return { xPercent, yPercent, widthPercent, heightPercent };
+};
 
 const lookSlots = (raw: ExtractedTemplate): LookSlot[] => {
   const slots: LookSlot[] = [
-    { id: "caption", what: "ふつうの字幕", look: raw.caption.look, setLook: (look) => (raw.caption.look = look), setCharHeight: (v) => (raw.caption.charHeightPercent = v) },
-    ...raw.emphasisStyles.map((style, i) => ({ id: `emphasis${i + 1}`, what: `強調した字幕(${style.role})`, look: style.look, setLook: (look: RawLook) => (style.look = look) })),
+    { id: "caption", what: "ふつうの字幕", look: raw.caption.look, setLook: (look) => (raw.caption.look = look), setCharHeight: (v) => (raw.caption.charHeightPercent = v), charHeight: raw.caption.charHeightPercent },
+    ...raw.emphasisStyles.map((style, i) => ({ id: `emphasis${i + 1}`, what: `強調した字幕(${style.role})`, look: style.look, setLook: (look: RawLook) => (style.look = look), charHeight: raw.caption.charHeightPercent * (style.scale || 1) })),
     ...raw.title.lines.map((line, i) => ({
       id: `title${i + 1}`,
       what: `タイトルの${i + 1}行目`,
       look: line,
       setLook: (look: RawLook) => (raw.title.lines[i] = look),
+      charHeight: raw.title.charHeightPercent,
       ...(i === 0 ? { setCharHeight: (v: number) => (raw.title.charHeightPercent = v) } : {}),
     })),
   ];
@@ -879,6 +906,7 @@ ${slots.map((slot) => `- ${slot.id}: ${slot.what}`).join("\n")}
   飾りや崩しの無い、ふつうの太いゴシックは Noto Sans JP(標準ゴシック)。ポップな書体(Mochiy Pop One・Reggae One・Potta One・Dela Gothic One など)は、
   字の形が丸く崩してある・極端に太い・飾りがある、とはっきり分かる時だけ選ぶ(太い縁取りが付いているだけなら、ふつうのゴシック)。
 - found: 切り抜きに、その文字がはっきり写っていれば true(写っていない・別の物が写っている時は false)。
+- text: 切り抜きに写っている文字(写っているまま。改行・空白は入れない。読めなければ空)。
 色は #RRGGBB。切り抜きごとに、id を付けて答えてください。
 `.trim();
 
@@ -1203,8 +1231,14 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
   const settled = Math.max(5, refined.title.intro ? refined.title.intro.seconds + 2.5 : 0);
   refined.title.lines = refined.title.lines.map((line) => (line.seconds < settled ? { ...line, seconds: settled } : line));
   const slots = lookSlots(refined);
+  // EC-5: AIが答えた字の箱を直してから、切り抜き・色を測る
+  for (const slot of slots) {
+    slot.look = { ...slot.look, box: fixBox(slot.look.box, slot.charHeight) };
+    slot.setLook(slot.look);
+  }
   const secondsOf = (look: RawLook) => (file.kind === "video" ? Math.round(look.seconds * 10) / 10 : 0);
-  // 1. 拡大した切り抜きで、見た目を答え直してもらう
+  // 1. 拡大した切り抜きで、見た目を答え直してもらう(写っている文字も答えてもらい、5で描いて比べるのに使う)
+  const textOf = new Map<string, string>();
   const crops: Part[] = [];
   const shown: LookSlot[] = [];
   for (const slot of slots) {
@@ -1224,14 +1258,14 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
         properties: {
           looks: {
             type: Type.ARRAY,
-            items: obj({ id: str, found: { type: Type.BOOLEAN }, fontFamily: str, color: colorSchema, strokeColor: nullableColorSchema, bandColor: nullableColorSchema, glowColor: nullableColorSchema }),
+            items: obj({ id: str, found: { type: Type.BOOLEAN }, text: str, fontFamily: str, color: colorSchema, strokeColor: nullableColorSchema, bandColor: nullableColorSchema, glowColor: nullableColorSchema }),
           },
         },
         required: ["looks"],
       },
       parse: z.object({
         looks: z.array(
-          z.object({ id: z.string(), found: z.boolean(), fontFamily: fontParse, color: colorParse, strokeColor: nullableColorParse, bandColor: nullableColorParse, glowColor: nullableColorParse })
+          z.object({ id: z.string(), found: z.boolean(), text: z.string().catch(""), fontFamily: fontParse, color: colorParse, strokeColor: nullableColorParse, bandColor: nullableColorParse, glowColor: nullableColorParse })
         ),
       }),
     }).catch((error: unknown) => {
@@ -1241,6 +1275,7 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
     for (const answer of answers.looks) {
       const slot = shown.find((item) => item.id === answer.id);
       if (!slot || !answer.found) continue;
+      if (answer.text.trim()) textOf.set(slot.id, answer.text.trim());
       slot.look = { ...slot.look, fontFamily: answer.fontFamily, color: answer.color, strokeColor: answer.strokeColor, bandColor: answer.bandColor, glowColor: answer.glowColor };
       slot.setLook(slot.look);
     }
@@ -1253,10 +1288,16 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
   };
   for (const slot of slots) {
     const pixels = await frameOf(secondsOf(slot.look));
-    if (!pixels || pixels.length < SAMPLE_WIDTH * SAMPLE_HEIGHT * 3) continue;
+    if (!pixels || pixels.length < SAMPLE_WIDTH * SAMPLE_HEIGHT * 3) {
+      console.info(`[exactCopy] ${slot.id}: ${secondsOf(slot.look)}秒の場面を取り出せない`);
+      continue;
+    }
     slot.look = { ...slot.look, box: alignBox(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, slot.look.color, slot.look.strokeColor ?? slot.look.bandColor) };
     const measured = dominantColors(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box);
-    if (measured.length === 0) continue;
+    if (measured.length === 0) {
+      console.info(`[exactCopy] ${slot.id}: 箱の中の色を測れない`);
+      continue;
+    }
     let color = snapColor(slot.look.color, measured);
     const used = [hexToRgb(color)];
     let strokeColor = slot.look.strokeColor ? snapColor(slot.look.strokeColor, measured, used) : null;
@@ -1267,6 +1308,43 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
     if (strokeColor) used.push(hexToRgb(strokeColor));
     const bandColor = slot.look.bandColor ? snapColor(slot.look.bandColor, measured, used) : null;
     slot.setLook({ ...slot.look, color, strokeColor, bandColor, glowColor: keepGlow(slot.look.glowColor, measured, [color, strokeColor, bandColor]) });
+    // 5. (EC-5)15書体で同じ文字を描いて比べ、書体と、字の色・縁の色の組み合わせを決める
+    const text = textOf.get(slot.id);
+    if (!text) console.info(`[exactCopy] ${slot.id}: 写っている文字が分からないので、描いて比べない`);
+    if (text) {
+      const box = slot.look.box;
+      const px = (percent: number, size: number) => Math.max(0, Math.min(size, Math.round((percent / 100) * size)));
+      // 字が切れないよう、上下は字の高さの2倍以上、左右は1割広げる(広げて入った上下の別の行は、行のかたまりで外す)
+      const halfHeight = Math.max(box.heightPercent, (slot.charHeight ?? 0) * 2) * 0.9;
+      const tried = await bestLook({
+        pixels,
+        width: SAMPLE_WIDTH,
+        box: {
+          x0: px(box.xPercent - box.widthPercent * 0.6, SAMPLE_WIDTH),
+          x1: px(box.xPercent + box.widthPercent * 0.6, SAMPLE_WIDTH),
+          y0: px(box.yPercent - halfHeight, SAMPLE_HEIGHT),
+          y1: px(box.yPercent + halfHeight, SAMPLE_HEIGHT),
+        },
+        centerY: px(box.yPercent, SAMPLE_HEIGHT),
+        text,
+        color,
+        strokeColor,
+        currentFont: slot.look.fontFamily,
+      }).catch((error: unknown) => {
+        console.warn("[exactCopy] 書体を描いて比べられませんでした", error);
+        return null;
+      });
+      if (!tried) console.info(`[exactCopy] ${slot.id}「${text}」: 字の形を取り出せない(字${color}・縁${strokeColor ?? "なし"}・箱${JSON.stringify(slot.look.box)})`);
+      if (tried) console.info(`[exactCopy] ${slot.id}「${text}」: 一番近いのは ${tried.fontFamily}${tried.swapped ? "(字と縁の色を入れ替え)" : ""}・似かた${tried.score.toFixed(2)}`);
+      const match = tried && tried.score >= MIN_MATCH_SCORE ? tried : null;
+      if (match) {
+        if (match.swapped && strokeColor) [color, strokeColor] = [strokeColor, color];
+        // 書体は、もとの(AIが答えた)書体より、はっきり(0.05より多く)似ている時だけ替える(描いて比べる結果はぶれるため)
+        const fontFamily = match.scoreOfCurrent !== undefined && match.score - match.scoreOfCurrent <= 0.05 ? slot.look.fontFamily : match.fontFamily;
+        slot.setLook({ ...slot.look, fontFamily, color, strokeColor, bandColor, glowColor: keepGlow(slot.look.glowColor, measured, [color, strokeColor, bandColor]) });
+        console.info(`[exactCopy] ${slot.id}「${text}」: 描いて比べて ${match.fontFamily}${match.swapped ? "・字と縁の色を入れ替え" : ""}(似かた${match.score.toFixed(2)})`);
+      }
+    }
     if (slot.setCharHeight) {
       const ink = measureInkHeight(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, slot.look.box, color, strokeColor ?? bandColor);
       // 文字の大きさ(px)は字の高さより少し大きい。測った値がとんでもない時(背景を数えた等)は、AIの答えのまま
@@ -1284,7 +1362,76 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
       if (center !== null) compare.name.fromBottomPercent = compare.yPercent + compare.heightPercent / 2 - center;
     }
   }
+  // 6. (EC-6)タイトルの帯の透け方と本当の色を測る
+  const band = refined.title.band;
+  const titleLook = refined.title.lines[0];
+  if (band && titleLook) {
+    const pixels = await frameOf(secondsOf(titleLook));
+    if (pixels && pixels.length >= SAMPLE_WIDTH * SAMPLE_HEIGHT * 3) {
+      const textColors = refined.title.lines.flatMap((line) => [line.color, line.strokeColor].filter((value): value is string => Boolean(value)));
+      const measuredBand = measureBand(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, band, textColors);
+      if (measuredBand) {
+        (band as typeof band & { opacity?: number }).opacity = measuredBand.opacity;
+        band.color = measuredBand.color;
+        console.info(`[exactCopy] タイトルの帯: 色${measuredBand.color}・透けない度合い${measuredBand.opacity}`);
+      }
+    }
+  }
   return refined;
+};
+
+/**
+ * タイトルの帯の透け方と本当の色を測る(EC-6)。帯が透けていると、帯の中に後ろの模様がうっすら見え、明るさがばらつく。
+ * 帯の中(文字の色に近い画素は除く)の明るさのばらつきを、帯のすぐ下の同じ高さの背景のばらつきと比べて、透け具合を出す。
+ * 帯の本当の色は、測った色から背景の分を差し引いて求める。測れない時は null。
+ */
+export const measureBand = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  band: { topPercent: number; heightPercent: number },
+  textColors: string[]
+): { color: string; opacity: number } | null => {
+  const rows = (top: number, size: number) => {
+    const y0 = Math.max(0, Math.round((top / 100) * height));
+    const y1 = Math.min(height, Math.round(((top + size) / 100) * height));
+    return [y0, y1] as const;
+  };
+  const texts = textColors.map(hexToRgb);
+  const stats = (y0: number, y1: number, skipText: boolean) => {
+    let n = 0;
+    const sum: Rgb = [0, 0, 0];
+    let lum = 0;
+    let lum2 = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = 0; x < width; x++) {
+        // 文字の無い左右の端だけで測る(文字のふちの画素を混ぜない)
+        if (x > width * 0.16 && x < width * 0.86) continue;
+        const i = (y * width + x) * 3;
+        const rgb: Rgb = [pixels[i], pixels[i + 1], pixels[i + 2]];
+        if (skipText && texts.some((t) => distance(rgb, t) < 90)) continue;
+        const l = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+        sum[0] += rgb[0];
+        sum[1] += rgb[1];
+        sum[2] += rgb[2];
+        lum += l;
+        lum2 += l * l;
+        n++;
+      }
+    }
+    if (n < 100) return null;
+    const mean = lum / n;
+    return { mean: [sum[0] / n, sum[1] / n, sum[2] / n] as Rgb, std: Math.sqrt(Math.max(0, lum2 / n - mean * mean)) };
+  };
+  const [by0, by1] = rows(band.topPercent + band.heightPercent * 0.1, band.heightPercent * 0.8);
+  const [gy0, gy1] = rows(band.topPercent + band.heightPercent * 1.15, band.heightPercent * 0.8);
+  const inside = stats(by0, by1, true);
+  const below = stats(gy0, gy1, false);
+  if (!inside || !below || below.std < 4) return null;
+  const opacity = Math.max(0.35, Math.min(1, 1 - inside.std / below.std));
+  if (opacity > 0.92) return { color: rgbToHex(inside.mean), opacity: 1 };
+  const solve = (k: number) => Math.max(0, Math.min(255, Math.round((inside.mean[k] - (1 - opacity) * below.mean[k]) / opacity)));
+  return { color: rgbToHex([solve(0), solve(1), solve(2)]), opacity: Math.round(opacity * 100) / 100 };
 };
 
 /**
