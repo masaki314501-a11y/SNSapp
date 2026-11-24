@@ -57,7 +57,7 @@ import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
 import { framingExact, holdPopups, withBandOpacity } from "@/lib/exactCopy/objects";
-import { applyExactEffects, captionLimitOf, emphasisEvents, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
+import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
@@ -610,17 +610,9 @@ export async function POST(request: Request) {
               const row = rowOf.get(segment.key);
               if (!row) return segment;
               exactEffects[segment.key] = { zoom: row.zoom, sfx: row.sfx };
-              // EC-8: 手本の強調の色を、強調1回ごとに写す(手本が強調ごとに色を変えている時も、同じように変わる)
-              const copied = row.copyOf !== null && events ? emphasisEvents(events)[row.copyOf] : undefined;
-              const recolored =
-                copied && segment.captionEmphasis && copied.textColor
-                  ? {
-                      ...segment.captionEmphasis,
-                      textColor: copied.textColor,
-                      ...(copied.strokeColor ? { strokeColor: copied.strokeColor } : {}),
-                    }
-                  : segment.captionEmphasis;
-              const withLook = { ...segment, captionEmphasis: recolored };
+              // E44: 強調の色は、型を読み取る時に画面から測った「強調の見た目の種類ごとの色」を使う
+              // (EC-8 の、AIが答えた色を強調1回ごとに写すやり方はやめた。AIの色は #0000FF のように実際と違ったため)
+              const withLook = segment;
               return segment.captionAnimation === "none" ? withLook : { ...withLook, captionAnimation: row.animation };
             });
             // 同じ字幕の続き(カットの切れ目の後)は、前のクリップと同じ強調の見た目にする
