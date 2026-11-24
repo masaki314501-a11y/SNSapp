@@ -1425,6 +1425,21 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
       if (center !== null) compare.name.fromBottomPercent = compare.yPercent + compare.heightPercent / 2 - center;
     }
   }
+  // 7. (EC-12)ランキングの枠の横の位置と幅を、枠の上の縁の横線から測る
+  const rankFrames = refined.frames;
+  if (rankFrames && rankFrames.borderColor && rankFrames.count >= 2) {
+    const pixels = await frameOf(secondsOf(refined.caption.look));
+    if (pixels && pixels.length >= SAMPLE_WIDTH * SAMPLE_HEIGHT * 3) {
+      const each = (rankFrames.bottomPercent - rankFrames.topPercent - rankFrames.gapPercent * (rankFrames.count - 1)) / rankFrames.count;
+      const tops = Array.from({ length: rankFrames.count }, (_, i) => rankFrames.topPercent + i * (each + rankFrames.gapPercent));
+      const span = measureFrameSpan(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, tops, rankFrames.borderColor, ((rankFrames.cornerRadiusPx / 1080) * 100) * 0.9);
+      if (span && span.widthPercent > 10 && span.widthPercent < 60) {
+        console.info(`[exactCopy] ランキングの枠: 横${rankFrames.xPercent}%・幅${rankFrames.widthPercent}% → 横${span.xPercent}%・幅${span.widthPercent}%`);
+        rankFrames.xPercent = span.xPercent;
+        rankFrames.widthPercent = span.widthPercent;
+      }
+    }
+  }
   // 6. (EC-6)タイトルの帯の透け方と本当の色を測る
   const band = refined.title.band;
   const titleLook = refined.title.lines[0];
@@ -1441,6 +1456,49 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
     }
   }
   return refined;
+};
+
+/**
+ * ランキングの枠の横の位置と幅を、枠の上の縁の横線から測る(EC-12)。各枠の上の縁の高さ(±0.8%)で、縁の色に近い画素が
+ * いちばん長く続く横線を探し、その左右の端の真ん中の値に、角の丸みの分を足して返す。測れなければ null。
+ * AIは枠の幅を細めに答えていた(手本は36%くらいなのに28%)。
+ */
+export const measureFrameSpan = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  borderTops: number[],
+  borderColor: string,
+  cornerRadiusPercent: number
+): { xPercent: number; widthPercent: number } | null => {
+  const target = hexToRgb(borderColor);
+  const lefts: number[] = [];
+  const rights: number[] = [];
+  for (const topPercent of borderTops) {
+    let best: [number, number] = [0, -1];
+    for (let dy = -0.8; dy <= 0.8; dy += 0.1) {
+      const y = Math.round(((topPercent + dy) / 100) * height);
+      if (y < 0 || y >= height) continue;
+      let start = -1;
+      let previous = -10;
+      for (let x = 0; x < width * 0.95; x++) {
+        const i = (y * width + x) * 3;
+        if (distance([pixels[i], pixels[i + 1], pixels[i + 2]], target) > 60) continue;
+        if (x - previous > 2) start = x;
+        previous = x;
+        if (x - start > best[1] - best[0]) best = [start, x];
+      }
+    }
+    if (best[1] - best[0] > width * 0.1) {
+      lefts.push(best[0]);
+      rights.push(best[1]);
+    }
+  }
+  if (lefts.length < 2) return null;
+  const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const left = (median(lefts) / width) * 100 - cornerRadiusPercent;
+  const right = (median(rights) / width) * 100 + cornerRadiusPercent;
+  return { xPercent: Math.round(((left + right) / 2) * 10) / 10, widthPercent: Math.round((right - left) * 10) / 10 };
 };
 
 /**
