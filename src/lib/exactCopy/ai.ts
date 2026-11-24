@@ -11,13 +11,9 @@ import {
   type CaptionFontFamily,
   type FaceBox,
 } from "@video/shared/schema";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { runWithGeminiRateLimit } from "@/lib/gemini/rateLimiter";
 import { isRetryableApiError, toFriendlyGeminiError } from "@/lib/gemini/geminiErrors";
 import { uploadGeminiFile, waitForGeminiFileActive } from "@/lib/gemini/geminiFiles";
-import { editExampleMediaPath, uploadExampleVideo, type EditExample } from "@/lib/gemini/editExamplesStore";
-import { selectEditExamples } from "@/lib/gemini/editExampleSelection";
 import { sanitizeSvgFragment, type FigureLayer } from "@/lib/editSteps/figure";
 import { toReferenceLayout, type ObjectLayout, type ReferenceLayout } from "@/lib/editSteps/logic";
 
@@ -72,16 +68,10 @@ export const EXAMPLES_INTRO = `
  * 工程別のクセ帳(data/edit-examples/step-guide.md。scripts/eval/build-step-guide.tsで手本から作る)。
  * 工程8・10で、手本の動画と一緒に渡す。
  */
-const STEP_GUIDE_PATH = path.join(process.cwd(), "data", "edit-examples", "step-guide.md");
 export const STEP_GUIDE_INTRO = `
 次は、この編集チームの編集のクセを、編集マニュアルの工程ごとにまとめた「工程別のクセ帳」です。手本と合わせて判断に使ってください。
 ただし、位置・大きさ・並べ方はツールの側で決めるので、ここでは見た目(書体・色・帯・形・出方)と、何を強調するかの参考にしてください。
 `.trim();
-const stepGuidePart = async (): Promise<Part[]> => {
-  const guide = await readFile(STEP_GUIDE_PATH, "utf8").then((text) => text.trim(), () => "");
-  return guide ? [{ text: `${STEP_GUIDE_INTRO}\n\n${guide}` }] : [];
-};
-
 const FONT_VALUES = CAPTION_FONT_FAMILY_OPTIONS.map((option) => option.value) as [CaptionFontFamily, ...CaptionFontFamily[]];
 const ANIMATION_VALUES = CAPTION_ANIMATION_OPTIONS.map((option) => option.value) as [CaptionAnimation, ...CaptionAnimation[]];
 const FONT_HINTS = CAPTION_FONT_FAMILY_OPTIONS.map((option) => `${option.value}(${option.label})`).join(" / ");
@@ -256,39 +246,7 @@ const referenceParts = async (references: StyleReferenceFile[] | undefined): Pro
   ];
 };
 
-const chosenExamples = new Map<string, { examples: EditExample[]; expiresAt: number }>();
-const exampleUploads = new Map<string, { part: Part; expiresAt: number }>();
-
-const examplesFor = async (ai: GoogleGenAI, absolutePath: string, mimeType: string): Promise<EditExample[]> => {
-  const cached = chosenExamples.get(absolutePath);
-  if (cached && cached.expiresAt > Date.now()) return cached.examples;
-  // 工程8・10では完成動画だけを見せるので、編集前の素材が無い手本も候補にする
-  const examples = await selectEditExamples(ai, await videoPart(ai, absolutePath, mimeType), [], { finalOnly: true });
-  chosenExamples.set(absolutePath, { examples, expiresAt: Date.now() + UPLOAD_REUSE_MS });
-  return examples;
-};
-
-const examplePart = async (ai: GoogleGenAI, mediaPath: string, mimeType: string): Promise<Part> => {
-  const cached = exampleUploads.get(mediaPath);
-  if (cached && cached.expiresAt > Date.now()) return cached.part;
-  const part = await uploadExampleVideo(ai, mediaPath, mimeType, [], "low");
-  exampleUploads.set(mediaPath, { part, expiresAt: Date.now() + UPLOAD_REUSE_MS });
-  return part;
-};
-
-/** 手本を見せる部分(手本が無ければ空)。完成動画を見せる。 */
-const exampleParts = async (absolutePath: string, mimeType: string): Promise<Part[]> => {
-  const ai = client();
-  const examples = await examplesFor(ai, absolutePath, mimeType);
-  if (examples.length === 0) return [];
-  const parts: Part[] = [{ text: EXAMPLES_INTRO }];
-  for (const [index, example] of examples.entries()) {
-    parts.push({ text: `【手本${index + 1}「${example.label}」の完成動画】` });
-    parts.push(await examplePart(ai, editExampleMediaPath(example, "correct")!, example.correctMimeType));
-  }
-  parts.push({ text: "【ここから、今回編集する動画の話】" });
-  return parts;
-};
+// EC-1.1: 過去の完成動画(手本選び AI-1)とクセ帳は使わないので、それを付ける部品は写していない
 
 /** JSONで答えてもらい、形を確かめて返す。混んでいる時だけ少し待って頼み直す。 */
 const askJson = async <T>(params: {
@@ -536,7 +494,7 @@ export const TEMPLATE_OBJECTS_NOTE = (template: { titleLines: number; kind: "ran
 - title: 手本と同じ${template.titleLines}行で書く(行の切れ目に改行\\nを入れる。言葉の途中で切らない)。${template.wording ? `言い回しの形も手本に合わせる(手本の形: ${template.wording})。手本の文言・題材は持ち込まず、今回の動画で話している内容で書く。` : ""}
 - layout: 今回の動画の話の内容から選ぶ。手本の出し方は「${{ ranking: "ranking(ランキングの枠)", compare: "compare(比べるカード)", none: "none(枠なし)" }[template.kind]}」。
   話の内容が手本の出し方に合う時はそれを選ぶ。合わない時(手本はランキングなのに、話は2つを比べている等)は、話の内容に合う物を選ぶ(話の内容を優先する)。
-- frameCount: ranking なら挙げる項目の数(順位の数)。compare なら比べている物の数(2〜4。表側と裏側なら2)。
+- frameCount: ranking なら挙げる項目の数(順位の数)。compare なら比べている物の数(2〜4。AとBを比べるなら2)。
 ${template.hasCta
   ? `- cta: 動画の最後に出す一言(手本と同じ役目の、見ている人への案内。例: 予約・相談・フォローへの誘い)。全角24文字以内、改行\\nを1つまで。
   今回の動画の最後で話している案内があれば、それに合わせる。言っていない約束(「無料」「今だけ」など)は入れない。`
@@ -563,8 +521,9 @@ export const decideObjects = async (input: {
   reason: string;
 }> => {
   const part = await videoPart(client(), input.absolutePath, input.mimeType);
-  const examples = await exampleParts(input.absolutePath, input.mimeType);
-  const guide = await stepGuidePart();
+  // EC-1.1: 過去の完成動画とクセ帳は見せない(試しに編集する動画の正解が入っているため。真似する手本は見た目の手本だけ)
+  const examples: Part[] = [];
+  const guide: Part[] = [];
   const references = await referenceParts(input.references);
   const result = await askJson({
     model: STEP_MODEL,
@@ -821,8 +780,9 @@ export const pickEmphasis = async (input: {
   marks: { frame: number; index: number }[];
 }> => {
   const { captions } = input;
-  const examples = await exampleParts(input.absolutePath, input.mimeType);
-  const guide = await stepGuidePart();
+  // EC-1.1: 過去の完成動画とクセ帳は見せない(試しに編集する動画の正解が入っているため。真似する手本は見た目の手本だけ)
+  const examples: Part[] = [];
+  const guide: Part[] = [];
   const references = await referenceParts(input.references);
   const colorsLine = input.objectColors?.length && references.length === 0
     ? `- タイトル・枠・図ですでに白・黒のほかに ${input.objectColors.join("・")} を使っているので、字幕(と図に足す部品)もこの色(か白・黒)から選ぶと3色以内に収まる。`
@@ -972,7 +932,7 @@ ${items.map((item, index) => `${index + 1}: ${item}`).join("\n")}
 【画像の棚】(番号: 名前 - 何が描いてあるか)
 ${library.map((image, index) => `${index + 1}: ${image.name} - ${image.description}`).join("\n")}
 
-- その項目そのものが描いてある画像を選ぶ(症状なら、その症状の口元の絵。国・地域なら、その国旗)。
+- その項目そのものが描いてある画像を選ぶ(例: 果物の名前なら、その果物の絵)。
 - 同じ画像を2つの項目に使わない。合う画像が無い項目は 0 にする(違う物を無理に選ばない)。
 項目の順に、選んだ画像の番号(picks)を答えてください。
 `.trim();

@@ -97,7 +97,7 @@ export const TEMPLATE_EXTRACT_PROMPT = (stillTimes: number[]) => `
 - 項目の出し方(言った時に、まず大きく出してから枠へ入るか等)、枠・カードの中身が絵・写真か文字か。
 - 強調した字幕の見た目。手本に何種類かあれば、種類ごとに、どんな字幕に使っているか(役割)。
 - 選ばれた方に丸などの印を付けているか、その見た目。最後の一言(予約への案内など)があるか、その見た目と出ている秒数。
-- タイトルの言い回しの形。手本の文言そのものではなく、形だけを書く(例「1行目に話題、2行目に問いかけ」「1行目に誰の話か、2行目に『〜』〇〇ランキング」)。
+- タイトルの言い回しの形。手本の文言そのものではなく、形だけを書く(例「1行目に問いかけ、2行目に答えの予告」「1行目に数、2行目に〇〇の方法」)。
 
 ## 読み取らないもの(動画ごとに変わるので、型に入れない)
 - 手本に写っている文言・題材・人の名前・項目の名前・数字。項目・カード・見出しの数。
@@ -109,7 +109,7 @@ export const TEMPLATE_EXTRACT_PROMPT = (stillTimes: number[]) => `
 - 文字の見た目(look)は、fontFamily(書体)・color(文字の色)・strokeColor(縁取りの色。無ければnull)・bandColor(文字の後ろの帯・板の色。無ければnull)・
   glowColor(文字の周りの光・にじみの色。無ければnull)。あわせて、その見た目がはっきり見える場面の秒数(seconds)と、その文字の箱(box)を答える(ツールがその場面の色を測って確かめる)。
 - 色は #RRGGBB。文字の色と縁取りの色を取り違えない。color は字の線の内側(真ん中)の色、strokeColor はその外側を囲む縁の色。
-  例: 白い字を青い太い縁が囲んでいれば color=白・strokeColor=青。青い字を白い縁が囲んでいれば color=青・strokeColor=白。よく見て区別する。
+  例: 黄色い字を黒い太い縁が囲んでいれば color=黄・strokeColor=黒。黒い字を白い縁が囲んでいれば color=黒・strokeColor=白。よく見て区別する。
 - 書体は次から一番近い物: ${FONT_HINTS}
   明朝体(Noto Serif JP など)は、縦の線が太く横の線が細く、線の終わりに「うろこ」(三角の飾り)がある。ゴシック体は線の太さが一定。丸ゴシック(M PLUS Rounded 1c)は線の端が丸い。
   飾りや崩しの無い、ふつうの太いゴシックは Noto Sans JP(標準ゴシック)。ポップな書体(Mochiy Pop One・Reggae One・Potta One・Dela Gothic One など)は、
@@ -126,7 +126,7 @@ export const TEMPLATE_EXTRACT_PROMPT = (stillTimes: number[]) => `
   それより少ない回数だけ出る、目立つ見た目の字幕は emphasisStyles に入れる。caption の look.seconds には、ふつうの字幕が出ている場面の秒数を答える。
   topPercent=1行目の上端、xPercent=字幕の横の中心、maxWidthPercent=字幕1行の幅の上限、charHeightPercent、
   style(outline=縁取り文字 / pill=色の帯の上の文字)、look、lines(よく出る行数。1か2)。
-- emphasisStyles: 強調した字幕(ふつうの字幕より目立つ見た目の字幕)。種類ごとに、role(どんな字幕に使っているか。例「比べた結果、選ばれた方の名前」「話の要点・強い言葉」「締めの案内」)、
+- emphasisStyles: 強調した字幕(ふつうの字幕より目立つ見た目の字幕)。種類ごとに、role(どんな字幕に使っているか。例「数字・金額」「話の要点・強い言葉」「問いかけ」)、
   look、scale(ふつうの字幕に対する文字の大きさの倍)。よく使う物から順に。強調が無ければ空。
 - title: 動画のあいだずっと出ているタイトル。align、xPercent(中央寄せなら中心・左寄せなら左端)、yPercent(全体の縦の中心)、charHeightPercent、maxWidthPercent(1行の幅)、
   lines(行ごとの look。行の数=タイトルの行数)、wording(言い回しの形)、band(タイトルの後ろの、画面の端から端までの帯。color・topPercent・heightPercent。無ければnull)、
@@ -871,7 +871,7 @@ export const LOOK_CHECK_PROMPT = (slots: { id: string; what: string }[]) => `
 ${slots.map((slot) => `- ${slot.id}: ${slot.what}`).join("\n")}
 
 - color: 字の線の内側(真ん中)の色。strokeColor: その外側を囲む縁の色(無ければnull)。2つを取り違えない。
-  例: 白い字を青い太い縁が囲んでいれば color=白・strokeColor=青。水色の字を白い縁が囲んでいれば color=水色・strokeColor=白。
+  例: 黄色い字を黒い太い縁が囲んでいれば color=黄・strokeColor=黒。黒い字を白い縁が囲んでいれば color=黒・strokeColor=白。
   縁が二重(内側の縁と外側の縁)の時は、内側の縁を strokeColor、外側を glowColor にする。
 - bandColor: 文字の後ろの帯・板の色(無ければnull)。glowColor: 文字の周りの光・にじみ・影の色(無ければnull)。
 - fontFamily: 次から一番近い書体: ${FONT_HINTS}
@@ -956,7 +956,7 @@ export const CAPTION_SURVEY_PROMPT = (times: number[]) => `
 - 絵を1枚ずつ順に見て、字幕が写っていれば、その見た目のグループの appearsAt にその絵の秒数を入れる(1枚の絵は1つのグループだけ)。
   数を答えるのではなく、写っていた絵の秒数を全部挙げる(ツールが数える。一番多いグループが、ふつうの字幕になる)。
 - グループごとに: appearsAt(写っていた絵の秒数を全部)、seconds(そのグループの字幕がはっきり写っている絵の秒数を1つ)、
-  examples(写っていた文言を2〜4個)、role(どんな言葉に使われているか。例「ふつうに話している言葉」「比べた結果、選ばれた方の名前」「問いかけ・否定」「締めの案内」)、
+  examples(写っていた文言を2〜4個)、role(どんな言葉に使われているか。例「ふつうに話している言葉」「数字・金額」「問いかけ・否定」)、
   look(fontFamily・color・strokeColor・bandColor・glowColor)、box(その秒の絵の中での字幕の箱。絵の幅・高さに対する%)。
 - color は字の線の内側(真ん中)の色、strokeColor はその外側を囲む縁の色(取り違えない)。縁が二重なら、内側の縁を strokeColor、外側を glowColor。
 - 書体は次から一番近い物: ${FONT_HINTS}
