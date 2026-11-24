@@ -54,6 +54,10 @@ import {
   type PlacedObjects,
 } from "@/lib/exactCopy/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
+import { SFX_PRESETS } from "@/components/editor/audioPresets";
+import { readReferenceEvents } from "@/lib/exactCopy/events";
+import { referenceIdOf } from "@/lib/exactCopy/extract";
+import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
@@ -426,8 +430,16 @@ export async function POST(request: Request) {
           // 話すのが速くて読み切れない字幕は、意味を変えずに短くする(チェック項目: テロップの表示時間は適切か)
           const tooLong = tooLongCaptions(split);
           const shortened = await shortenCaptions(tooLong.map((run) => ({ text: run.text, maxChars: run.maxChars })));
-          const replacements = new Map(tooLong.flatMap((run, index) => (shortened[index] !== run.text ? [[run.text, shortened[index]] as const] : [])));
-          const replaced = replaceCaptions(split, replacements);
+          const replacements = new Map<string, string>(tooLong.flatMap((run, index) => (shortened[index] !== run.text ? [[run.text, shortened[index]] as const] : [])));
+          const readable = replaceCaptions(split, replacements);
+          // EC-3: 字幕の長さを手本に合わせる(手本の字幕の長さより長い字幕は、意味を変えずに手本の長さまで縮める)
+          const firstPair = (await resolvePairs())[0];
+          const events = firstPair && template ? await readReferenceEvents(firstPair.file, referenceIdOf(firstPair.referencePath)) : null;
+          const limit = events ? captionLimitOf(events) : null;
+          const longRuns = limit ? captionRuns(readable).filter((run) => [...run.text.replace(/\s/g, "")].length > limit) : [];
+          const fitted = await shortenCaptions(longRuns.map((run) => ({ text: run.text, maxChars: limit ?? 99 })));
+          for (const [index, run] of longRuns.entries()) if (fitted[index] && fitted[index] !== run.text) replacements.set(run.text, fitted[index]);
+          const replaced = replaceCaptions(readable, replacements);
           // 型で、冒頭に真ん中へ大きくタイトルを出す時は、その間は字幕を出さない(手本と同じく、タイトルだけを見せる)
           const introSeconds = template?.title.intro?.seconds ?? 0;
           let elapsed = 0;
@@ -484,7 +496,7 @@ export async function POST(request: Request) {
                   frameCount: rects.length,
                 }
               : { kind: "none" };
-          const { picks, look: aiLook, lookReason: aiLookReason, frameItems, figureItems, marks } = await pickEmphasis({
+          const { picks: aiPicks, look: aiLook, lookReason: aiLookReason, frameItems, figureItems, marks } = await pickEmphasis({
             absolutePath: video.absolutePath,
             mimeType: video.mimeType,
             captions: withCaption.map((segment) => segment.caption),
@@ -493,6 +505,28 @@ export async function POST(request: Request) {
             references: await resolveReferences(),
             emphasisRoles: template?.emphasisStyles.map((style) => style.role),
           });
+          // EC-3: 手本の出来事の一覧に沿って、字幕ごとの強調・出る時の動き・寄り・効果音を決め直す(手本の動画1本だけを見る)
+          const firstPair = (await resolvePairs())[0];
+          const events = firstPair && template ? await readReferenceEvents(firstPair.file, referenceIdOf(firstPair.referencePath)) : null;
+          const plan =
+            events && template
+              ? await planImitation({
+                  events,
+                  rows: withCaption.map((segment) => ({ text: segment.caption, seconds: segment.durationInSeconds })),
+                  totalSeconds: totalSeconds(segments),
+                  emphasisStyles: template.emphasisStyles.map((style) => ({
+                    role: style.role,
+                    look: `書体${style.fontFamily}・字${style.textColor}・縁${style.strokeColor ?? "なし"}・帯${style.bandColor ?? "なし"}`,
+                  })),
+                  sounds: SFX_PRESETS.map((preset) => ({ id: preset.id, label: preset.label })),
+                }).catch((error: unknown) => {
+                  console.warn("[exact-copy] 手本の当てはめができませんでした", error);
+                  return null;
+                })
+              : null;
+          const picks = plan
+            ? plan.flatMap((row) => (row.emphasis === null ? [] : [{ index: row.index, reason: "手本の出来事に合わせて強調", style: row.emphasis }]))
+            : aiPicks;
           // 型がある時は、字幕の見た目は型どおり(AIが決めるのは、どの字幕を強調するか・どの種類の見た目にするかと、枠に入れる項目だけ)
           const emphasisLookOf = (style: number) => {
             const chosenStyle = template?.emphasisStyles[style] ?? template?.emphasisStyles[0];
@@ -533,6 +567,17 @@ export async function POST(request: Request) {
           } else if (template?.emphasisStyles[0]?.glowColor) {
             const glow = template.emphasisStyles[0].glowColor;
             emphasized = emphasized.map((segment) => (keys.has(segment.key) ? { ...segment, captionGlowColor: glow } : segment));
+          }
+          // EC-3: 字幕が出る時の動きを、手本のその役目の字幕と同じにする。寄りと効果音は工程11で付けるので覚えておく
+          const exactEffects: ExactEffects = {};
+          if (plan) {
+            const rowOf = new Map(plan.map((row) => [withCaption[row.index].key, row]));
+            emphasized = emphasized.map((segment) => {
+              const row = rowOf.get(segment.key);
+              if (!row) return segment;
+              exactEffects[segment.key] = { zoom: row.zoom, sfx: row.sfx };
+              return segment.captionAnimation === "none" ? segment : { ...segment, captionAnimation: row.animation };
+            });
           }
           // ランキング・「〇選」の枠に、項目名を入れる(言い始めた時から最後まで出す)
           const frameFills: FrameFill[] = frameItems.map((item) => ({
@@ -592,6 +637,7 @@ export async function POST(request: Request) {
                 templateMarks,
                 fillImageSrcs,
                 figure,
+                ...(plan ? { exactEffects } : {}),
               })
             ),
             note: `${regrown ? `話していた項目が${usedFrames}個だったので、ランキングの枠を${usedFrames}個に並べ直しました。` : ""}${picks.length}個の字幕を強調しました${frameFills.length > 0 ? `。枠${new Set(frameFills.map((fill) => fill.frame)).size}個に項目名を入れました${frameFills.length > new Set(frameFills.map((fill) => fill.frame)).size ? `(話題ごとの中身も入れて、合わせて${frameFills.length}回)` : ""}` : ""}${figure && figure.parts.length > 0 ? `。図に、話に合わせて${figure.parts.length}個の部品を足しました` : ""}`,
@@ -616,6 +662,15 @@ export async function POST(request: Request) {
           };
         }
         case 11: {
+          // EC-3: 工程10で手本の出来事に沿って決めた寄りと効果音を付ける(強調した字幕すべてには付けない)
+          const exactEffects = (state as StepState & { exactEffects?: ExactEffects }).exactEffects;
+          if (exactEffects) {
+            const applied = applyExactEffects(segments, exactEffects);
+            return {
+              state: { ...state, segments: applied },
+              note: `手本の出来事に沿って、${applied.filter((segment) => segment.zoom).length}か所で寄り、${applied.filter((segment) => segment.emphasisSfxPresetId).length}か所で効果音を鳴らしました`,
+            };
+          }
           const result = emphasisEffects(segments);
           return {
             state: { ...state, segments: result.segments },
