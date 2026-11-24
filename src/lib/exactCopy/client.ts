@@ -70,7 +70,8 @@ export const runExactCopy = async (
   project: VideoProject,
   options: { onProgress?: (progress: ExactProgress) => void; onStep?: (project: VideoProject) => void; signal?: AbortSignal } = {}
 ): Promise<VideoProject> => {
-  let current: VideoProject = { ...project, editSteps: { results: {}, snapshots: {}, reviewed: {} } };
+  // 手本の字幕は、話している言葉に合わせて一部を光らせていないので、光らせない(EC-3.1)
+  let current: VideoProject = { ...project, captionWordSync: "none", editSteps: { results: {}, snapshots: {}, reviewed: {} } };
   for (let step = 1; step <= EXACT_LAST_STEP; step++) {
     options.onProgress?.({ step, title: EDIT_STEPS[step - 1].title });
     current = await runExactStep(current, step, options.signal);
