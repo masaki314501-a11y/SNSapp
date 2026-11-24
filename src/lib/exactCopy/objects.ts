@@ -68,3 +68,22 @@ export const withBandOpacity = <T extends { globalShapes: ShapeOverlay[] }>(buil
     ),
   };
 };
+
+/**
+ * 先生の映り方を手本に合わせる拡大(EC-7)。顔の大きさの比で倍率を決め(1〜2倍)、顔が手本の位置に来るよう拡大の中心を決める。
+ * 今までの決め方(framingToMatch)は、顔の大きさが同じでも必ず1.15倍以上に拡大していたので、先生が手本より大きく映った。
+ * 拡大しかできないので、位置を動かしたい時だけ、届くのに要る分まで倍率を上げる(1.3倍まで)。
+ */
+export const framingExact = (
+  face: { xPercent: number; yPercent: number; heightPercent: number },
+  target: { xPercent: number; yPercent: number; heightPercent: number }
+): { scale: number; focusXPercent: number; focusYPercent: number } | null => {
+  const bySize = target.heightPercent / Math.max(1, face.heightPercent);
+  const reach = (position: number, goal: number) =>
+    goal > position ? goal / Math.max(1, position) : goal < position ? (100 - goal) / Math.max(1, 100 - position) : 1;
+  const byPosition = Math.min(1.3, Math.max(reach(face.xPercent, target.xPercent), reach(face.yPercent, target.yPercent)));
+  const scale = Math.min(2, Math.max(1, bySize, Math.abs(face.xPercent - target.xPercent) > 3 || Math.abs(face.yPercent - target.yPercent) > 3 ? byPosition : 1));
+  if (scale < 1.02) return null;
+  const focus = (position: number, goal: number) => Math.min(100, Math.max(0, (scale * position - goal) / (scale - 1)));
+  return { scale: round2(scale), focusXPercent: round2(focus(face.xPercent, target.xPercent)), focusYPercent: round2(focus(face.yPercent, target.yPercent)) };
+};

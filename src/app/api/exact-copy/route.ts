@@ -19,7 +19,6 @@ import {
   chinCaptionY,
   emphasisEffects,
   framingForFace,
-  framingToMatch,
   referenceCaptionY,
   placeMainFootage,
   removeLongSilences,
@@ -38,7 +37,7 @@ import {
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
 import { buildTemplateObjects, effectiveKind, placeTemplateFills, templateCaption, TOPIC_FRAME, type ReferenceTemplate } from "@/lib/editSteps/template";
-import { extractReferenceTemplate as findReferenceTemplate } from "@/lib/exactCopy/extract";
+import { extractReferenceTemplate as findReferenceTemplate, measureFace } from "@/lib/exactCopy/extract";
 import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
 import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
 import {
@@ -57,7 +56,7 @@ import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
-import { holdPopups, withBandOpacity } from "@/lib/exactCopy/objects";
+import { framingExact, holdPopups, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
@@ -222,12 +221,18 @@ export async function POST(request: Request) {
           };
         }
         case 6: {
-          const face = await detectFace({ absolutePath: video.absolutePath, mimeType: video.mimeType });
+          // EC-7: 手本とカット動画の顔を、同じ測り方(目盛り付きの場面の絵5枚)で測ってそろえる
+          const firstReference = (await resolvePairs())[0]?.file;
+          const measuredReference = firstReference ? await measureFace(firstReference) : null;
+          const measuredCut = measuredReference ? await measureFace({ absolutePath: video.absolutePath, mimeType: video.mimeType, kind: "video" }) : null;
+          const face = measuredCut
+            ? { ...measuredCut, widthPercent: measuredCut.heightPercent * (9 / 16) * 1.2 }
+            : await detectFace({ absolutePath: video.absolutePath, mimeType: video.mimeType });
           if (!face) return { state: { ...state, framing: null }, note: "顔が見つからなかったため、拡大しませんでした" };
           // 見た目の手本があれば、手本の人物と同じ位置・大きさに映るように寄せる(型があれば、型に測っておいた位置)
-          const target = template ? template.face : (await readReferenceLayout(await resolveReferences()))?.face;
+          const target = measuredReference ?? (template ? template.face : (await readReferenceLayout(await resolveReferences()))?.face);
           if (target) {
-            const matched = framingToMatch(face, target);
+            const matched = framingExact(face, target);
             return {
               state: { ...state, framing: matched, segments: segments.map((segment) => ({ ...segment, faceBox: face })) },
               note: matched

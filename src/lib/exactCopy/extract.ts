@@ -346,6 +346,53 @@ const stillTimesOf = (duration: number): number[] => {
   return [...new Set(times.map((t) => Math.round(Math.min(end, t) * 10) / 10))];
 };
 
+// ---------- 顔の位置と大きさを測る(EC-7) ----------
+
+export const FACE_MEASURE_PROMPT = (times: number[]) => `
+上は、話している人が映っている動画の、${times.map((t) => `${t.toFixed(1)}秒`).join("・")}の場面の絵です。赤紫の線は位置を読むための目盛りです(濃い線と数字が10%ごと、薄い線が5%ごと。左上が0)。
+絵ごとに、話している人の顔の箱を、目盛りで測って答えてください。
+- xPercent・yPercent: 顔の中心(画面の幅・高さに対する%)。
+- heightPercent: 顔の高さ(髪の生え際から、あごの先まで。画面の高さに対する%)。
+- 顔が映っていない絵は found=false。
+`.trim();
+
+/**
+ * 動画の顔の位置と大きさを、目盛り付きの場面の絵5枚で測り、真ん中の値を返す(EC-7)。
+ * 手本とカット動画を同じ測り方で測り、先生の映り方(拡大と位置)を手本にそろえる(測り方が違うと、ずれ方も違って合わなかった)。
+ */
+export const measureFace = async (file: StyleReferenceFile): Promise<{ xPercent: number; yPercent: number; heightPercent: number } | null> => {
+  const duration = file.kind === "video" && !file.youtubeUrl ? await durationOf(file.absolutePath).catch(() => 0) : 0;
+  if (duration <= 0) return null;
+  const times = [0.2, 0.35, 0.5, 0.65, 0.8].map((r) => Math.round(Math.max(0.5, Math.min(duration - 3, duration * r)) * 10) / 10);
+  const parts: Part[] = [];
+  for (const seconds of times) {
+    const png = await stillAt(file, seconds).catch(() => null);
+    if (png) parts.push({ text: `【${seconds.toFixed(1)}秒の場面】` }, { inlineData: { mimeType: "image/png", data: png.toString("base64") } });
+  }
+  if (parts.length === 0) return null;
+  const answer = await askJson({
+    model: STEP_MODEL,
+    label: "顔の位置と大きさ",
+    parts: [...parts, { text: FACE_MEASURE_PROMPT(times) }],
+    schema: {
+      type: Type.OBJECT,
+      properties: {
+        faces: { type: Type.ARRAY, items: obj({ found: { type: Type.BOOLEAN }, xPercent: num, yPercent: num, heightPercent: num }) },
+      },
+      required: ["faces"],
+    },
+    parse: z.object({ faces: z.array(z.object({ found: z.boolean(), xPercent: z.number(), yPercent: z.number(), heightPercent: z.number() })) }),
+  }).catch(() => null);
+  const found = (answer?.faces ?? []).filter((face) => face.found && face.heightPercent > 2 && face.heightPercent < 80);
+  if (found.length === 0) return null;
+  const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  return {
+    xPercent: median(found.map((face) => face.xPercent)),
+    yPercent: median(found.map((face) => face.yPercent)),
+    heightPercent: median(found.map((face) => face.heightPercent)),
+  };
+};
+
 // ---------- 色を測る ----------
 
 type Rgb = [number, number, number];

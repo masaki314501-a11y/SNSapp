@@ -55,3 +55,16 @@ describe("完全模倣 EC-3 当てはめ", () => {
     expect(captionLimitOf({ seconds: 10, measuredChanges: [], events: texts.map(event), rules: { emphasis: "", captions: "", zoom: "", sfx: "", objects: "" } })).toBe(13);
   });
 });
+
+describe("完全模倣 EC-7 先生の映り方", () => {
+  it("顔の大きさも位置も手本と同じなら拡大しない(今までのように必ず1.15倍にはしない)", async () => {
+    const { framingExact } = await import("./objects");
+    expect(framingExact({ xPercent: 50, yPercent: 30, heightPercent: 20 }, { xPercent: 50, yPercent: 30, heightPercent: 20 })).toBeNull();
+  });
+  it("顔が手本の半分の大きさなら、2倍に拡大して顔を手本の位置に置く", async () => {
+    const { framingExact } = await import("./objects");
+    const f = framingExact({ xPercent: 50, yPercent: 40, heightPercent: 10 }, { xPercent: 50, yPercent: 30, heightPercent: 20 })!;
+    expect(f.scale).toBe(2);
+    expect(f.focusYPercent + (40 - f.focusYPercent) * f.scale).toBeCloseTo(30, 1);
+  });
+});
