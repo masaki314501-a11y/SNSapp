@@ -33,7 +33,7 @@ import {
   type StepState,
 } from "@/lib/editSteps/logic";
 import { captionBandHeight } from "@/lib/editSteps/logic";
-import { buildTemplateObjects, effectiveKind, placeTemplateFills, templateCaption, TOPIC_FRAME, type ReferenceTemplate } from "@/lib/editSteps/template";
+import { buildTemplateObjects, effectiveKind, placeTemplateFills, templateCaption, templateSounds, TOPIC_FRAME, type ReferenceTemplate } from "@/lib/editSteps/template";
 import { findReferenceTemplate } from "@/lib/editSteps/templateStore";
 import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
 import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
@@ -147,6 +147,12 @@ export async function POST(request: Request) {
     ).flatMap((pair) => (pair.file ? [{ referencePath: pair.referencePath, file: pair.file }] : []));
   const resolveReferences = async () => (await resolvePairs()).map((pair) => pair.file);
 
+  // 型は先に作っておく: 工程1の時に読み取りを始めておき(待たない)、型を使う工程(6〜)ではできた型を使う
+  if (step === 1) {
+    void resolvePairs()
+      .then((pairs) => findReferenceTemplate(pairs.map((pair) => pair.file), pairs.map((pair) => pair.referencePath)))
+      .catch(() => null);
+  }
   // 見た目の手本の型(手本から自動で読み取った見た目・並べ方・出し方)。あれば工程6〜10は型どおりにし、AIには中身だけを決めてもらう。
   // 読み取りには時間がかかるので、型を使う工程(6〜14)の時だけ読む(同じ手本なら2回目からは覚えた物)
   const template: ReferenceTemplate | null =
@@ -613,9 +619,14 @@ export async function POST(request: Request) {
         }
         case 11: {
           const result = emphasisEffects(segments);
+          // 型に手本の効果音があれば、手本と同じ音にする(手本で鳴っていない種類は鳴らさない・締めの音を足す)
+          const sounded = template ? templateSounds({ ...state, segments: result.segments }, template) : result.segments;
+          const fromReference = sounded !== result.segments;
           return {
-            state: { ...state, segments: result.segments },
-            note: `強調した字幕${result.count}個に効果音を付け、少し人物を拡大しました`,
+            state: { ...state, segments: sounded },
+            note: fromReference
+              ? `強調した字幕${result.count}個に少し人物の拡大を付け、効果音は見た目の手本から切り出した音を、手本で鳴っていた所と同じ種類の字幕に付けました`
+              : `強調した字幕${result.count}個に効果音を付け、少し人物を拡大しました`,
           };
         }
         case 12: {

@@ -378,6 +378,9 @@ export const templateCaption = (template: ReferenceTemplate): { yPercent: number
     maxWidthPercent: template.caption.maxWidthPercent,
     textColor: template.caption.textColor,
     ...(template.caption.bottomPercent !== undefined ? { bottomPercent: template.caption.bottomPercent } : {}),
+    // 手本から測った縁の太さ・影(測った型にだけある)
+    ...(template.caption.strokeScale ? { strokeScale: template.caption.strokeScale } : {}),
+    ...(template.caption.textShadow ? { textShadow: template.caption.textShadow } : {}),
   },
 });
 
@@ -572,4 +575,35 @@ export const placeTemplateFills = (state: StepState, template: ReferenceTemplate
   }
 
   return { ...state, globalOverlays: [...base, ...texts], templateImages: images, templateShapes: marks };
+};
+
+/**
+ * 型に手本から切り出した効果音がある時(手本を測って作った型)、効果音を手本どおりにする(工程11)。
+ * - 強調の字幕は、その見た目の種類で手本が鳴らしていた音にする。手本で鳴っていなかった種類は鳴らさない
+ * - 最後の一言が出る所で、手本の締めの音を鳴らす
+ * 手本の音が型に無い時は、そのまま(手持ちの効果音)。
+ */
+export const templateSounds = (state: StepState, template: ReferenceTemplate): StepState["segments"] => {
+  const segments = state.segments;
+  if (!template.emphasisStyles.some((style) => style.sound) && !template.closingSound) return segments;
+  const ctaStart = template.cta && state.templateCta?.trim() ? Math.max(0, totalSeconds(state) - template.cta.seconds) : null;
+  let closingIndex = -1;
+  if (ctaStart !== null && template.closingSound) {
+    let at = 0;
+    let nearest = Infinity;
+    segments.forEach((segment, i) => {
+      if (Math.abs(at - ctaStart) < nearest) {
+        nearest = Math.abs(at - ctaStart);
+        closingIndex = i;
+      }
+      at += segment.durationInSeconds;
+    });
+  }
+  return segments.map((segment, i) => {
+    if (i === closingIndex) return { ...segment, emphasisSfxPresetId: template.closingSound };
+    if (!segment.emphasisSfxPresetId) return segment;
+    const color = segment.captionEmphasis?.textColor?.toUpperCase();
+    const style = template.emphasisStyles.find((candidate) => candidate.textColor.toUpperCase() === color);
+    return { ...segment, emphasisSfxPresetId: style?.sound };
+  });
 };
