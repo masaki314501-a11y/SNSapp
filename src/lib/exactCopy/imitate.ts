@@ -201,7 +201,13 @@ export const longestShotOf = (changes: number[]): number | null => {
  * 手本と同じ「ぱっと寄る」を入れて区切る(手本では、どの画角も6.9秒以内に、寄るか切り替わっていた)。
  * 寄る強さは、この動画でほかに寄っている所と同じ(無ければ scale)。字幕の続き(カットの切れ目の後)には入れない。
  */
-export const breakLongShots = (segments: ProjectSegment[], limitSeconds: number, scale: number): ProjectSegment[] => {
+export const breakLongShots = (
+  segments: ProjectSegment[],
+  limitSeconds: number,
+  scale: number,
+  /** 寄りを入れない字幕(丸が付く字幕など)。start・end は完成動画の秒。 */
+  skip: (start: number, end: number) => boolean = () => false
+): ProjectSegment[] => {
   const used = segments.find((segment) => segment.zoom)?.zoom?.scale ?? scale;
   const result = [...segments];
   let lastChange = 0;
@@ -214,9 +220,13 @@ export const breakLongShots = (segments: ProjectSegment[], limitSeconds: number,
       lastChange = end;
       return;
     }
+    // 元の動画の別の所へ飛ぶ切れ目(カット)は、画角が変わる所として数える(寄りを増やしすぎないため)
+    const previous = result[i - 1];
+    const jumped = previous && Math.abs(previous.startFromSeconds + previous.durationInSeconds - segment.startFromSeconds) > 0.3;
+    if (jumped) lastChange = start;
     const continued = i > 0 && result[i - 1].caption.trim() !== "" && result[i - 1].caption === segment.caption;
     const neighborZoomed = Boolean(result[i - 1]?.zoom || result[i + 1]?.zoom);
-    if (end - lastChange > limitSeconds && start - lastChange >= 1 && !continued && !neighborZoomed) {
+    if (end - lastChange > limitSeconds && start - lastChange >= 1 && !continued && !neighborZoomed && !skip(start, end)) {
       result[i] = {
         ...segment,
         zoom: { scale: used, style: "punch", focusXPercent: segment.faceBox?.xPercent ?? 50, focusYPercent: segment.faceBox?.yPercent ?? 40 },

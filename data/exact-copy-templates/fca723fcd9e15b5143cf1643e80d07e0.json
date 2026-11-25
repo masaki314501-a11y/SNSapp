@@ -215,9 +215,9 @@
     }
   ],
   "frozen": {
-    "number": 6,
+    "number": 9,
     "at": "2026-11-25",
-    "note": "完成型5に、強調の種類ごとの効果音と締めの効果音を足した(判断系。手本で寄りと一緒に鳴っていた音)"
+    "note": "完成型8に、生成で寄り以外に数えられる切り替わり(10秒あたり約2.2回。J1・L1の実測)を足した(A4)"
   },
   "sounds": [
     {
@@ -250,5 +250,8 @@
     "volume": 1
   },
   "zoomScale": 1.13,
-  "closingSound": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se6.wav"
+  "closingSound": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se6.wav",
+  "longestShotSeconds": 6.9,
+  "changesPerTenSeconds": 3.1,
+  "otherChangesPerTenSeconds": 2.2
 }

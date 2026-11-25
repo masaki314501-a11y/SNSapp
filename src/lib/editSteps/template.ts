@@ -154,6 +154,12 @@ export type ReferenceTemplate = {
   ctaStages?: { text: string; look: TemplateTextLook; yPercent: number; seconds: number; fontSizePx?: number }[];
   /** 完全模倣だけ: 手本から切り出した効果音(id は「exact:<置き場所>」、label は音の感じ)。 */
   sounds?: { id: string; label: string }[];
+  /** 完全模倣だけ: 手本で、画面が切り替わらずに続いたいちばん長い秒数(画面から測定)。これより長く続く所に寄りを入れる。 */
+  longestShotSeconds?: number;
+  /** 完全模倣だけ: 手本の、10秒あたりの画面の切り替わりの回数(画面から測定)。 */
+  changesPerTenSeconds?: number;
+  /** 完全模倣だけ: 生成で、寄り以外(字幕・強調の出入り)で切り替わりと数えられる、10秒あたりの回数(生成を測った値)。 */
+  otherChangesPerTenSeconds?: number;
   /** 完全模倣だけ: 締めに入る時に鳴らす、手本から切り出した効果音の id。 */
   closingSound?: string;
   /** 完全模倣だけ: 手本から測った寄りの倍率(手本では、寄るのは強調の字幕の時だけだった)。 */

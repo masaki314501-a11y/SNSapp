@@ -57,6 +57,7 @@ import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events
 import { referenceIdOf } from "@/lib/exactCopy/extract";
 import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredLookAndZoom, measuredMotions, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
+import { balanceShots, visibleCutsOf } from "@/lib/exactCopy/shots";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
 import { CAPTION_FONT_FAMILY_OPTIONS, type CaptionFontFamily } from "@video/shared/schema";
@@ -766,9 +767,28 @@ export async function POST(request: Request) {
           // A3・J91・J92・G60: 完全模倣は工程13で終わる(工程14は通らない)ので、締めの段と、締めの間の片付けはここで行う
           const total13 = totalSeconds(segments);
           // グループ2: タイトル・見出し・写真・丸などの物は、手本どおり「ぱっと出る」にそろえる
-          const closed = template
+          const judged = template
             ? measuredLookAndZoom(measuredMotions(instantObjects(clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13)), template), template)
             : state;
+          // B8: 手本のいちばん長い画角より長く、寄りも切り替わりも無く続く所に、手本と同じ「ぱっと寄る」を入れる(効果音は付けない)
+          // A4: 全体の切り替わりが多すぎる時は、ほかの切り替わりに近すぎる強調の寄りから外す(手本の10秒あたりの回数＋1回未満まで)。
+          // 元の動画の切れ目は、画面で見て変わる物だけを切り替わりとして数える
+          const closed =
+            template?.longestShotSeconds && template.zoomScale
+              ? {
+                  ...judged,
+                  segments: balanceShots(judged.segments as ProjectSegment[], {
+                    visible: await visibleCutsOf(video.absolutePath, judged.segments as ProjectSegment[]),
+                    limitSeconds: template.longestShotSeconds,
+                    scale: template.zoomScale,
+                    // 書き出した動画では、寄り以外(字幕・強調の出入り)でも10秒あたり約2.2回切り替わる(J1・L1の実測)ので、その分を引く
+                    maxPerTen: (template.changesPerTenSeconds ?? 3) + 0.9 - (template.otherChangesPerTenSeconds ?? 0),
+                    // 丸が付く字幕には寄りを足さない(手本は、丸が付く字幕では寄っていなかった)
+                    skip: (start, end) =>
+                      (judged.templateShapes ?? []).some((shape) => (shape.startOffsetSeconds ?? 0) >= start - 0.05 && (shape.startOffsetSeconds ?? 0) < end),
+                  }),
+                }
+              : judged;
           // グループ3: 手本から取り出したBGMがあれば、手元の曲ではなく、それを手本の音量で最初から最後まで入れる
           if (template?.bgm) {
             return {
