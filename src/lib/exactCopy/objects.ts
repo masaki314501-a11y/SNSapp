@@ -254,14 +254,41 @@ export const measuredLookAndZoom = (state: StepState, template: ReferenceTemplat
       ? { ...(layout ?? {}), ...(caption.strokeScale ? { strokeScale: caption.strokeScale } : {}), ...(caption.textShadow ? { textShadow: caption.textShadow } : {}) }
       : layout;
   const scale = template.zoomScale;
-  const segments = scale
-    ? state.segments.map((segment, i, all) => {
-        const continued = i > 0 && all[i - 1].caption.trim() !== "" && all[i - 1].caption === segment.caption;
-        const zoomed = !!segment.captionEmphasis && !!segment.caption.trim() && !continued;
-        return zoomed
-          ? { ...segment, zoom: { scale, style: "punch" as const, focusXPercent: segment.faceBox?.xPercent ?? 50, focusYPercent: segment.faceBox?.yPercent ?? 40 } }
-          : { ...segment, zoom: undefined };
-      })
-    : state.segments;
+  // 判断系(E47・E48・I83・D21):
+  // - 見出しと同じ文言の字幕は出さない(手本は、話題の名前を見出しにだけ出していた)
+  // - 寄るのは強調の字幕だけ。ただし丸が付く字幕では寄らない(手本の「表側矯正」は丸と一緒に出て、寄っていなかった)
+  // - 効果音は、寄る強調の時だけ、その種類の手本の音を鳴らす。締めに入る時は締めの音。ほかでは鳴らさない(手本は見出しで鳴らしていなかった)
+  const normalize = (text: string) => text.replace(/[\s、。!！?？]/g, "");
+  const topics = new Set((state.frameFills ?? []).map((fill) => normalize(fill.label)).filter(Boolean));
+  const marks = (state.templateShapes ?? []).map((shape) => shape.startOffsetSeconds ?? 0);
+  const closingStart = Math.min(
+    ...state.globalOverlays.filter((overlay) => overlay.tag === CTA_STAGE_TAG).map((overlay) => overlay.startOffsetSeconds ?? Infinity)
+  );
+  let at = 0;
+  let closingSounded = false;
+  const segments = state.segments.map((segment, i, all) => {
+    const start = at;
+    const end = at + segment.durationInSeconds;
+    at = end;
+    if (segment.caption.trim() && topics.has(normalize(segment.caption))) {
+      return { ...segment, caption: "", captionEmphasis: undefined, zoom: undefined, emphasisSfxPresetId: undefined };
+    }
+    if (!closingSounded && template.closingSound && Number.isFinite(closingStart) && Math.abs(start - closingStart) < 0.05) {
+      closingSounded = true;
+      return { ...segment, zoom: undefined, emphasisSfxPresetId: template.closingSound };
+    }
+    if (!scale) return segment;
+    const continued = i > 0 && all[i - 1].caption.trim() !== "" && all[i - 1].caption === segment.caption;
+    const withMark = marks.some((mark) => mark >= start - 0.05 && mark < end);
+    const zoomed = !!segment.captionEmphasis && !!segment.caption.trim() && !continued && !withMark;
+    if (!zoomed) return { ...segment, zoom: undefined, emphasisSfxPresetId: undefined };
+    const color = segment.captionEmphasis?.textColor?.toUpperCase();
+    const style = template.emphasisStyles.find((candidate) => candidate.textColor.toUpperCase() === color);
+    return {
+      ...segment,
+      zoom: { scale, style: "punch" as const, focusXPercent: segment.faceBox?.xPercent ?? 50, focusYPercent: segment.faceBox?.yPercent ?? 40 },
+      emphasisSfxPresetId: style?.sound,
+    };
+  });
   return { ...state, ...(captionLayout ? { captionLayout } : {}), segments };
 };

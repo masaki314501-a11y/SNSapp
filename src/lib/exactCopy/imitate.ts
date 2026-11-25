@@ -48,6 +48,9 @@ const fmtEvents = (events: ReferenceEvents) =>
     })
     .join("\n");
 
+/** 手本の、ふつうの字幕の出来事の数。 */
+const captionEventCount = (events: ReferenceEvents) => events.events.filter((event) => event.kind === "caption").length;
+
 export const IMITATE_PROMPT = (input: {
   events: ReferenceEvents;
   rows: { text: string; seconds: number; objects?: string[] }[];
@@ -76,6 +79,7 @@ ${input.rows.map((row, index) => `${index + 1}: ${row.text.replace(/\n/g, "")} (
 この動画の同じ役目の言葉・瞬間に、同じように起こしてください。手本の秒数を写すのではなく、話の中身で対応させます。
 手本で、丸・絵・名前などの物が出る瞬間に、強調・寄り・効果音が一緒に起きていたら、この動画でも、同じ物が出る字幕([ ]の中)に同じ組み合わせで起こしてください。
 量(強調・寄り・効果音の回数)は、手本と同じ割合にします(動画の長さが違えば、その分だけ増減する)。手本で使っていない物は使わない。
+強調の数の目安: 手本は、字幕${captionEventCount(input.events) + emphasisEvents(input.events).length}個のうち${emphasisEvents(input.events).length}個を強調していた。この動画の字幕は${input.rows.length}個なので、およそ${Math.max(1, Math.round((input.rows.length * emphasisEvents(input.events).length) / Math.max(1, captionEventCount(input.events) + emphasisEvents(input.events).length)))}個を強調する(話題ごとに偏らせず、どの話題にも手本と同じくらい入れる)。
 字幕ごとに、次を答えてください(すべての字幕について、番号の順に)。
 - index: 字幕の番号。
 - emphasis: 手本で強調していた役目の字幕なら、強調の見た目の番号。強調しないなら 0。

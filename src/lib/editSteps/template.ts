@@ -57,6 +57,8 @@ export type TemplateEmphasisStyle = {
   outerStroke?: { color: string; widthPx: number };
   /** 完全模倣だけ: 手本から測った、この強調が出る時の動き。 */
   animation?: CaptionAnimation;
+  /** 完全模倣だけ: この強調で寄る時に鳴らす、手本から切り出した効果音の id(手本で鳴っていなければ無し)。 */
+  sound?: string;
 };
 
 export type ReferenceTemplate = {
@@ -152,6 +154,8 @@ export type ReferenceTemplate = {
   ctaStages?: { text: string; look: TemplateTextLook; yPercent: number; seconds: number; fontSizePx?: number }[];
   /** 完全模倣だけ: 手本から切り出した効果音(id は「exact:<置き場所>」、label は音の感じ)。 */
   sounds?: { id: string; label: string }[];
+  /** 完全模倣だけ: 締めに入る時に鳴らす、手本から切り出した効果音の id。 */
+  closingSound?: string;
   /** 完全模倣だけ: 手本から測った寄りの倍率(手本では、寄るのは強調の字幕の時だけだった)。 */
   zoomScale?: number;
   /** 完全模倣だけ: 手本から取り出したBGM(置き場所と、声に対する音量)。 */
