@@ -246,3 +246,14 @@ describe("完全模倣 グループ2 字幕の出方を手本の出方にそろ�
     expect(out.segments.map((s) => s.captionAnimation)).toEqual(["none", "pop", "none", "blur-in", "none", "pop"]);
   });
 });
+
+describe("完全模倣 E41 数字・金額の字幕は強調しない", () => {
+  it("数字・金額を言う強調を外す", async () => {
+    const { measuredLookAndZoom } = await import("./objects");
+    const template = { caption: {}, emphasisStyles: [], zoomScale: 1.13 } as never;
+    const seg = (caption: string) => ({ caption, durationInSeconds: 2, startFromSeconds: 0, captionEmphasis: { textColor: "#FFF" } });
+    const state = { segments: [seg("日本より3分の1位安い"), seg("韓国なら高くても60万"), seg("当グループの強み")], globalOverlays: [] } as never;
+    const out = measuredLookAndZoom(state, template) as unknown as { segments: { captionEmphasis?: unknown }[] };
+    expect(out.segments.map((s) => !!s.captionEmphasis)).toEqual([false, false, true]);
+  });
+});

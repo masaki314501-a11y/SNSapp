@@ -80,6 +80,7 @@ ${input.rows.map((row, index) => `${index + 1}: ${row.text.replace(/\n/g, "")} (
 手本で、丸・絵・名前などの物が出る瞬間に、強調・寄り・効果音が一緒に起きていたら、この動画でも、同じ物が出る字幕([ ]の中)に同じ組み合わせで起こしてください。
 量(強調・寄り・効果音の回数)は、手本と同じ割合にします(動画の長さが違えば、その分だけ増減する)。手本で使っていない物は使わない。
 強調の数の目安: 手本は、字幕${captionEventCount(input.events) + emphasisEvents(input.events).length}個のうち${emphasisEvents(input.events).length}個を強調していた。この動画の字幕は${input.rows.length}個なので、およそ${Math.max(1, Math.round((input.rows.length * emphasisEvents(input.events).length) / Math.max(1, captionEventCount(input.events) + emphasisEvents(input.events).length)))}個を強調する(話題ごとに偏らせず、どの話題にも手本と同じくらい入れる)。
+強調の見た目は、手本でその見た目を使っていた役目の言葉にだけ使う(例: 治療法の名前の見た目を、ほかの言葉に使わない)。手本の強調には数字・金額の言葉が無かったので、数字・金額を言う字幕は強調しない。
 字幕ごとに、次を答えてください(すべての字幕について、番号の順に)。
 - index: 字幕の番号。
 - emphasis: 手本で強調していた役目の字幕なら、強調の見た目の番号。強調しないなら 0。

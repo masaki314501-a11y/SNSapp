@@ -264,9 +264,12 @@ export const measuredLookAndZoom = (state: StepState, template: ReferenceTemplat
   const closingStart = Math.min(
     ...state.globalOverlays.filter((overlay) => overlay.tag === CTA_STAGE_TAG).map((overlay) => overlay.startOffsetSeconds ?? Infinity)
   );
+  // E41: 手本の強調には数字・金額の言葉が無かったので、数字・金額を言う字幕は強調しない(AIが選んでしまった時の止め)
+  const numeric = /[0-9０-９]|[一二三四五六七八九十百千万]+(円|万|分の|割|%|％|倍)/;
   let at = 0;
   let closingSounded = false;
-  const segments = state.segments.map((segment, i, all) => {
+  const plain = state.segments.map((segment) => (segment.captionEmphasis && numeric.test(segment.caption) ? { ...segment, captionEmphasis: undefined, captionAnimation: "none" as const } : segment));
+  const segments = plain.map((segment, i, all) => {
     const start = at;
     const end = at + segment.durationInSeconds;
     at = end;
