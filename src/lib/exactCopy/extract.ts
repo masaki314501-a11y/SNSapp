@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 19;
+const EXTRACT_VERSION = 24;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -300,6 +300,8 @@ const RESPONSE_PARSE = z.object({
     .nullable()
     .default(null),
   note: z.string().default(""),
+  /** 完全模倣だけ: 締めの段(AIには聞かない。1秒ごとに測った字幕から、ツールが入れる)。 */
+  ctaStages: z.array(z.object({ text: z.string(), look: lookParse, yPercent: percent, seconds: positive })).optional(),
 });
 export type ExtractedTemplate = z.infer<typeof RESPONSE_PARSE>;
 
@@ -1069,6 +1071,9 @@ export const toReferenceTemplate = (raw: ExtractedTemplate, meta: { name: string
           },
         }
       : {}),
+    ...(raw.cta && raw.ctaStages && raw.ctaStages.length > 0
+      ? { ctaStages: raw.ctaStages.map((stage) => ({ text: stage.text, look: toLook(stage.look), yPercent: stage.yPercent, seconds: stage.seconds })) }
+      : {}),
   };
 };
 
@@ -1390,7 +1395,11 @@ const captionBand = (raw: ExtractedTemplate) => {
 const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, duration: number): Promise<ExtractedTemplate> => {
   if (file.kind !== "video" || duration <= 2) return raw;
   const band = captionBand(raw);
-  const times = Array.from({ length: Math.min(70, Math.floor(Math.max(1, duration - 3))) }, (_, i) => i + 0.5);
+  // A3: 終わりの近く(締めの段が出る所)は0.25秒ごとに見る(1秒弱しか出ない段も拾うため)
+  const tailFrom = Math.max(0, duration - (raw.cta?.seconds ?? 5) - 6);
+  const coarse = Array.from({ length: Math.min(70, Math.floor(Math.max(1, duration - 3))) }, (_, i) => i + 0.5);
+  const tail = raw.cta ? Array.from({ length: Math.max(0, Math.floor((duration - 2.5 - tailFrom) / 0.25)) }, (_, i) => Math.round((tailFrom + i * 0.25) * 100) / 100) : [];
+  const times = [...new Set([...coarse.filter((t) => t < tailFrom), ...tail].map((t) => t.toFixed(1)))].map(Number).sort((a, b) => a - b);
   const parts: Part[] = [];
   const cropPixels = new Map<string, Uint8Array>();
   // E40: 色の重なりの順番を測れるように、画面の元の幅(540)で切り抜く
@@ -1482,9 +1491,56 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     const role = mostCommon(members.map((m) => m.role)) || "強調した言葉";
     return `${role}${texts.length > 0 ? `(手本では「${texts.slice(0, 2).join("」「")}」のような言葉)` : ""}`;
   };
-  const [normal, ...others] = grouped;
+  const [normal, ...rest] = grouped;
+  // A3・J91・J92: 締めの段。終わりから前へたどり、ふつうの字幕が出る所までの、見た目の組の並び(出た順)
+  // (手本の日韓は「無料ですか?」(黒い字に白い縁)→「無料実施中!」(白い字に赤い縁)→「ご予約ください!」(水色の字に黄色い光))
+  const groupOf = new Map<SeenCaption, SeenCaption[]>(grouped.flatMap((members) => members.map((m) => [m, members] as const)));
+  const ordered = [...seen].sort((a, b) => a.seconds - b.seconds);
+  const near = (a: string | null, b: string | null) => !!a && !!b && distance(hexToRgb(a), hexToRgb(b)) <= 60;
+  const looksNormal = (item: SeenCaption) =>
+    (near(item.fill, normal[0].fill) && near(item.edge, normal[0].edge)) || (near(item.fill, normal[0].edge) && near(item.edge, normal[0].fill));
+  // 同じ文言が続く秒を1つのまとまりにする(1秒ごとの読みは、ある秒だけ色の読みが外れることがあるので、まとまりの多数決で決める)
+  const textRuns: SeenCaption[][] = [];
+  for (const item of ordered) {
+    const last = textRuns[textRuns.length - 1];
+    const prev = last?.[last.length - 1];
+    if (last && prev && item.seconds - prev.seconds <= 2 && sameCaption(prev.text, item.text)) last.push(item);
+    else textRuns.push([item]);
+  }
+  const runs: { members: SeenCaption[]; items: SeenCaption[] }[] = [];
+  for (let i = textRuns.length - 1; i >= 0 && raw.cta; i--) {
+    const items = textRuns[i];
+    if (i < textRuns.length - 1 && textRuns[i + 1][0].seconds - items[items.length - 1].seconds > 2) break;
+    // ふつうの字幕(組か、字と縁の色がふつうの字幕と同じ秒が半分以上)の所で止める
+    const normalCount = items.filter((item) => groupOf.get(item) === normal || looksNormal(item)).length;
+    if (normalCount * 2 >= items.length) break;
+    // 見た目は、まとまりの中で画面から測れた組のうち、いちばん多い物
+    const candidates = items.filter((item) => item.measured);
+    const members = mostCommon((candidates.length > 0 ? candidates : items).map((item) => groupOf.get(item)!));
+    runs.unshift({ members, items });
+  }
+  const tailStart = runs[0]?.items[0].seconds ?? Infinity;
+  const ctaStages =
+    raw.cta && runs.length > 0 && tailStart >= duration - (raw.cta.seconds + 8)
+      ? runs.map((run, i) => {
+          const start = run.items[0].seconds;
+          const next = runs[i + 1]?.items[0].seconds;
+          const seconds = next !== undefined ? next - start : run.items[run.items.length - 1].seconds - start + 0.5;
+          const texts = run.items.map((m) => m.text.trim()).filter(Boolean);
+          const text = texts.length > 0 ? mostCommon(texts) : "";
+          return { text, look: lookOf(run.members), yPercent: toScreen(run.items[0].box).yPercent, seconds: Math.round(Math.max(0.5, seconds) * 100) / 100 };
+        })
+      : undefined;
+  if (ctaStages)
+    console.info(`[exactCopy] 締めの段: ${ctaStages.map((stage) => `「${stage.text.replace(/\n/g, "")}」(字${stage.look.color}・縁${stage.look.strokeColor ?? stage.look.bandColor ?? "なし"}・${stage.seconds}秒)`).join(" → ")}`);
+  // 締めの段にしか出ない組は、強調の種類に入れない
+  const stageOnly = new Set(runs.filter((run) => run.members.every((m) => m.seconds >= tailStart)).map((run) => run.members));
+  const others = ctaStages ? rest.filter((members) => !stageOnly.has(members)) : rest;
+  const cta = raw.cta;
   return {
     ...raw,
+    cta,
+    ...(ctaStages ? { ctaStages } : {}),
     caption: { ...raw.caption, look: lookOf(normal) },
     // 手本の強調は5種類以上あることがある(日韓は白字青縁・明朝白字黒影・明朝青濃淡光・明朝白字青光・黄字黒縁・赤字白縁)
     emphasisStyles: others.slice(0, 10).map((members) => ({ role: roleOf(members), look: lookOf(members), scale: 1 })),

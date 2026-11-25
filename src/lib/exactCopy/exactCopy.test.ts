@@ -128,3 +128,107 @@ describe("完全模倣 E40 1秒ごとに測った字幕を見た目でまとめ�
     expect(groupSeenCaptions([seen(1, "#FFFFFF", "#1060D0"), seen(2, "#1060D0", "#FFFFFF", {}, false)])).toHaveLength(1);
   });
 });
+
+describe("完全模倣 A3 最後の一言の間は字幕・見出しを出さない", () => {
+  it("最後の一言にかかる字幕からあとを消し、見出し・丸は最後の一言の所で終える", async () => {
+    const { clearUnderCta } = await import("./objects");
+    const { TEMPLATE_FILL_TAG } = await import("@/lib/editSteps/template");
+    const seg = (key: string, seconds: number, caption: string) => ({ key, durationInSeconds: seconds, caption }) as never;
+    const text = (t: string, start: number, extra = {}) => ({ text: t, startOffsetSeconds: start, tag: TEMPLATE_FILL_TAG, ...extra }) as never;
+    const state = {
+      segments: [seg("a", 4, "はじめ"), seg("b", 4, "途中"), seg("c", 3, "最後の字幕")],
+      globalOverlays: [text("仕上がり", 2, { color: "#020202", yPercent: 55 }), text("ご予約は", 6.1, { color: "#3FB7F6", yPercent: 50 }), { text: "タイトル" } as never],
+      templateImages: [],
+      templateShapes: [{ startOffsetSeconds: 1 } as never],
+    } as never;
+    const template = { cta: { seconds: 5, yPercent: 50, look: { color: "#3fb7f6" } }, compare: { topic: { yPercent: 55 } } } as never;
+    const result = clearUnderCta(state, template, 11) as unknown as {
+      segments: { caption: string }[];
+      globalOverlays: { text: string; startOffsetSeconds?: number; durationInSeconds?: number }[];
+      templateShapes: { durationInSeconds?: number }[];
+    };
+    expect(result.segments.map((s) => s.caption)).toEqual(["はじめ", "", ""]);
+    expect(result.globalOverlays.find((o) => o.text === "ご予約は")).toMatchObject({ startOffsetSeconds: 6.1, durationInSeconds: 4.9 });
+    expect(result.globalOverlays.find((o) => o.text === "仕上がり")).toMatchObject({ durationInSeconds: 4.1 });
+    expect(result.globalOverlays.find((o) => o.text === "タイトル")).toEqual({ text: "タイトル" });
+    expect(result.globalOverlays).toHaveLength(3);
+    expect(result.templateShapes[0]).toMatchObject({ durationInSeconds: 5.1 });
+  });
+});
+
+describe("完全模倣 B8 同じ画角が長く続く所に寄りを入れる", () => {
+  it("手本のいちばん長い秒数を、測った切り替わりの間から出す", async () => {
+    const { longestShotOf } = await import("./imitate");
+    expect(longestShotOf([1.8, 8.4, 10.3, 13])).toBeCloseTo(6.6);
+    expect(longestShotOf([1])).toBeNull();
+  });
+  it("寄りの無いまま上限を超える所に、ほかの寄りと同じ強さで寄る", async () => {
+    const { breakLongShots } = await import("./imitate");
+    const seg = (caption: string, zoom?: number) => ({ key: caption, caption, durationInSeconds: 3, ...(zoom ? { zoom: { scale: zoom, style: "punch" } } : {}) }) as never;
+    const out = breakLongShots([seg("a", 1.2), seg("b"), seg("c"), seg("d"), seg("e"), seg("f")], 6.9, 1.15) as unknown as { zoom?: { scale: number } }[];
+    expect(out.map((s) => s.zoom?.scale ?? 0)).toEqual([1.2, 0, 0, 1.2, 0, 0]);
+  });
+});
+
+describe("完全模倣 A3・J91・J92 締めの段", () => {
+  it("手本の段の順番・長さで終わりに並べ、最後の段にこの動画の最後の一言を入れる", async () => {
+    const { placeCtaStages, CTA_STAGE_TAG } = await import("./objects");
+    const look = (color: string) => ({ color, fontFamily: "Noto Sans JP" });
+    const template = {
+      cta: { xPercent: 50, yPercent: 50, fontSizePx: 80, maxWidthPercent: 90, seconds: 4, look: look("#FBFCFB") },
+      ctaStages: [
+        { text: "カウンセリングは\n無料ですか？", look: look("#010101"), yPercent: 50, seconds: 1.5 },
+        { text: "カウンセリングは\n無料実施中！", look: look("#FBFCFB"), yPercent: 50, seconds: 0.7 },
+        { text: "プロフィールリンクから\nご予約ください！", look: look("#3FB7F6"), yPercent: 49, seconds: 3.2 },
+      ],
+    } as never;
+    const state = { segments: [], globalOverlays: [{ text: "古い一言", tag: "template-fill", startOffsetSeconds: 16, color: "#FBFCFB", yPercent: 50 }] } as never;
+    const out = placeCtaStages(state, template, 20, "ご予約は\nプロフィールから！") as unknown as { globalOverlays: { text: string; startOffsetSeconds: number; durationInSeconds: number; tag?: string }[] };
+    const stages = out.globalOverlays.filter((o) => o.tag === CTA_STAGE_TAG);
+    expect(out.globalOverlays.some((o) => o.text === "古い一言")).toBe(false);
+    expect(stages.map((o) => [o.text, o.startOffsetSeconds])).toEqual([
+      ["カウンセリングは", 14.6],
+      ["無料ですか？", 14.6],
+      ["カウンセリングは", 16.1],
+      ["無料実施中！", 16.1],
+      ["ご予約は", 16.8],
+      ["プロフィールから！", 16.8],
+    ]);
+    expect(stages.at(-1)?.durationInSeconds).toBe(3.2);
+  });
+});
+
+describe("完全模倣 C13 寄りの倍率を画面から測る", () => {
+  it("寄った所(1.04〜1.4倍)の真ん中の値を使い、引いた所・切り替わりは数えない", async () => {
+    const { zoomScaleOf } = await import("./measureZoom");
+    expect(zoomScaleOf([1.126, 0.903, 1.114, 0.921, 1.145, 0.836, 1.09, 1.011, 1.271, 0.773, 1.115, 0.899])).toBe(1.13);
+    expect(zoomScaleOf([0.9, 1.01])).toBeNull();
+  });
+});
+
+describe("完全模倣 締めの段の行", () => {
+  it("改行が無く1行に収まらない時は、真ん中に近い助詞の後ろで2行に分ける", async () => {
+    const { linesOf } = await import("./objects");
+    const tooLong = () => false;
+    expect(linesOf("カウンセリングは無料ですか?", tooLong)).toEqual(["カウンセリングは", "無料ですか?"]);
+    expect(linesOf("プロフィールリンクからご予約ください!", tooLong)).toEqual(["プロフィールリンクから", "ご予約ください!"]);
+    expect(linesOf("ご予約は\nプロフィールから!", tooLong)).toEqual(["ご予約は", "プロフィールから!"]);
+    expect(linesOf("短い", () => true)).toEqual(["短い"]);
+  });
+});
+
+describe("完全模倣 グループ2 出る時の動きを測る", () => {
+  it("手本の3つの出方(ぱっと・弾む拡大・ぼかし)を見分ける", async () => {
+    const { motionOf } = await import("./measureMotion");
+    const f = (count: number, spread: number) => ({ count, spread });
+    // ふつうの字幕: 0.1秒で全部出る
+    expect(motionOf([f(0, 0), f(0, 0), f(1000, 0.8), f(1000, 0.8), f(1000, 0.8)])).toBe("none");
+    // 黄色い強調(手本の実測): 8.4秒から 0.24→0.81→0.66→0.74→0.78
+    expect(motionOf([f(0, 0), f(100, 0.24), f(4544, 0.81), f(2765, 0.66), f(3710, 0.74), f(4303, 0.78), f(4300, 0.78)])).toBe("pop");
+    // 青い光の強調(手本の実測): 前の字幕の白 → ぼやけた白が広がって増え、続けて減ってくっきり
+    expect(motionOf([f(5932, 0.82), f(5999, 0.61), f(14185, 0.76), f(21726, 0.89), f(18866, 0.89), f(14154, 0.89), f(6678, 0.88), f(5436, 0.88), f(5476, 0.88)])).toBe("blur-in");
+    // 長い字幕から短い字幕へ、いきなり替わる
+    expect(motionOf([f(9000, 0.9), f(9000, 0.9), f(5000, 0.82), f(5000, 0.82)])).toBe("none");
+    expect(motionOf([f(0, 0), f(10, 0)])).toBeNull();
+  });
+});

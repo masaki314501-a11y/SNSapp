@@ -4,7 +4,7 @@
  */
 import type { ImageOverlay, ShapeOverlay, TextOverlay } from "@video/shared/schema";
 import type { StepState } from "@/lib/editSteps/logic";
-import { TEMPLATE_FILL_TAG, type ReferenceTemplate } from "@/lib/editSteps/template";
+import { fitFontSize, lineStepPercent, TEMPLATE_FILL_TAG, textOverlay, type ReferenceTemplate } from "@/lib/editSteps/template";
 
 /** 最後の項目の大きな写真を出しておく、いちばん長い秒数。 */
 const LAST_HOLD_SECONDS = 10;
@@ -86,4 +86,111 @@ export const framingExact = (
   if (scale < 1.02) return null;
   const focus = (position: number, goal: number) => Math.min(100, Math.max(0, (scale * position - goal) / (scale - 1)));
   return { scale: round2(scale), focusXPercent: round2(focus(face.xPercent, target.xPercent)), focusYPercent: round2(focus(face.yPercent, target.yPercent)) };
+};
+
+/**
+ * 完全模倣(A3 締め方): 締め(最後の一言・締めの段)が出ている間は、ふつうの字幕・話題の見出し・丸を出さない
+ * (手本では、締めの字幕は字幕の所に出て、その間は字幕も見出しも出ていなかった。動画の上のタイトルと、カードとその中身は出したまま)。
+ * 締めの始まりにかかる字幕は、言いかけで消えないよう、まるごと出さない。
+ */
+export const clearUnderCta = (state: StepState, template: ReferenceTemplate, totalSeconds: number): StepState => {
+  const cta = template.cta;
+  if (!cta) return state;
+  const planned = round2(Math.max(0, totalSeconds - cta.seconds));
+  // 最後の一言の文字(型の最後の一言と同じ色で、終わりの近くから、型の位置の近くに出ている物。動画の長さの数え方で、出始めは少しずれる)
+  const isCta = (overlay: TextOverlay) =>
+    overlay.tag === CTA_STAGE_TAG ||
+    (overlay.tag === TEMPLATE_FILL_TAG &&
+      Math.abs((overlay.startOffsetSeconds ?? 0) - planned) < 1 &&
+      String(overlay.color ?? "").toUpperCase() === cta.look.color.toUpperCase() &&
+      Math.abs(overlay.yPercent - cta.yPercent) < 15);
+  const ctaTexts = state.globalOverlays.filter(isCta);
+  if (ctaTexts.length === 0) return state;
+  const start = round2(Math.min(...ctaTexts.map((overlay) => overlay.startOffsetSeconds ?? planned)));
+  let at = 0;
+  const segments = state.segments.map((segment) => {
+    const end = at + segment.durationInSeconds;
+    at = end;
+    return end > start + 0.05 && segment.caption.trim() ? { ...segment, caption: "", captionEmphasis: undefined } : segment;
+  });
+  const endAt = <T extends { startOffsetSeconds?: number; durationInSeconds?: number }>(item: T): T | null => {
+    const from = item.startOffsetSeconds ?? 0;
+    if (from >= start - 0.01) return null;
+    const to = item.durationInSeconds !== undefined ? from + item.durationInSeconds : Infinity;
+    return to > start ? { ...item, durationInSeconds: round2(start - from) } : item;
+  };
+  // 話題の見出し(型の見出しの位置にある、型どおりに置いた文字)
+  const topicY = template.compare?.topic?.yPercent;
+  const isTopic = (overlay: TextOverlay) => overlay.tag === TEMPLATE_FILL_TAG && topicY !== undefined && Math.abs(overlay.yPercent - topicY) < 2;
+  const globalOverlays = state.globalOverlays.flatMap((overlay) => {
+    if (isCta(overlay) && overlay.tag !== CTA_STAGE_TAG) return [{ ...overlay, startOffsetSeconds: start, durationInSeconds: round2(totalSeconds - start) }];
+    if (!isTopic(overlay)) return [overlay];
+    const kept = endAt(overlay);
+    return kept ? [kept] : [];
+  });
+  const templateShapes = state.templateShapes?.flatMap((shape) => {
+    const kept = endAt(shape);
+    return kept ? [kept] : [];
+  });
+  return { ...state, segments, globalOverlays, templateShapes };
+};
+
+/**
+ * 締めの段の行。改行があればそのまま。無くて、1行では字が型の大きさの8割未満に縮む時は、
+ * 真ん中に近い助詞(は・から・を・に・で・が)の後ろで2行に分ける(手本の締めは「カウンセリングは/無料ですか?」のように2行)。
+ */
+export const linesOf = (text: string, fits: (line: string) => boolean): string[] => {
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length !== 1 || fits(lines[0])) return lines;
+  const chars = [...lines[0]];
+  let best: number | null = null;
+  for (const particle of ["から", "は", "を", "に", "で", "が"]) {
+    for (let at = lines[0].indexOf(particle); at >= 0; at = lines[0].indexOf(particle, at + 1)) {
+      const cut = [...lines[0].slice(0, at + particle.length)].length;
+      if (cut < chars.length * 0.3 || cut > chars.length * 0.7) continue;
+      if (best === null || Math.abs(cut - chars.length / 2) < Math.abs(best - chars.length / 2)) best = cut;
+    }
+  }
+  const cut = best ?? Math.ceil(chars.length / 2);
+  return [chars.slice(0, cut).join(""), chars.slice(cut).join("")];
+};
+
+/** 締めの段の文字の目印(clearUnderCta が締めの始まりを見分けるため)。 */
+export const CTA_STAGE_TAG = "exact-cta-stage";
+
+/**
+ * 完全模倣(A3・J91・J92 締め方): 手本の終わりの「締めの段」(例: 問いかけ → 無料の案内 → 予約の案内)を、
+ * 手本と同じ順番・長さ・見た目・位置で、動画の終わりに出す。最後の段は、この動画の最後の一言(finalText)。
+ * 前の段は、手本の文言のまま(同じ医院の案内)。型に締めの段が無ければ、何もしない。
+ */
+export const placeCtaStages = (state: StepState, template: ReferenceTemplate, totalSeconds: number, finalText: string | undefined): StepState => {
+  const stages = template.ctaStages;
+  const cta = template.cta;
+  if (!stages || stages.length === 0 || !cta) return state;
+  const texts = stages.map((stage, i) => (i === stages.length - 1 && finalText?.trim() ? finalText.trim() : stage.text));
+  const total = stages.reduce((sum, stage) => sum + stage.seconds, 0);
+  let at = Math.max(0, totalSeconds - total);
+  const overlays: TextOverlay[] = stages.flatMap((stage, i) => {
+    const lines = linesOf(texts[i], (text) => fitFontSize([{ text, look: stage.look }], cta.fontSizePx, cta.maxWidthPercent) >= cta.fontSizePx * 0.8);
+    const size = fitFontSize(lines.map((text) => ({ text, look: stage.look })), cta.fontSizePx, cta.maxWidthPercent);
+    const start = round2(at);
+    at += stage.seconds;
+    const duration = round2(i === stages.length - 1 ? totalSeconds - start : stage.seconds);
+    return lines.map((line, index) => ({
+      ...textOverlay(line, stage.look, { xPercent: cta.xPercent, yPercent: stage.yPercent + (index - (lines.length - 1) / 2) * lineStepPercent(size), fontSizePx: size }),
+      startOffsetSeconds: start,
+      durationInSeconds: duration,
+      // 手本の締めの字幕は、ぱっと出る
+      animation: "none",
+      tag: CTA_STAGE_TAG,
+    }));
+  });
+  // 型どおりの最後の一言(1つだけの物)は外して、締めの段に置き換える
+  const planned = Math.max(0, totalSeconds - cta.seconds);
+  const isOldCta = (overlay: TextOverlay) =>
+    overlay.tag === TEMPLATE_FILL_TAG &&
+    Math.abs((overlay.startOffsetSeconds ?? 0) - planned) < 1 &&
+    String(overlay.color ?? "").toUpperCase() === cta.look.color.toUpperCase() &&
+    Math.abs(overlay.yPercent - cta.yPercent) < 15;
+  return { ...state, globalOverlays: [...state.globalOverlays.filter((overlay) => !isOldCta(overlay) && overlay.tag !== CTA_STAGE_TAG), ...overlays] };
 };

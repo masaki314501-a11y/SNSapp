@@ -56,7 +56,7 @@ import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
-import { framingExact, holdPopups, withBandOpacity } from "@/lib/exactCopy/objects";
+import { clearUnderCta, framingExact, holdPopups, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
@@ -806,8 +806,12 @@ export async function POST(request: Request) {
             frameFills: state.frameFills?.map((fill) => ({ ...fill, label: fix(fill.label) })),
             videoAdjust: light.adjust,
           }));
+          // A3: 最後の一言が出ている間は、字幕・見出し・枠の物を出さない(手本の締め方)
+          // A3・J91・J92: 手本の締めの段(問いかけ → 案内 → 最後の一言)を、手本と同じ順番・長さ・見た目で終わりに出す
+          const total14 = totalSeconds(adjusted.segments as ProjectSegment[]);
+          const closed = template ? clearUnderCta(placeCtaStages(adjusted, template, total14, adjusted.templateCta), template, total14) : adjusted;
           const result = runChecklist({
-            state: adjusted,
+            state: closed,
             spans,
             look: {
               captionStyle: captionLook.style,

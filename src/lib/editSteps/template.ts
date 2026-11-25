@@ -140,6 +140,8 @@ export type ReferenceTemplate = {
   };
   /** 最後の一言(予約への案内など)。文言は動画ごとにAIが決める。 */
   cta?: { xPercent: number; yPercent: number; fontSizePx: number; look: TemplateTextLook; seconds: number; maxWidthPercent: number };
+  /** 完全模倣だけ: 締めの段(手本の終わりに、ふつうの字幕の後に続く見た目の違う字幕を、出た順に。最後の段に動画ごとの最後の一言を入れる)。 */
+  ctaStages?: { text: string; look: TemplateTextLook; yPercent: number; seconds: number }[];
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -154,13 +156,13 @@ export const TEMPLATE_FILL_TAG = "template-fill";
 const widthEm = (text: string, look: TemplateTextLook) => estimateTextWidthPx(text, 1) + (look.bandColor ? 0.8 : 0.3);
 
 /** 幅に収まる文字の大きさ(px)。大きくても base まで。 */
-const fitFontSize = (texts: { text: string; look: TemplateTextLook }[], base: number, maxWidthPercent: number, min = 28) => {
+export const fitFontSize = (texts: { text: string; look: TemplateTextLook }[], base: number, maxWidthPercent: number, min = 28) => {
   const maxWidthPx = (maxWidthPercent / 100) * VIDEO_WIDTH;
   const longest = Math.max(1, ...texts.map(({ text, look }) => widthEm(text, look)));
   return Math.max(min, Math.min(base, Math.floor(maxWidthPx / longest)));
 };
 
-const textOverlay = (
+export const textOverlay = (
   text: string,
   look: TemplateTextLook,
   at: { xPercent: number; yPercent: number; fontSizePx: number }
@@ -212,7 +214,7 @@ const imageOf = (src: string, box: TemplateBox, extra: Partial<ImageOverlay> = {
 });
 
 /** 文字の高さ(%)。 */
-const lineStepPercent = (fontSizePx: number) => ((fontSizePx * LINE_HEIGHT) / VIDEO_HEIGHT) * 100;
+export const lineStepPercent = (fontSizePx: number) => ((fontSizePx * LINE_HEIGHT) / VIDEO_HEIGHT) * 100;
 
 /** ランキングの枠の箱(上から順)。 */
 export const templateFrameBoxes = (frames: NonNullable<ReferenceTemplate["frames"]>, count: number): TemplateBox[] => {

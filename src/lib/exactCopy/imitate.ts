@@ -184,3 +184,41 @@ export const captionLimitOf = (events: ReferenceEvents): number | null => {
   if (lengths.length < 3) return null;
   return Math.max(6, lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * 0.8))]);
 };
+
+/** 手本で、画面が切り替わらずに続いたいちばん長い秒数(測った切り替わりの秒の間)。測れていなければ null。 */
+export const longestShotOf = (changes: number[]): number | null => {
+  if (changes.length < 3) return null;
+  const sorted = [...changes].sort((a, b) => a - b);
+  return Math.max(...sorted.slice(1).map((value, i) => value - sorted[i]));
+};
+
+/**
+ * 完全模倣(B8 同じ画角が続く長さ): 寄りも切り替わりも無いまま、手本のいちばん長い秒数より長く続く所に、
+ * 手本と同じ「ぱっと寄る」を入れて区切る(手本では、どの画角も6.9秒以内に、寄るか切り替わっていた)。
+ * 寄る強さは、この動画でほかに寄っている所と同じ(無ければ scale)。字幕の続き(カットの切れ目の後)には入れない。
+ */
+export const breakLongShots = (segments: ProjectSegment[], limitSeconds: number, scale: number): ProjectSegment[] => {
+  const used = segments.find((segment) => segment.zoom)?.zoom?.scale ?? scale;
+  const result = [...segments];
+  let lastChange = 0;
+  let at = 0;
+  result.forEach((segment, i) => {
+    const start = at;
+    const end = at + segment.durationInSeconds;
+    at = end;
+    if (segment.zoom) {
+      lastChange = end;
+      return;
+    }
+    const continued = i > 0 && result[i - 1].caption.trim() !== "" && result[i - 1].caption === segment.caption;
+    const neighborZoomed = Boolean(result[i - 1]?.zoom || result[i + 1]?.zoom);
+    if (end - lastChange > limitSeconds && start - lastChange >= 1 && !continued && !neighborZoomed) {
+      result[i] = {
+        ...segment,
+        zoom: { scale: used, style: "punch", focusXPercent: segment.faceBox?.xPercent ?? 50, focusYPercent: segment.faceBox?.yPercent ?? 40 },
+      };
+      lastChange = end;
+    }
+  });
+  return result;
+};
