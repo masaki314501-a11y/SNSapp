@@ -55,7 +55,7 @@ import {
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
-import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredLookAndZoom, measuredMotions, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
+import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredLookAndZoom, measuredMotions, PERCENT, placeCtaStages, softenComparison, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { balanceShots, visibleCutsOf } from "@/lib/exactCopy/shots";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
@@ -789,18 +789,43 @@ export async function POST(request: Request) {
                   }),
                 }
               : judged;
+          // 段階2 K97: 比較広告に当たる比べる数字(〇分の1・〇倍)を言い換える
+          const softened: StepState = {
+            ...closed,
+            segments: closed.segments.map((segment) => (segment.caption.trim() ? { ...segment, caption: softenComparison(segment.caption) } : segment)),
+            globalOverlays: closed.globalOverlays.map((overlay) => ({ ...overlay, text: softenComparison(String(overlay.text)) })),
+          };
+          // 段階2 D37: 誤字・脱字を、AIが動画の声と見比べて探し、一部だけの小さな直しは自動で直す(工程14と同じ決まり。完全模倣は工程14を通らないため)
+          const proofTexts = [
+            ...captionRuns(softened.segments as ProjectSegment[]).map((run) => ({ kind: "字幕" as const, text: run.text })),
+            ...softened.globalOverlays.map((overlay) => ({ kind: "タイトル・枠の文字" as const, text: String(overlay.text) })).filter((item) => item.text.trim() && !/^\d+$/.test(item.text)),
+          ];
+          const typos = template ? await proofreadTexts({ absolutePath: video.absolutePath, mimeType: video.mimeType, texts: proofTexts }).catch(() => []) : [];
+          const smallFixes = typos.filter(isSmallTypoFix);
+          const fixText = (text: string) => smallFixes.reduce((current, typo) => (current === typo.text ? current.replace(typo.wrong, typo.correct) : current), text);
+          const proofread: StepState = template
+            ? {
+                ...softened,
+                segments: softened.segments.map((segment) => (segment.caption.trim() ? { ...segment, caption: fixText(segment.caption) } : segment)),
+                globalOverlays: softened.globalOverlays.map((overlay) => ({ ...overlay, text: fixText(String(overlay.text)) })),
+              }
+            : closed;
+          if (template) {
+            const percentLeft = proofread.segments.filter((segment) => PERCENT.test(segment.caption)).map((segment) => segment.caption);
+            console.info(`[exact-copy] 誤字の直し ${smallFixes.length}件(候補 ${typos.length}件)${percentLeft.length > 0 ? `・〇%が残った字幕: ${percentLeft.join("・")}` : ""}`);
+          }
           // グループ3: 手本から取り出したBGMがあれば、手元の曲ではなく、それを手本の音量で最初から最後まで入れる
           if (template?.bgm) {
             return {
-              state: { ...closed, bgm: { src: template.bgm.src, label: "手本のBGM", volume: template.bgm.volume, fadeInSeconds: 0, fadeOutSeconds: 0 } },
+              state: { ...proofread, bgm: { src: template.bgm.src, label: "手本のBGM", volume: template.bgm.volume, fadeInSeconds: 0, fadeOutSeconds: 0 } },
               note: "手本から取り出したBGMを、手本と同じ音量で最初から最後まで入れました",
             };
           }
           const chosen = parsed.data.bgm;
-          if (!chosen) return { state: { ...closed, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
+          if (!chosen) return { state: { ...proofread, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
           return {
             state: {
-              ...closed,
+              ...proofread,
               bgm: { src: chosen.src, label: chosen.label, volume: BGM_VOLUME, fadeInSeconds: BGM_FADE_IN_SECONDS, fadeOutSeconds: BGM_FADE_OUT_SECONDS },
             },
             note: `BGM「${chosen.label}」を、動画の頭から話し声より小さな音量で入れ、最後の${fmt(BGM_FADE_OUT_SECONDS)}で下げて動画の終わりと一緒に終わるようにしました`,

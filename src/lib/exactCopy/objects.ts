@@ -295,3 +295,13 @@ export const measuredLookAndZoom = (state: StepState, template: ReferenceTemplat
   });
   return { ...state, ...(captionLayout ? { captionLayout } : {}), segments };
 };
+
+/**
+ * 完全模倣(段階2 K97): 比較広告に当たる比べる数字を言い換える(マニュアル「不当な比較広告(〇倍・〇%・〇分の1)を使わない」)。
+ * 「3分の1位」「三分の一」→「大幅に」、「〇倍」→「何倍も」。〇% は自然な言い換えが決まらないので残し、呼んだ所で記録に出す。
+ */
+const KANSUJI = "[0-9０-９一二三四五六七八九十]+";
+const FRACTION = new RegExp(`${KANSUJI}\\s?分の\\s?${KANSUJI}(位|くらい|ぐらい|ほど)?`, "g");
+const TIMES = new RegExp(`${KANSUJI}(\\.[0-9]+)?\\s?倍(以上)?(も)?`, "g");
+export const PERCENT = /[0-9０-９]+(\.[0-9]+)?\s?[%％]/;
+export const softenComparison = (text: string): string => text.replace(FRACTION, "大幅に").replace(TIMES, "何倍も").replace(/大幅に\s?大幅に/g, "大幅に");

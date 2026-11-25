@@ -257,3 +257,14 @@ describe("完全模倣 E41 数字・金額の字幕は強調しない", () => {
     expect(out.segments.map((s) => !!s.captionEmphasis)).toEqual([false, false, true]);
   });
 });
+
+describe("完全模倣 K97 比較広告に当たる比べる数字を言い換える", () => {
+  it("〇分の一・〇倍を言い換え、ほかはそのまま", async () => {
+    const { softenComparison, PERCENT } = await import("./objects");
+    expect(softenComparison("日本より3分の1位安い")).toBe("日本より大幅に安い");
+    expect(softenComparison("日本より三分の一安い")).toBe("日本より大幅に安い");
+    expect(softenComparison("費用は2倍以上")).toBe("費用は何倍も");
+    expect(softenComparison("韓国は高くても60万円")).toBe("韓国は高くても60万円");
+    expect(PERCENT.test("満足度90%")).toBe(true);
+  });
+});
