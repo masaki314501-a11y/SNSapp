@@ -39,6 +39,8 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
 const EXTRACT_VERSION = 32;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
+/** 完成型(凍結した型)の置き場所。手本ごとに1つ。 */
+const FROZEN_DIR = path.join(process.cwd(), "data", "exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
 const SAMPLE_HEIGHT = 960;
@@ -301,7 +303,7 @@ const RESPONSE_PARSE = z.object({
     .default(null),
   note: z.string().default(""),
   /** 完全模倣だけ: 締めの段(AIには聞かない。1秒ごとに測った字幕から、ツールが入れる)。 */
-  ctaStages: z.array(z.object({ text: z.string(), look: lookParse, yPercent: percent, seconds: positive })).optional(),
+  ctaStages: z.array(z.object({ text: z.string(), look: lookParse, yPercent: percent, seconds: positive, charHeightPercent: percent.optional() })).optional(),
 });
 export type ExtractedTemplate = z.infer<typeof RESPONSE_PARSE>;
 
@@ -1072,7 +1074,16 @@ export const toReferenceTemplate = (raw: ExtractedTemplate, meta: { name: string
         }
       : {}),
     ...(raw.cta && raw.ctaStages && raw.ctaStages.length > 0
-      ? { ctaStages: raw.ctaStages.map((stage) => ({ text: stage.text, look: toLook(stage.look), yPercent: stage.yPercent, seconds: stage.seconds })) }
+      ? {
+          ctaStages: raw.ctaStages.map((stage) => ({
+            text: stage.text,
+            look: toLook(stage.look),
+            yPercent: stage.yPercent,
+            seconds: stage.seconds,
+            // A3: 締めの段ごとに、画面から測った字の大きさ(測れなければ、最後の一言の大きさ)
+            ...(stage.charHeightPercent ? { fontSizePx: fontPx(stage.charHeightPercent, 28, 160) } : {}),
+          })),
+        }
       : {}),
   };
 };
@@ -1144,7 +1155,9 @@ const lookSlots = (raw: ExtractedTemplate): LookSlot[] => {
   const cta = raw.cta;
   if (cta) slots.push({ id: "cta", what: "最後の一言", look: cta.look, setLook: (look) => (cta.look = look), setCharHeight: (v) => (cta.charHeightPercent = v) });
   // A3: 締めの段も、強調と同じ仕組み(拡大した切り抜きで見直し・色を合わせ・色の重なりの順番で向きを決める)で測り直す
-  raw.ctaStages?.forEach((stage, i) => slots.push({ id: `stage${i + 1}`, what: `締めの${i + 1}段目の字幕`, look: stage.look, setLook: (look) => (stage.look = look) }));
+  raw.ctaStages?.forEach((stage, i) =>
+    slots.push({ id: `stage${i + 1}`, what: `締めの${i + 1}段目の字幕`, look: stage.look, setLook: (look) => (stage.look = look), setCharHeight: (v) => (stage.charHeightPercent = v) })
+  );
   return slots;
 };
 
@@ -1950,6 +1963,9 @@ export const extractReferenceTemplate = (references: StyleReferenceFile[], refer
   const running = memory.get(key);
   if (running) return running;
   const task = (async () => {
+    // 完成型(手本と照らして直し、凍結した型)があれば、読み取らずにそれを使う(2026-11-25 追加指示「まず完璧な型を1回作って、凍結する」)
+    const frozen = await readFile(path.join(FROZEN_DIR, `${id}.json`), "utf8").then((text) => JSON.parse(text) as ReferenceTemplate).catch(() => null);
+    if (frozen) return frozen;
     const saved = await readFile(cachePath(key), "utf8").then((text) => JSON.parse(text) as ReferenceTemplate).catch(() => null);
     if (saved) return saved;
     const duration = file.kind === "video" && !file.youtubeUrl ? await durationOf(file.absolutePath).catch(() => 0) : 0;

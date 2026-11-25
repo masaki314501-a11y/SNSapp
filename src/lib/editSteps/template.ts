@@ -141,7 +141,7 @@ export type ReferenceTemplate = {
   /** 最後の一言(予約への案内など)。文言は動画ごとにAIが決める。 */
   cta?: { xPercent: number; yPercent: number; fontSizePx: number; look: TemplateTextLook; seconds: number; maxWidthPercent: number };
   /** 完全模倣だけ: 締めの段(手本の終わりに、ふつうの字幕の後に続く見た目の違う字幕を、出た順に。最後の段に動画ごとの最後の一言を入れる)。 */
-  ctaStages?: { text: string; look: TemplateTextLook; yPercent: number; seconds: number }[];
+  ctaStages?: { text: string; look: TemplateTextLook; yPercent: number; seconds: number; fontSizePx?: number }[];
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;

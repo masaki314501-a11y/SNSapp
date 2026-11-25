@@ -1,0 +1,209 @@
+{
+  "name": "日韓の手本(矯正治療どちらがおすすめ)の完成型",
+  "referenceIds": [
+    "fca723fcd9e15b5143cf1643e80d07e0"
+  ],
+  "kind": "compare",
+  "face": {
+    "xPercent": 50,
+    "yPercent": 32,
+    "heightPercent": 18
+  },
+  "caption": {
+    "topPercent": 45,
+    "bottomPercent": 50.8,
+    "xPercent": 50,
+    "maxWidthPercent": 90,
+    "fontSize": "xlarge",
+    "fontFamily": "M PLUS Rounded 1c",
+    "style": "outline",
+    "textColor": "#38B3C3",
+    "accentColor": "#FBFDFD"
+  },
+  "emphasisStyles": [
+    {
+      "role": "項目の名前・選ばれた方の名前(手本では「表側矯正」「裏側矯正」「ほぼ同じ」のような言葉)",
+      "fontFamily": "Noto Sans JP",
+      "textColor": "#FBFDFC",
+      "bandColor": null,
+      "scale": 1.37,
+      "strokeColor": "#0A5CC6",
+      "outerStroke": {
+        "color": "#F4F9F8",
+        "widthPx": 6.5
+      }
+    },
+    {
+      "role": "否定・難しい点(手本では「発注までに時間がかかる」「裏側は適応がある」「扱ってない歯医者が多い」のような言葉)",
+      "fontFamily": "Noto Serif JP",
+      "textColor": "#FDFDFD",
+      "bandColor": null,
+      "scale": 1.25,
+      "strokeColor": "#030202"
+    },
+    {
+      "role": "強み・特徴(手本では「完全オーダーメイド」のような言葉)",
+      "fontFamily": "Noto Sans JP",
+      "textColor": "#F4CB1B",
+      "bandColor": null,
+      "scale": 1.15,
+      "strokeColor": "#272423",
+      "outerStroke": {
+        "color": "#F7F782",
+        "widthPx": 6
+      }
+    },
+    {
+      "role": "治療法の名前の強調(手本では「上下裏側(フルリンガル)」のような言葉)",
+      "fontFamily": "Noto Sans JP",
+      "textColor": "#CB2024",
+      "bandColor": null,
+      "scale": 1.1,
+      "strokeColor": "#FEFCF7",
+      "outerStroke": {
+        "color": "#E9DFAF",
+        "widthPx": 5
+      }
+    },
+    {
+      "role": "医院の強み(手本では「当グループの強み」のような言葉)",
+      "fontFamily": "Noto Serif JP",
+      "textColor": "#3B5EC4",
+      "bandColor": null,
+      "scale": 1.2,
+      "strokeColor": "#E3D8A3",
+      "outerStroke": {
+        "color": "#DECEA0",
+        "widthPx": 5
+      }
+    },
+    {
+      "role": "メリット(手本では「治療期間も目立たない」のような言葉)",
+      "fontFamily": "Noto Serif JP",
+      "textColor": "#F9FCFC",
+      "bandColor": null,
+      "scale": 1.03,
+      "glowColor": "#5EB8E1"
+    }
+  ],
+  "title": {
+    "align": "center",
+    "xPercent": 31,
+    "yPercent": 12.25,
+    "fontSizePx": 50,
+    "maxWidthPercent": 75,
+    "lineCount": 2,
+    "lines": [
+      {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#1F589F",
+        "strokeColor": "#F4F6F7"
+      },
+      {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#DFDFDF",
+        "strokeColor": "#1F1F1F"
+      }
+    ],
+    "wording": "1行目にテーマ、2行目に問いかけ",
+    "intro": {
+      "seconds": 1.8,
+      "xPercent": 50,
+      "yPercent": 49,
+      "fontSizePx": 115
+    }
+  },
+  "compare": {
+    "row": {
+      "yPercent": 70,
+      "heightPercent": 22,
+      "leftPercent": 8,
+      "rightPercent": 92,
+      "gapPercent": 4
+    },
+    "shape": {
+      "borderColor": "#CCCCCC",
+      "borderWidthPx": 8,
+      "fillColor": "#FFFFFF",
+      "fillOpacity": 1,
+      "cornerRadiusPx": 0
+    },
+    "content": "image",
+    "name": {
+      "fontSizePx": 64,
+      "look": {
+        "fontFamily": "Noto Sans JP",
+        "color": "#020202",
+        "bandColor": "#F1F1F1"
+      },
+      "fromBottomPercent": 2.25
+    },
+    "topic": {
+      "xPercent": 50,
+      "yPercent": 56,
+      "fontSizePx": 66,
+      "look": {
+        "fontFamily": "Noto Sans JP",
+        "color": "#010102",
+        "bandColor": "#FDFDFD"
+      }
+    },
+    "marker": {
+      "color": "#FF0000",
+      "strokeWidthPx": 32
+    }
+  },
+  "cta": {
+    "xPercent": 50,
+    "yPercent": 50,
+    "fontSizePx": 86,
+    "look": {
+      "fontFamily": "Noto Sans JP",
+      "color": "#242325",
+      "bandColor": "#FDFDFD"
+    },
+    "seconds": 5,
+    "maxWidthPercent": 90
+  },
+  "ctaStages": [
+    {
+      "text": "カウンセリングは\n無料ですか?",
+      "look": {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#010101",
+        "strokeColor": "#FDFCFD"
+      },
+      "yPercent": 46.556,
+      "seconds": 1.5,
+      "fontSizePx": 86
+    },
+    {
+      "text": "カウンセリングは\n無料実施中!",
+      "look": {
+        "fontFamily": "M PLUS Rounded 1c",
+        "color": "#FBFDFA",
+        "strokeColor": "#C02C08"
+      },
+      "yPercent": 45.752,
+      "seconds": 0.7,
+      "fontSizePx": 86
+    },
+    {
+      "text": "プロフィールリンクから\nご予約ください!",
+      "look": {
+        "fontFamily": "Noto Serif JP",
+        "color": "#3FB7F6",
+        "strokeColor": "#E4E09E",
+        "glowColor": "#F7F782"
+      },
+      "yPercent": 45.216,
+      "seconds": 3.3,
+      "fontSizePx": 86
+    }
+  ],
+  "frozen": {
+    "number": 1,
+    "at": "2026-11-25",
+    "note": "型の覚え番号32を土台に、手本の画面を測った値で直した(型のチェック表は docs/change-tree.md)"
+  }
+}

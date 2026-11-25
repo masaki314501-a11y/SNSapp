@@ -754,11 +754,14 @@ export async function POST(request: Request) {
           };
         }
         case 13: {
+          // A3・J91・J92・G60: 完全模倣は工程13で終わる(工程14は通らない)ので、締めの段と、締めの間の片付けはここで行う
+          const total13 = totalSeconds(segments);
+          const closed = template ? clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13) : state;
           const chosen = parsed.data.bgm;
-          if (!chosen) return { state: { ...state, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
+          if (!chosen) return { state: { ...closed, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
           return {
             state: {
-              ...state,
+              ...closed,
               bgm: { src: chosen.src, label: chosen.label, volume: BGM_VOLUME, fadeInSeconds: BGM_FADE_IN_SECONDS, fadeOutSeconds: BGM_FADE_OUT_SECONDS },
             },
             note: `BGM「${chosen.label}」を、動画の頭から話し声より小さな音量で入れ、最後の${fmt(BGM_FADE_OUT_SECONDS)}で下げて動画の終わりと一緒に終わるようにしました`,
@@ -807,7 +810,7 @@ export async function POST(request: Request) {
             videoAdjust: light.adjust,
           }));
           // A3: 最後の一言が出ている間は、字幕・見出し・枠の物を出さない(手本の締め方)
-          // A3・J91・J92: 手本の締めの段(問いかけ → 案内 → 最後の一言)を、手本と同じ順番・長さ・見た目で終わりに出す
+          // (締めの段と片付けは工程13で行う。工程14は完全模倣では通らないが、通った時も同じになるようにここでも行う)
           const total14 = totalSeconds(adjusted.segments as ProjectSegment[]);
           const closed = template ? clearUnderCta(placeCtaStages(adjusted, template, total14, adjusted.templateCta), template, total14) : adjusted;
           const result = runChecklist({

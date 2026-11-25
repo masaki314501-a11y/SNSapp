@@ -169,13 +169,27 @@ export const placeCtaStages = (state: StepState, template: ReferenceTemplate, to
   if (!stages || stages.length === 0 || !cta) return state;
   const texts = stages.map((stage, i) => (i === stages.length - 1 && finalText?.trim() ? finalText.trim() : stage.text));
   const total = stages.reduce((sum, stage) => sum + stage.seconds, 0);
-  let at = Math.max(0, totalSeconds - total);
+  // 締めの始まりは、近い方の字幕の切れ目に合わせる(字幕の途中から始めると、その字幕を消すしかなく、何も出ない間ができる)。
+  // ずれた分は1段目の長さで合わせる(1段目は最低0.8秒)
+  const planned = Math.max(0, totalSeconds - total);
+  const cuts: number[] = [];
+  let edge = 0;
+  for (const segment of state.segments) {
+    cuts.push(round2(edge));
+    edge += segment.durationInSeconds;
+  }
+  const lastStart = totalSeconds - (total - stages[0].seconds) - 0.8;
+  const candidates = cuts.filter((cut) => cut <= lastStart + 0.05);
+  const snapped = candidates.length > 0 ? candidates.reduce((best, cut) => (Math.abs(cut - planned) < Math.abs(best - planned) ? cut : best)) : planned;
+  const durations = stages.map((stage, i) => (i === 0 ? stage.seconds + (planned - snapped) : stage.seconds));
+  let at = snapped;
   const overlays: TextOverlay[] = stages.flatMap((stage, i) => {
-    const lines = linesOf(texts[i], (text) => fitFontSize([{ text, look: stage.look }], cta.fontSizePx, cta.maxWidthPercent) >= cta.fontSizePx * 0.8);
-    const size = fitFontSize(lines.map((text) => ({ text, look: stage.look })), cta.fontSizePx, cta.maxWidthPercent);
+    const base = stage.fontSizePx ?? cta.fontSizePx;
+    const lines = linesOf(texts[i], (text) => fitFontSize([{ text, look: stage.look }], base, cta.maxWidthPercent) >= base * 0.8);
+    const size = fitFontSize(lines.map((text) => ({ text, look: stage.look })), base, cta.maxWidthPercent);
     const start = round2(at);
-    at += stage.seconds;
-    const duration = round2(i === stages.length - 1 ? totalSeconds - start : stage.seconds);
+    at += durations[i];
+    const duration = round2(i === stages.length - 1 ? totalSeconds - start : durations[i]);
     return lines.map((line, index) => ({
       ...textOverlay(line, stage.look, { xPercent: cta.xPercent, yPercent: stage.yPercent + (index - (lines.length - 1) / 2) * lineStepPercent(size), fontSizePx: size }),
       startOffsetSeconds: start,
@@ -186,10 +200,10 @@ export const placeCtaStages = (state: StepState, template: ReferenceTemplate, to
     }));
   });
   // 型どおりの最後の一言(1つだけの物)は外して、締めの段に置き換える
-  const planned = Math.max(0, totalSeconds - cta.seconds);
+  const oldCtaStart = Math.max(0, totalSeconds - cta.seconds);
   const isOldCta = (overlay: TextOverlay) =>
     overlay.tag === TEMPLATE_FILL_TAG &&
-    Math.abs((overlay.startOffsetSeconds ?? 0) - planned) < 1 &&
+    Math.abs((overlay.startOffsetSeconds ?? 0) - oldCtaStart) < 1 &&
     String(overlay.color ?? "").toUpperCase() === cta.look.color.toUpperCase() &&
     Math.abs(overlay.yPercent - cta.yPercent) < 15;
   return { ...state, globalOverlays: [...state.globalOverlays.filter((overlay) => !isOldCta(overlay) && overlay.tag !== CTA_STAGE_TAG), ...overlays] };
