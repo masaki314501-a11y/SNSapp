@@ -165,6 +165,9 @@ export const captionAnimationSchema = z
     "blur-in",
     "slide-side",
     "flip-in",
+    // 完全模倣だけ: 手本から測った出方(選ぶ一覧 CAPTION_ANIMATION_OPTIONS には入れない。今までの作り方では使わない)
+    "bounce-in",
+    "blur-expand",
     // 前のクリップと同じ字幕が続く時(カットの切れ目が言葉の途中にある時)に、出し直しの動きをせず、そのまま出しておく
     "none",
   ])

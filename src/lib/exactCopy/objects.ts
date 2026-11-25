@@ -167,7 +167,8 @@ export const placeCtaStages = (state: StepState, template: ReferenceTemplate, to
   const stages = template.ctaStages;
   const cta = template.cta;
   if (!stages || stages.length === 0 || !cta) return state;
-  const texts = stages.map((stage, i) => (i === stages.length - 1 && finalText?.trim() ? finalText.trim() : stage.text));
+  // 改行が「\n」の2文字で入っていたら、本当の改行に直す
+  const texts = stages.map((stage, i) => (i === stages.length - 1 && finalText?.trim() ? finalText.trim() : stage.text).replace(/\\n/g, "\n"));
   const total = stages.reduce((sum, stage) => sum + stage.seconds, 0);
   // 締めの始まりは、近い方の字幕の切れ目に合わせる(字幕の途中から始めると、その字幕を消すしかなく、何も出ない間ができる)。
   // ずれた分は1段目の長さで合わせる(1段目は最低0.8秒)
@@ -208,3 +209,34 @@ export const placeCtaStages = (state: StepState, template: ReferenceTemplate, to
     Math.abs(overlay.yPercent - cta.yPercent) < 15;
   return { ...state, globalOverlays: [...state.globalOverlays.filter((overlay) => !isOldCta(overlay) && overlay.tag !== CTA_STAGE_TAG), ...overlays] };
 };
+
+/**
+ * 完全模倣(グループ2 G61・H81・F55): タイトル・見出し・枠の文字・写真・丸・カードは、手本どおり「ぱっと出る」にする
+ * (手本を0.1秒ごとに見ると、冒頭のタイトルは真ん中から左上へいきなり替わり、見出し・丸もいきなり出ていた。
+ * 共通の部品は、タイトル・枠を「ふわっと」、写真・見出し・丸を「拡大しながら」と決め打ちしているため、完全模倣ではここで外す)。
+ */
+export const instantObjects = (state: StepState): StepState => ({
+  ...state,
+  globalOverlays: state.globalOverlays.map((overlay) => ({ ...overlay, animation: "none" as const })),
+  globalShapes: state.globalShapes.map((shape) => ({ ...shape, animation: "none" as const })),
+  ...(state.templateImages ? { templateImages: state.templateImages.map((image) => ({ ...image, animation: "none" as const })) } : {}),
+  ...(state.templateShapes ? { templateShapes: state.templateShapes.map((shape) => ({ ...shape, animation: "none" as const })) } : {}),
+});
+
+/**
+ * 完全模倣(グループ2 D35・E46): 字幕ごとの出方を、手本から測った出方にそろえる(最後の工程13で行う)。
+ * 前の字幕の続き(カットの切れ目の後)は動きなし。強調は、字の色が同じ強調の種類の出方。ふつうの字幕は、ふつうの字幕の出方。
+ * 型に出方が無ければ、ぱっと出る(手本に無い動きは使わない。共通の部品は、動きなしの字幕を「ポップイン」に戻すため、ここでそろえ直す)。
+ */
+export const measuredMotions = (state: StepState, template: ReferenceTemplate): StepState => ({
+  ...state,
+  segments: state.segments.map((segment, i, all) => {
+    if (!segment.caption.trim()) return segment;
+    const continued = i > 0 && all[i - 1].caption === segment.caption;
+    if (continued) return { ...segment, captionAnimation: "none" as const };
+    const color = segment.captionEmphasis?.textColor?.toUpperCase();
+    const style = color ? template.emphasisStyles.find((candidate) => candidate.textColor.toUpperCase() === color) : undefined;
+    const animation = (segment.captionEmphasis ? style?.animation : template.caption.animation) ?? "none";
+    return { ...segment, captionAnimation: animation };
+  }),
+});

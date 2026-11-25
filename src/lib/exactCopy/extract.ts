@@ -1960,12 +1960,14 @@ export const extractReferenceTemplate = (references: StyleReferenceFile[], refer
   if (!file || !referencePath) return Promise.resolve(null);
   const id = referenceIdOf(referencePath);
   const key = `v${EXTRACT_VERSION}_${id}`;
+  // 完成型(手本と照らして直し、凍結した型)があれば、読み取らずにそれを使う(2026-11-25 追加指示「まず完璧な型を1回作って、凍結する」)。
+  // 完成型は直すことがあるので、覚えておかずに毎回ファイルから読む
+  const frozenPath = path.join(FROZEN_DIR, `${id}.json`);
   const running = memory.get(key);
-  if (running) return running;
   const task = (async () => {
-    // 完成型(手本と照らして直し、凍結した型)があれば、読み取らずにそれを使う(2026-11-25 追加指示「まず完璧な型を1回作って、凍結する」)
-    const frozen = await readFile(path.join(FROZEN_DIR, `${id}.json`), "utf8").then((text) => JSON.parse(text) as ReferenceTemplate).catch(() => null);
+    const frozen = await readFile(frozenPath, "utf8").then((text) => JSON.parse(text) as ReferenceTemplate).catch(() => null);
     if (frozen) return frozen;
+    if (running) return running;
     const saved = await readFile(cachePath(key), "utf8").then((text) => JSON.parse(text) as ReferenceTemplate).catch(() => null);
     if (saved) return saved;
     const duration = file.kind === "video" && !file.youtubeUrl ? await durationOf(file.absolutePath).catch(() => 0) : 0;

@@ -56,7 +56,7 @@ import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
-import { clearUnderCta, framingExact, holdPopups, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
+import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredMotions, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
@@ -317,6 +317,10 @@ export async function POST(request: Request) {
           // タイトルの指定があれば、文言はそれを使う(見た目と枠の数はAIの案のまま)
           const fixedTitle = parsed.data.title?.trim();
           if (fixedTitle) objects.title = fixedTitle;
+          // 完全模倣: AIの答えの改行が「\n」の2文字で入っていることがあるので、本当の改行に直す(タイトルが1行で小さく出た)
+          const realBreaks = (text: string) => text.replace(/\\n/g, "\n");
+          objects.title = realBreaks(objects.title);
+          if (objects.cta) objects.cta = realBreaks(objects.cta);
           if (template) {
             // 話の内容が手本の出し方と合う時は、手本の型どおりに枠・カードを置く。
             // 合わない時(手本はランキングなのに話は比べる内容など)は、話の内容を優先して、話に合う物を置く(タイトルと字幕の見た目は手本のまま)
@@ -619,7 +623,9 @@ export async function POST(request: Request) {
               // E44: 強調の色は、型を読み取る時に画面から測った「強調の見た目の種類ごとの色」を使う
               // (EC-8 の、AIが答えた色を強調1回ごとに写すやり方はやめた。AIの色は #0000FF のように実際と違ったため)
               const withLook = segment;
-              return segment.captionAnimation === "none" ? withLook : { ...withLook, captionAnimation: row.animation };
+              // グループ2: 出方は、AIの答え(row.animation)を使わず、手本から測った出方(型に無ければ、ぱっと出る)。手本に無い動きは選ばない
+              const measured = (row.emphasis !== null ? template?.emphasisStyles[row.emphasis]?.animation : template?.caption.animation) ?? "none";
+              return segment.captionAnimation === "none" ? withLook : { ...withLook, captionAnimation: measured };
             });
             // 同じ字幕の続き(カットの切れ目の後)は、前のクリップと同じ強調の見た目にする
             emphasized = emphasized.map((segment, i, all) =>
@@ -756,7 +762,8 @@ export async function POST(request: Request) {
         case 13: {
           // A3・J91・J92・G60: 完全模倣は工程13で終わる(工程14は通らない)ので、締めの段と、締めの間の片付けはここで行う
           const total13 = totalSeconds(segments);
-          const closed = template ? clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13) : state;
+          // グループ2: タイトル・見出し・写真・丸などの物は、手本どおり「ぱっと出る」にそろえる
+          const closed = template ? measuredMotions(instantObjects(clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13)), template) : state;
           const chosen = parsed.data.bgm;
           if (!chosen) return { state: { ...closed, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
           return {

@@ -18,7 +18,8 @@
     "fontFamily": "M PLUS Rounded 1c",
     "style": "outline",
     "textColor": "#38B3C3",
-    "accentColor": "#FBFDFD"
+    "accentColor": "#FBFDFD",
+    "animation": "none"
   },
   "emphasisStyles": [
     {
@@ -31,7 +32,8 @@
       "outerStroke": {
         "color": "#F4F9F8",
         "widthPx": 6.5
-      }
+      },
+      "animation": "none"
     },
     {
       "role": "否定・難しい点(手本では「発注までに時間がかかる」「裏側は適応がある」「扱ってない歯医者が多い」のような言葉)",
@@ -39,7 +41,8 @@
       "textColor": "#FDFDFD",
       "bandColor": null,
       "scale": 1.25,
-      "strokeColor": "#030202"
+      "strokeColor": "#030202",
+      "animation": "none"
     },
     {
       "role": "強み・特徴(手本では「完全オーダーメイド」のような言葉)",
@@ -51,7 +54,8 @@
       "outerStroke": {
         "color": "#F7F782",
         "widthPx": 6
-      }
+      },
+      "animation": "bounce-in"
     },
     {
       "role": "治療法の名前の強調(手本では「上下裏側(フルリンガル)」のような言葉)",
@@ -63,7 +67,8 @@
       "outerStroke": {
         "color": "#E9DFAF",
         "widthPx": 5
-      }
+      },
+      "animation": "none"
     },
     {
       "role": "医院の強み(手本では「当グループの強み」のような言葉)",
@@ -75,7 +80,8 @@
       "outerStroke": {
         "color": "#DECEA0",
         "widthPx": 5
-      }
+      },
+      "animation": "none"
     },
     {
       "role": "メリット(手本では「治療期間も目立たない」のような言葉)",
@@ -83,7 +89,8 @@
       "textColor": "#F9FCFC",
       "bandColor": null,
       "scale": 1.03,
-      "glowColor": "#5EB8E1"
+      "glowColor": "#5EB8E1",
+      "animation": "blur-expand"
     }
   ],
   "title": {
@@ -202,8 +209,8 @@
     }
   ],
   "frozen": {
-    "number": 1,
+    "number": 3,
     "at": "2026-11-25",
-    "note": "型の覚え番号32を土台に、手本の画面を測った値で直した(型のチェック表は docs/change-tree.md)"
+    "note": "完成型2の強調の出方を、手本の動きの数値どおりの完全模倣だけの動き(bounce-in・blur-expand)にした"
   }
 }

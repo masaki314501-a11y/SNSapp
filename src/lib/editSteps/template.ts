@@ -1,4 +1,5 @@
 import type {
+  CaptionAnimation,
   CaptionFontFamily,
   CaptionFontSize,
   CaptionLayout,
@@ -54,6 +55,8 @@ export type TemplateEmphasisStyle = {
   scale?: number;
   /** 縁の外側にもう1本ある、くっきりした線の色と太さ(横1080pxでのpx)。完全模倣で手本から測った時だけ。 */
   outerStroke?: { color: string; widthPx: number };
+  /** 完全模倣だけ: 手本から測った、この強調が出る時の動き。 */
+  animation?: CaptionAnimation;
 };
 
 export type ReferenceTemplate = {
@@ -78,6 +81,8 @@ export type ReferenceTemplate = {
     textColor: string;
     /** 縁取り(outline)か帯(pill)の色。 */
     accentColor: string;
+    /** 完全模倣だけ: 手本から測った、ふつうの字幕が出る時の動き。 */
+    animation?: CaptionAnimation;
   };
   /** 強調した字幕の見た目(1つ目がふだん使う物。手本に何種類かあれば役割ごとに)。 */
   emphasisStyles: TemplateEmphasisStyle[];

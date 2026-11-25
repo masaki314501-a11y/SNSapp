@@ -84,6 +84,19 @@ export const getCaptionAnimationStyle = (
       });
       return { transform: "none", opacity, filter: `blur(${(1 - progress) * 10}px)` };
     }
+    case "bounce-in": {
+      // 完全模倣だけ: 手本の黄色い強調の出方(0.1秒ごとの大きさ 31%→104%→85%→95%→100%。最初から濃い字のまま)
+      const t = localFrame / fps;
+      const scale = interpolate(t, [0, 0.1, 0.2, 0.3, 0.4], [0.31, 1.04, 0.85, 0.95, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+      return { transform: `scale(${scale})`, opacity: 1 };
+    }
+    case "blur-expand": {
+      // 完全模倣だけ: 手本の青い光の強調の出方(強くぼやけた横に狭い字が、0.2秒で広がり、0.5秒でくっきりする。最初から濃い字のまま)
+      const t = localFrame / fps;
+      const scaleX = interpolate(t, [0, 0.2], [0.7, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+      const blur = interpolate(t, [0, 0.5], [14, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+      return { transform: `scaleX(${scaleX})`, opacity: 1, filter: `blur(${blur}px)` };
+    }
     case "slide-side": {
       const progress = spring({
         frame: springFrame,

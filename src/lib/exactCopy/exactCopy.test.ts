@@ -232,3 +232,17 @@ describe("完全模倣 グループ2 出る時の動きを測る", () => {
     expect(motionOf([f(0, 0), f(10, 0)])).toBeNull();
   });
 });
+
+describe("完全模倣 グループ2 字幕の出方を手本の出方にそろえる", () => {
+  it("強調は種類ごとの出方、ふつうはふつうの出方、続きは動きなし", async () => {
+    const { measuredMotions } = await import("./objects");
+    const template = {
+      caption: { animation: "none" },
+      emphasisStyles: [{ textColor: "#F4CB1B", animation: "pop" }, { textColor: "#F9FCFC", animation: "blur-in" }, { textColor: "#FBFDFC" }],
+    } as never;
+    const seg = (caption: string, color?: string) => ({ caption, captionAnimation: "pop", ...(color ? { captionEmphasis: { textColor: color } } : {}) });
+    const state = { segments: [seg("ふつう"), seg("黄", "#f4cb1b"), seg("黄", "#f4cb1b"), seg("光", "#F9FCFC"), seg("白", "#FBFDFC"), seg("")] } as never;
+    const out = measuredMotions(state, template) as unknown as { segments: { captionAnimation: string }[] };
+    expect(out.segments.map((s) => s.captionAnimation)).toEqual(["none", "pop", "none", "blur-in", "none", "pop"]);
+  });
+});
