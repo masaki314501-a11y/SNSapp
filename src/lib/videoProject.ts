@@ -332,7 +332,10 @@ const emphasisSfx = (segments: ProjectSegment[]) => {
   return segments.flatMap((segment) => {
     const clipStart = start;
     start += Math.max(segment.durationInSeconds, 0.3);
-    const preset = segment.emphasisSfxPresetId ? SFX_PRESETS.find((p) => p.id === segment.emphasisSfxPresetId) : undefined;
+    const id = segment.emphasisSfxPresetId;
+    // 完全模倣だけ: 「exact:<置き場所>」は、手本から切り出した効果音をそのまま鳴らす(手元の効果音集は探さない)
+    if (id?.startsWith("exact:")) return [{ src: id.slice("exact:".length), label: "手本の効果音", startFromSeconds: clipStart, volume: 1 }];
+    const preset = id ? SFX_PRESETS.find((p) => p.id === id) : undefined;
     return preset ? [{ src: preset.src, label: preset.label, startFromSeconds: clipStart, volume: 1 }] : [];
   });
 };

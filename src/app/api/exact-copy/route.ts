@@ -53,7 +53,6 @@ import {
   type PlacedObjects,
 } from "@/lib/exactCopy/ai";
 import { measureLightAdjust } from "@/lib/audio/videoLight";
-import { SFX_PRESETS } from "@/components/editor/audioPresets";
 import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
 import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredMotions, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
@@ -543,7 +542,9 @@ export async function POST(request: Request) {
                     role: style.role,
                     look: `書体${style.fontFamily}・字${style.textColor}・縁${style.strokeColor ?? "なし"}・帯${style.bandColor ?? "なし"}`,
                   })),
-                  sounds: SFX_PRESETS.map((preset) => ({ id: preset.id, label: preset.label })),
+                  // グループ3: 効果音は手本から切り出した音だけ(手元の効果音集から似た音を選ぶ代用はしない。手本の音が無ければ鳴らさない)
+                  // AIには短い番号(se1〜)で選ばせ、あとで置き場所に戻す
+                  sounds: (template.sounds ?? []).map((sound, i) => ({ id: `se${i + 1}`, label: sound.label })),
                 }).catch((error: unknown) => {
                   console.warn("[exact-copy] 手本の当てはめができませんでした", error);
                   return null;
@@ -619,7 +620,9 @@ export async function POST(request: Request) {
             emphasized = emphasized.map((segment) => {
               const row = rowOf.get(segment.key);
               if (!row) return segment;
-              exactEffects[segment.key] = { zoom: row.zoom, sfx: row.sfx };
+              // グループ3: 効果音の番号(se1〜)を、手本から切り出した音の置き場所に戻す
+              const sound = row.sfx?.startsWith("se") ? template?.sounds?.[Number(row.sfx.slice(2)) - 1]?.id ?? null : row.sfx;
+              exactEffects[segment.key] = { zoom: row.zoom, sfx: sound };
               // E44: 強調の色は、型を読み取る時に画面から測った「強調の見た目の種類ごとの色」を使う
               // (EC-8 の、AIが答えた色を強調1回ごとに写すやり方はやめた。AIの色は #0000FF のように実際と違ったため)
               const withLook = segment;
@@ -764,6 +767,13 @@ export async function POST(request: Request) {
           const total13 = totalSeconds(segments);
           // グループ2: タイトル・見出し・写真・丸などの物は、手本どおり「ぱっと出る」にそろえる
           const closed = template ? measuredMotions(instantObjects(clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13)), template) : state;
+          // グループ3: 手本から取り出したBGMがあれば、手元の曲ではなく、それを手本の音量で最初から最後まで入れる
+          if (template?.bgm) {
+            return {
+              state: { ...closed, bgm: { src: template.bgm.src, label: "手本のBGM", volume: template.bgm.volume, fadeInSeconds: 0, fadeOutSeconds: 0 } },
+              note: "手本から取り出したBGMを、手本と同じ音量で最初から最後まで入れました",
+            };
+          }
           const chosen = parsed.data.bgm;
           if (!chosen) return { state: { ...closed, bgm: null }, note: "BGMは入れませんでした(入れる時は、曲を選んでから「やり直す」を押してください)" };
           return {

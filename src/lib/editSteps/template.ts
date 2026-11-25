@@ -147,6 +147,10 @@ export type ReferenceTemplate = {
   cta?: { xPercent: number; yPercent: number; fontSizePx: number; look: TemplateTextLook; seconds: number; maxWidthPercent: number };
   /** 完全模倣だけ: 締めの段(手本の終わりに、ふつうの字幕の後に続く見た目の違う字幕を、出た順に。最後の段に動画ごとの最後の一言を入れる)。 */
   ctaStages?: { text: string; look: TemplateTextLook; yPercent: number; seconds: number; fontSizePx?: number }[];
+  /** 完全模倣だけ: 手本から切り出した効果音(id は「exact:<置き場所>」、label は音の感じ)。 */
+  sounds?: { id: string; label: string }[];
+  /** 完全模倣だけ: 手本から取り出したBGM(置き場所と、声に対する音量)。 */
+  bgm?: { src: string; volume: number };
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;

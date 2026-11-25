@@ -209,8 +209,38 @@
     }
   ],
   "frozen": {
-    "number": 3,
+    "number": 4,
     "at": "2026-11-25",
-    "note": "完成型2の強調の出方を、手本の動きの数値どおりの完全模倣だけの動き(bounce-in・blur-expand)にした"
+    "note": "完成型3に、手本の音から声を分けて切り出した効果音6つとBGMを足した(グループ3)"
+  },
+  "sounds": [
+    {
+      "id": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se1.wav",
+      "label": "短い雑音のかたまり(手本では、黄色い強み・特徴の強調「完全オーダーメイド」が出た時)"
+    },
+    {
+      "id": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se2.wav",
+      "label": "同じ高さが続く澄んだ音(手本では、寄りから戻って次の話に移る時)"
+    },
+    {
+      "id": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se3.wav",
+      "label": "風を切る音(手本では、項目の名前「裏側矯正」の強調で寄った時)"
+    },
+    {
+      "id": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se4.wav",
+      "label": "澄んだ単音(手本では、否定・難しい点の強調「扱ってない歯医者が多い」が出た時)"
+    },
+    {
+      "id": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se5.wav",
+      "label": "上がっていく音(手本では、医院の強み「当グループの強み」が出た時)"
+    },
+    {
+      "id": "exact:audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/se6.wav",
+      "label": "和音(手本では、締めの「無料実施中!」から予約の案内に移る時)"
+    }
+  ],
+  "bgm": {
+    "src": "audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/bgm.wav",
+    "volume": 1
   }
 }
