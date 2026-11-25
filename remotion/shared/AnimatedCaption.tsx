@@ -168,7 +168,8 @@ export const AnimatedCaption: React.FC<Props> = ({
           color: emphasis?.textColor ?? baseTextColor,
           // 縁取りの内側半分は文字に隠れるので、見える太さはこの半分(文字の約9%)。以前の2.5px固定では
           // 細すぎて、ショート動画でよく見る太い縁取りの字幕にならなかった。
-          WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18)}px ${emphasis?.strokeColor ?? accentColor}`,
+          // 完全模倣で手本から縁の太さを測った時は、ふつうの字幕だけその倍率にする(layout.strokeScale。無ければいつもの太さ)
+          WebkitTextStroke: `${Math.round(48 * sizeScale * 0.18 * (emphasis ? 1 : (layout?.strokeScale ?? 1)))}px ${emphasis?.strokeColor ?? accentColor}`,
           paintOrder: "stroke fill",
           fontFamily: fontFamilyStack,
           fontSize: 48 * sizeScale,
@@ -176,7 +177,9 @@ export const AnimatedCaption: React.FC<Props> = ({
           lineHeight: 1.35,
           textShadow: glowColor
             ? `0 0 ${Math.round(48 * sizeScale * 0.2)}px ${glowColor}, 0 0 ${Math.round(48 * sizeScale * 0.45)}px ${glowColor}`
-            : "0 4px 12px rgba(0,0,0,0.5)",
+            : !emphasis && layout?.textShadow
+              ? layout.textShadow
+              : "0 4px 12px rgba(0,0,0,0.5)",
         }
       : {
           display: "inline-block",

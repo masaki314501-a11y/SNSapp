@@ -55,7 +55,7 @@ import {
 import { measureLightAdjust } from "@/lib/audio/videoLight";
 import { measureMarkerStroke, readReferenceEvents } from "@/lib/exactCopy/events";
 import { referenceIdOf } from "@/lib/exactCopy/extract";
-import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredMotions, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
+import { clearUnderCta, framingExact, holdPopups, instantObjects, measuredLookAndZoom, measuredMotions, placeCtaStages, withBandOpacity } from "@/lib/exactCopy/objects";
 import { applyExactEffects, captionLimitOf, planImitation, type ExactEffects } from "@/lib/exactCopy/imitate";
 import { libraryImageSrc, loadImageLibrary } from "@/lib/imageLibrary";
 import { isSmallTypoFix, isWhiteOrBlack, runChecklist, type CheckItem } from "@/lib/editSteps/checklist";
@@ -766,7 +766,9 @@ export async function POST(request: Request) {
           // A3・J91・J92・G60: 完全模倣は工程13で終わる(工程14は通らない)ので、締めの段と、締めの間の片付けはここで行う
           const total13 = totalSeconds(segments);
           // グループ2: タイトル・見出し・写真・丸などの物は、手本どおり「ぱっと出る」にそろえる
-          const closed = template ? measuredMotions(instantObjects(clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13)), template) : state;
+          const closed = template
+            ? measuredLookAndZoom(measuredMotions(instantObjects(clearUnderCta(placeCtaStages(state, template, total13, state.templateCta), template, total13)), template), template)
+            : state;
           // グループ3: 手本から取り出したBGMがあれば、手元の曲ではなく、それを手本の音量で最初から最後まで入れる
           if (template?.bgm) {
             return {

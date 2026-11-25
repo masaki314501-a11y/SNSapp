@@ -240,3 +240,28 @@ export const measuredMotions = (state: StepState, template: ReferenceTemplate): 
     return { ...segment, captionAnimation: animation };
   }),
 });
+
+/**
+ * 完全模倣(測る系 D32・D34・C13・C14): ふつうの字幕の縁の太さ・影と、寄りを、手本から測った値にそろえる(最後の工程13で行う)。
+ * 寄り: 手本では、寄った6か所がすべて強調の字幕と同時だった(倍率 1.09〜1.27、真ん中 約1.13)。強調の字幕(続きを除く)でだけ、
+ * 手本の倍率でぱっと寄る。ほかの所では寄らない。
+ */
+export const measuredLookAndZoom = (state: StepState, template: ReferenceTemplate): StepState => {
+  const caption = template.caption;
+  const layout = state.captionLayout ?? undefined;
+  const captionLayout =
+    caption.strokeScale || caption.textShadow
+      ? { ...(layout ?? {}), ...(caption.strokeScale ? { strokeScale: caption.strokeScale } : {}), ...(caption.textShadow ? { textShadow: caption.textShadow } : {}) }
+      : layout;
+  const scale = template.zoomScale;
+  const segments = scale
+    ? state.segments.map((segment, i, all) => {
+        const continued = i > 0 && all[i - 1].caption.trim() !== "" && all[i - 1].caption === segment.caption;
+        const zoomed = !!segment.captionEmphasis && !!segment.caption.trim() && !continued;
+        return zoomed
+          ? { ...segment, zoom: { scale, style: "punch" as const, focusXPercent: segment.faceBox?.xPercent ?? 50, focusYPercent: segment.faceBox?.yPercent ?? 40 } }
+          : { ...segment, zoom: undefined };
+      })
+    : state.segments;
+  return { ...state, ...(captionLayout ? { captionLayout } : {}), segments };
+};

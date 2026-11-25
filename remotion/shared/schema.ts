@@ -340,6 +340,10 @@ export const captionLayoutSchema = z.object({
   maxWidthPercent: z.number().min(20).max(100).optional(),
   /** 字幕の文字の色(縁取り文字・帯の字幕)。 */
   textColor: zColor().optional(),
+  /** 完全模倣だけ: ふつうの字幕の縁の太さの倍率(1=いつもの太さ)。手本から測った時だけ。 */
+  strokeScale: z.number().min(0.2).max(4).optional(),
+  /** 完全模倣だけ: ふつうの字幕の影(CSSの text-shadow)。手本から測った時だけ。 */
+  textShadow: z.string().max(200).optional(),
 });
 
 export type CaptionLayout = z.infer<typeof captionLayoutSchema>;

@@ -19,7 +19,9 @@
     "style": "outline",
     "textColor": "#38B3C3",
     "accentColor": "#FBFDFD",
-    "animation": "none"
+    "animation": "none",
+    "strokeScale": 2.2,
+    "textShadow": "4px 4px 6px rgba(0,0,0,0.35)"
   },
   "emphasisStyles": [
     {
@@ -209,9 +211,9 @@
     }
   ],
   "frozen": {
-    "number": 4,
+    "number": 5,
     "at": "2026-11-25",
-    "note": "完成型3に、手本の音から声を分けて切り出した効果音6つとBGMを足した(グループ3)"
+    "note": "完成型4に、ふつうの字幕の縁の太さの倍率(2.2)・右下の薄い影・寄りの倍率(1.13)を足した(測る系)"
   },
   "sounds": [
     {
@@ -242,5 +244,6 @@
   "bgm": {
     "src": "audio/exact-sfx/fca723fcd9e15b5143cf1643e80d07e0/bgm.wav",
     "volume": 1
-  }
+  },
+  "zoomScale": 1.13
 }
