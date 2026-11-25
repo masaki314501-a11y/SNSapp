@@ -37,7 +37,7 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 24;
+const EXTRACT_VERSION = 32;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 色を測るための絵の大きさ。 */
 const SAMPLE_WIDTH = 540;
@@ -1143,6 +1143,8 @@ const lookSlots = (raw: ExtractedTemplate): LookSlot[] => {
   }
   const cta = raw.cta;
   if (cta) slots.push({ id: "cta", what: "最後の一言", look: cta.look, setLook: (look) => (cta.look = look), setCharHeight: (v) => (cta.charHeightPercent = v) });
+  // A3: 締めの段も、強調と同じ仕組み(拡大した切り抜きで見直し・色を合わせ・色の重なりの順番で向きを決める)で測り直す
+  raw.ctaStages?.forEach((stage, i) => slots.push({ id: `stage${i + 1}`, what: `締めの${i + 1}段目の字幕`, look: stage.look, setLook: (look) => (stage.look = look) }));
   return slots;
 };
 
@@ -1258,6 +1260,7 @@ export const CAPTION_SURVEY_PROMPT = (times: number[]) => `
 絵を1枚ずつ順に見て、写っている字幕(話した言葉の文字)を、絵ごとに1つずつ答えてください。グループに分けなくてよい(見た目が同じかどうかは、ツールが画面から測って分ける)。
 - 字幕が写っていない絵、TikTokのロゴ・投稿者名だけの絵は答えに入れない。タイトル・枠の中の文字・見出しの帯も字幕ではない(話した言葉の字幕だけ)。
 - 1枚の絵に見た目の違う字幕が2つあれば、文字の大きい方を1つだけ答える。
+- text は、2行の字幕なら2行とも、改行(\n)でつないで全部書く(1行目だけにしない)。
 - 絵ごとに: seconds(その絵の秒数)、text(写っている文字のまま)、role(どんな言葉か。例「ふつうに話している言葉」「項目の名前」「数字・金額」「問いかけ・否定」「強み・おすすめ」「呼びかけ」)、
   look(fontFamily・color・strokeColor・bandColor・glowColor)、box(その絵の中での字幕の箱。絵の幅・高さに対する%)。
 - color は字の線の内側(真ん中)の色、strokeColor はその外側を囲む縁の色(取り違えない)。縁が二重なら、内側の縁を strokeColor、外側を glowColor。
@@ -1401,6 +1404,7 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
   const tail = raw.cta ? Array.from({ length: Math.max(0, Math.floor((duration - 2.5 - tailFrom) / 0.25)) }, (_, i) => Math.round((tailFrom + i * 0.25) * 100) / 100) : [];
   const times = [...new Set([...coarse.filter((t) => t < tailFrom), ...tail].map((t) => t.toFixed(1)))].map(Number).sort((a, b) => a - b);
   const parts: Part[] = [];
+  const framesAt: { seconds: number; parts: Part[] }[] = [];
   const cropPixels = new Map<string, Uint8Array>();
   // E40: 色の重なりの順番を測れるように、画面の元の幅(540)で切り抜く
   const outWidth = SAMPLE_WIDTH;
@@ -1413,42 +1417,53 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     const pixels = result ? new Uint8Array(result.stdout as unknown as Buffer) : null;
     if (!pixels || pixels.length < outWidth * outHeight * 3) continue;
     cropPixels.set(seconds.toFixed(1), pixels);
-    parts.push({ text: `【${seconds.toFixed(1)}秒】` }, { inlineData: { mimeType: "image/png", data: encodePng(pixels, outWidth, outHeight).toString("base64") } });
+    framesAt.push({ seconds, parts: [{ text: `【${seconds.toFixed(1)}秒】` }, { inlineData: { mimeType: "image/png", data: encodePng(pixels, outWidth, outHeight).toString("base64") } }] });
+    parts.push(...framesAt[framesAt.length - 1].parts);
   }
   if (parts.length === 0) return raw;
   const itemLook = obj({ fontFamily: str, color: colorSchema, strokeColor: nullableColorSchema, bandColor: nullableColorSchema, glowColor: nullableColorSchema });
-  const survey = await askJson({
-    model: STEP_MODEL,
-    label: "見た目の手本の字幕",
-    timeoutMs: EXTRACT_TIMEOUT_MS,
-    parts: [...parts, { text: CAPTION_SURVEY_PROMPT(times) }],
-    schema: {
-      type: Type.OBJECT,
-      properties: { captions: { type: Type.ARRAY, items: obj({ seconds: num, text: str, role: str, look: itemLook, box: boxSchema }) } },
-      required: ["captions"],
-    },
-    parse: z.object({
-      captions: z.array(
-        z.object({
-          seconds: positive,
-          text: z.string().catch(""),
-          role: z.string().catch(""),
-          look: z.object({ fontFamily: fontParse, color: colorParse, strokeColor: nullableColorParse, bandColor: nullableColorParse, glowColor: nullableColorParse }),
-          box: boxParse,
-        })
-      ),
-    }),
-  }).catch((error: unknown) => {
-    console.warn("[referenceTemplate] 字幕の見た目を数えられませんでした", error);
-    return { captions: [] };
-  });
+  // AIに一度に見せる絵は40枚まで(多すぎると、後ろの方の答えを省くことがあった)。答えは、つないで1つの並びにする
+  const CHUNK = 40;
+  const ask = (chunk: { seconds: number; parts: Part[] }[]) =>
+    askJson({
+      model: STEP_MODEL,
+      label: "見た目の手本の字幕",
+      timeoutMs: EXTRACT_TIMEOUT_MS,
+      parts: [...chunk.flatMap((frame) => frame.parts), { text: CAPTION_SURVEY_PROMPT(chunk.map((frame) => frame.seconds)) }],
+      schema: {
+        type: Type.OBJECT,
+        properties: { captions: { type: Type.ARRAY, items: obj({ seconds: num, text: str, role: str, look: itemLook, box: boxSchema }) } },
+        required: ["captions"],
+      },
+      parse: z.object({
+        captions: z.array(
+          z.object({
+            seconds: positive,
+            text: z.string().catch(""),
+            role: z.string().catch(""),
+            look: z.object({ fontFamily: fontParse, color: colorParse, strokeColor: nullableColorParse, bandColor: nullableColorParse, glowColor: nullableColorParse }),
+            box: boxParse,
+          })
+        ),
+      }),
+    }).catch((error: unknown) => {
+      console.warn("[referenceTemplate] 字幕の見た目を数えられませんでした", error);
+      return { captions: [] };
+    });
+  const chunks = Array.from({ length: Math.ceil(framesAt.length / CHUNK) }, (_, i) => framesAt.slice(i * CHUNK, (i + 1) * CHUNK));
+  const answers = await Promise.all(chunks.map(ask));
+  console.info(`[exactCopy] 字幕の読み取り: ${chunks.map((chunk, i) => `${chunk[0].seconds}〜${chunk[chunk.length - 1].seconds}秒の${chunk.length}枚中${answers[i].captions.length}枚`).join("・")}`);
+  const survey = { captions: answers.flatMap((answer) => answer.captions) };
   // 1秒ごとに、その秒の画面で色を測る(同じ秒を2度答えた時は、先の答えだけ)
   const seen: SeenCaption[] = [];
   for (const item of survey.captions) {
     const key = item.seconds.toFixed(1);
     const pixels = cropPixels.get(key);
     if (!pixels || seen.some((s) => s.seconds.toFixed(1) === key)) continue;
-    seen.push({ seconds: item.seconds, text: item.text, role: item.role, look: item.look, box: item.box, ...measureSeenCaption(pixels, outWidth, outHeight, item.look, item.box) });
+    // 字幕の箱の中で色が見つからなければ、字幕の帯の全体で測り直す(AIの答えた箱がずれていることがある)
+    const inBox = measureSeenCaption(pixels, outWidth, outHeight, item.look, item.box);
+    const measured = inBox.measured ? inBox : measureSeenCaption(pixels, outWidth, outHeight, item.look, FULL_BOX);
+    seen.push({ seconds: item.seconds, text: item.text, role: item.role, look: item.look, box: item.box, ...(measured.measured ? measured : inBox) });
   }
   const grouped = groupSeenCaptions(seen);
   if (process.env.EXACT_COPY_DEBUG)
@@ -1497,14 +1512,29 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
   const groupOf = new Map<SeenCaption, SeenCaption[]>(grouped.flatMap((members) => members.map((m) => [m, members] as const)));
   const ordered = [...seen].sort((a, b) => a.seconds - b.seconds);
   const near = (a: string | null, b: string | null) => !!a && !!b && distance(hexToRgb(a), hexToRgb(b)) <= 60;
-  const looksNormal = (item: SeenCaption) =>
-    (near(item.fill, normal[0].fill) && near(item.edge, normal[0].edge)) || (near(item.fill, normal[0].edge) && near(item.edge, normal[0].fill));
+  // ふつうの字幕と同じ見た目か。画面で測れた秒は測った色で、測れなかった秒はAIの答えた字・縁・光の色で比べる
+  // (手本の予約の案内は、AIの答えた色だと水色の字・白い縁で、ふつうの字幕と同じに見える。光の色(黄色)だけが違う)
+  const pairNear = (fill: string, edge: string | null, f2: string, e2: string | null) =>
+    (near(fill, f2) && near(edge, e2)) || (near(fill, e2) && near(edge, f2));
+  const measuredNormal = normal.find((m) => m.measured);
+  const aiNormal = normal.find((m) => !m.measured) ?? normal[0];
+  const looksNormal = (item: SeenCaption) => {
+    if (item.measured) return !!measuredNormal && pairNear(item.fill, item.edge, measuredNormal.fill, measuredNormal.edge);
+    // 光が白か黒の答えは、回によってばらばらなので、光は無いものとして比べる
+    const plain = (glow: string | null) => (!glow || near(glow, "#FFFFFF") || near(glow, "#000000") ? null : glow);
+    const glowA = plain(item.look.glowColor);
+    const glowB = plain(aiNormal.look.glowColor);
+    const sameGlow = (!glowA && !glowB) || near(glowA, glowB);
+    return pairNear(item.look.color, item.look.strokeColor ?? item.look.bandColor, aiNormal.look.color, aiNormal.look.strokeColor ?? aiNormal.look.bandColor) && sameGlow;
+  };
   // 同じ文言が続く秒を1つのまとまりにする(1秒ごとの読みは、ある秒だけ色の読みが外れることがあるので、まとまりの多数決で決める)
   const textRuns: SeenCaption[][] = [];
   for (const item of ordered) {
     const last = textRuns[textRuns.length - 1];
     const prev = last?.[last.length - 1];
-    if (last && prev && item.seconds - prev.seconds <= 2 && sameCaption(prev.text, item.text)) last.push(item);
+    // 文言が同じでも、測った字と縁の色が変わったら別のまとまり(手本の「無料ですか?」黒い字と「無料実施中!」赤い縁は、1行目が同じ)
+    const sameLookAsPrev = !prev || !prev.measured || !item.measured || (near(prev.fill, item.fill) && near(prev.edge, item.edge));
+    if (last && prev && item.seconds - prev.seconds <= 2 && sameCaption(prev.text, item.text) && sameLookAsPrev) last.push(item);
     else textRuns.push([item]);
   }
   const runs: { members: SeenCaption[]; items: SeenCaption[] }[] = [];
@@ -1512,7 +1542,7 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     const items = textRuns[i];
     if (i < textRuns.length - 1 && textRuns[i + 1][0].seconds - items[items.length - 1].seconds > 2) break;
     // ふつうの字幕(組か、字と縁の色がふつうの字幕と同じ秒が半分以上)の所で止める
-    const normalCount = items.filter((item) => groupOf.get(item) === normal || looksNormal(item)).length;
+    const normalCount = items.filter((item) => looksNormal(item)).length;
     if (normalCount * 2 >= items.length) break;
     // 見た目は、まとまりの中で画面から測れた組のうち、いちばん多い物
     const candidates = items.filter((item) => item.measured);
@@ -1520,6 +1550,27 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     runs.unshift({ members, items });
   }
   const tailStart = runs[0]?.items[0].seconds ?? Infinity;
+  // 締めの段の字と縁の向きを、元の大きさの画面で、色の重なりの順番から決め直す(小さな切り抜きでは決まらないことがある)
+  // 締めの段の見た目は、段の中で測れた秒の色を近い色どうしでまとめた、いちばん多い色の組(ふつうの字幕と同じ色の組は、ほかがある限り使わない)。
+  // 測る秒と箱は、その組の秒の物にする(このあと refineLooks で、強調と同じ仕組みで測り直す)
+  const stageLooks: RawLook[] = runs.map((run) => {
+    const clusters: SeenCaption[][] = [];
+    for (const item of run.items.filter((m) => m.measured)) {
+      const cluster = clusters.find((c) => pairNear(item.fill, item.edge, c[0].fill, c[0].edge));
+      if (cluster) cluster.push(item);
+      else clusters.push([item]);
+    }
+    const usable = clusters.filter((c) => !looksNormal(c[0]));
+    const best = (usable.length > 0 ? usable : clusters).sort((a, b) => b.length - a.length)[0];
+    const item = best?.[0] ?? run.items[Math.floor(run.items.length / 2)];
+    const base = lookOf(run.members);
+    return {
+      ...base,
+      ...(best ? { color: item.fill, strokeColor: base.bandColor ? null : item.edge, bandColor: base.bandColor ? item.edge : null } : {}),
+      seconds: item.seconds,
+      box: toScreen(item.box),
+    };
+  });
   const ctaStages =
     raw.cta && runs.length > 0 && tailStart >= duration - (raw.cta.seconds + 8)
       ? runs.map((run, i) => {
@@ -1528,7 +1579,7 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
           const seconds = next !== undefined ? next - start : run.items[run.items.length - 1].seconds - start + 0.5;
           const texts = run.items.map((m) => m.text.trim()).filter(Boolean);
           const text = texts.length > 0 ? mostCommon(texts) : "";
-          return { text, look: lookOf(run.members), yPercent: toScreen(run.items[0].box).yPercent, seconds: Math.round(Math.max(0.5, seconds) * 100) / 100 };
+          return { text, look: stageLooks[i], yPercent: toScreen(run.items[0].box).yPercent, seconds: Math.round(Math.max(0.5, seconds) * 100) / 100 };
         })
       : undefined;
   if (ctaStages)
