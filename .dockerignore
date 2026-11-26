@@ -12,3 +12,4 @@ public/references
 public/images
 .remotion-bundle
 *.log
+.venv-sound

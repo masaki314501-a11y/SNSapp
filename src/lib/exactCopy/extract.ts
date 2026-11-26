@@ -26,6 +26,7 @@ import { drawGrid, encodePng } from "@/lib/editSteps/gridImage";
 import { bestLook, MIN_MATCH_SCORE } from "./drawMatch";
 import { toReferenceLayout } from "@/lib/editSteps/logic";
 import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/template";
+import { captionChangeTimes, cutReferenceSounds, matchReferenceSounds, withReferenceSounds } from "./referenceSounds";
 
 /**
  * お客様が添付した見た目の手本(動画・スクリーンショット)から、型(template.ts)を自動で読み取る。
@@ -37,7 +38,8 @@ import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/templa
  */
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
-const EXTRACT_VERSION = 32;
+// 33: 手本から効果音とBGMを自動で切り出して型に入れる
+const EXTRACT_VERSION = 33;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 完成型(凍結した型)の置き場所。手本ごとに1つ。 */
 const FROZEN_DIR = path.join(process.cwd(), "data", "exact-copy-templates");
@@ -233,7 +235,16 @@ const RESPONSE_PARSE = z.object({
     lines: z.number().default(1),
   }),
   emphasisStyles: z
-    .array(z.object({ role: z.string(), look: lookParse, scale: z.number().default(1), outerStroke: z.object({ color: z.string(), widthPx: z.number() }).optional() }))
+    .array(
+      z.object({
+        role: z.string(),
+        look: lookParse,
+        scale: z.number().default(1),
+        outerStroke: z.object({ color: z.string(), widthPx: z.number() }).optional(),
+        /** その見た目の字幕を読んだ秒(1秒ごと。手本の効果音を結び付けるのに使う)。 */
+        seen: z.array(z.number()).optional(),
+      })
+    )
     .default([]),
   title: z.object({
     align: z.enum(["left", "center"]),
@@ -303,7 +314,7 @@ const RESPONSE_PARSE = z.object({
     .default(null),
   note: z.string().default(""),
   /** 完全模倣だけ: 締めの段(AIには聞かない。1秒ごとに測った字幕から、ツールが入れる)。 */
-  ctaStages: z.array(z.object({ text: z.string(), look: lookParse, yPercent: percent, seconds: positive, charHeightPercent: percent.optional() })).optional(),
+  ctaStages: z.array(z.object({ text: z.string(), look: lookParse, yPercent: percent, seconds: positive, charHeightPercent: percent.optional(), start: z.number().optional() })).optional(),
 });
 export type ExtractedTemplate = z.infer<typeof RESPONSE_PARSE>;
 
@@ -1592,7 +1603,7 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
           const seconds = next !== undefined ? next - start : run.items[run.items.length - 1].seconds - start + 0.5;
           const texts = run.items.map((m) => m.text.trim()).filter(Boolean);
           const text = texts.length > 0 ? mostCommon(texts) : "";
-          return { text, look: stageLooks[i], yPercent: toScreen(run.items[0].box).yPercent, seconds: Math.round(Math.max(0.5, seconds) * 100) / 100 };
+          return { text, look: stageLooks[i], yPercent: toScreen(run.items[0].box).yPercent, seconds: Math.round(Math.max(0.5, seconds) * 100) / 100, start };
         })
       : undefined;
   if (ctaStages)
@@ -1607,7 +1618,7 @@ const surveyCaptions = async (raw: ExtractedTemplate, file: StyleReferenceFile, 
     ...(ctaStages ? { ctaStages } : {}),
     caption: { ...raw.caption, look: lookOf(normal) },
     // 手本の強調は5種類以上あることがある(日韓は白字青縁・明朝白字黒影・明朝青濃淡光・明朝白字青光・黄字黒縁・赤字白縁)
-    emphasisStyles: others.slice(0, 10).map((members) => ({ role: roleOf(members), look: lookOf(members), scale: 1 })),
+    emphasisStyles: others.slice(0, 10).map((members) => ({ role: roleOf(members), look: lookOf(members), scale: 1, seen: members.map((m) => m.seconds).sort((a, b) => a - b) })),
   };
 };
 
@@ -1948,6 +1959,30 @@ const memory = new Map<string, Promise<ReferenceTemplate | null>>();
 const cachePath = (key: string) => path.join(CACHE_DIR, `${key.replace(/[^0-9a-zA-Z_-]/g, "_")}.json`);
 
 /** 手本の保存場所から、型を覚えておく時の名前(ファイル名から拡張子を除いた物。YouTubeは動画のID)。 */
+/**
+ * 手本の音から効果音とBGMを切り出し、型に入れる(referenceSounds.ts)。手元の動画の手本だけ。
+ * 強調の見た目の並びは、型の強調の見た目と同じ順(toReferenceTemplate は1つずつ写す)。
+ */
+const addReferenceSounds = async (template: ReferenceTemplate, raw: ExtractedTemplate, file: StyleReferenceFile, id: string): Promise<ReferenceTemplate> => {
+  if (file.kind !== "video" || file.youtubeUrl || raw.emphasisStyles.length !== template.emphasisStyles.length) return template;
+  const cut = await cutReferenceSounds(file.absolutePath, id);
+  if (!cut) return template;
+  const top = Math.max(0, raw.caption.topPercent - 6);
+  const changes = await captionChangeTimes(file.absolutePath, top, raw.caption.topPercent + 16);
+  const matched = matchReferenceSounds({
+    sounds: cut.sounds,
+    captionChanges: changes,
+    styleSeen: raw.emphasisStyles.map((style) => style.seen ?? []),
+    stageStarts: (raw.ctaStages ?? []).flatMap((stage) => (stage.start !== undefined ? [stage.start] : [])),
+  });
+  if (process.env.EXACT_COPY_DEBUG)
+    console.info(`[exactCopy] 字幕が変わった秒: ${changes.join(" ")} / 強調を読んだ秒: ${raw.emphasisStyles.map((style) => (style.seen ?? []).join(",")).join(" | ")} / 締めの段の始め: ${(raw.ctaStages ?? []).map((stage) => stage.start).join(" ")}`);
+  console.info(
+    `[exactCopy] 手本の効果音の結び付け: ${template.emphasisStyles.map((style, i) => `${style.role.slice(0, 12)}→${matched.styles[i] !== null ? `${cut.sounds[matched.styles[i]!].start}秒` : "なし"}`).join(" / ")} / 締め→${matched.closing !== null ? `${cut.sounds[matched.closing].start}秒` : "なし"}`
+  );
+  return withReferenceSounds(template, id, cut, matched);
+};
+
 export const referenceIdOf = (referencePath: string): string => path.basename(referencePath).replace(/\.[^.]+$/, "");
 
 /**
@@ -1990,7 +2025,11 @@ export const extractReferenceTemplate = (references: StyleReferenceFile[], refer
     const withIntro = await checkIntro(raw, file, duration).catch(() => raw);
     const surveyed = await surveyCaptions(withIntro, file, duration).catch(() => withIntro);
     const snapped = await refineLooks(surveyed, file);
-    const template = toReferenceTemplate(snapped, { name: "見た目の手本", referenceIds: [id] });
+    const measured = toReferenceTemplate(snapped, { name: "見た目の手本", referenceIds: [id] });
+    const template = await addReferenceSounds(measured, snapped, file, id).catch((error: unknown) => {
+      console.warn("[exactCopy] 手本の効果音を型に入れられませんでした", error);
+      return measured;
+    });
     await mkdir(CACHE_DIR, { recursive: true }).catch(() => undefined);
     await writeFile(cachePath(key), JSON.stringify({ ...template, extractNote: raw.note }, null, 2)).catch(() => undefined);
     return template;
