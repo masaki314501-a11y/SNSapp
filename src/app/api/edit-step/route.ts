@@ -35,6 +35,7 @@ import {
 import { captionBandHeight } from "@/lib/editSteps/logic";
 import { buildTemplateObjects, effectiveKind, placeTemplateFills, templateCaption, templateSounds, TOPIC_FRAME, type ReferenceTemplate } from "@/lib/editSteps/template";
 import { findReferenceTemplate } from "@/lib/editSteps/templateStore";
+import { collectSfxEvents, EMPHASIS_SFX, pickEmphasisSfx, placeSfx, TEAM_SFX } from "@/lib/editSteps/sfxPlan";
 import { figureArea, figureImageColors, figureViewBoxHeight, placeFigure, type FigureDraft, type FigureLayer } from "@/lib/editSteps/figure";
 import { faceOnScreen } from "@/lib/editSteps/screenBoxes";
 import {
@@ -618,15 +619,28 @@ export async function POST(request: Request) {
           };
         }
         case 11: {
-          const result = emphasisEffects(segments);
-          // 型に手本の効果音があれば、手本と同じ音にする(手本で鳴っていない種類は鳴らさない・締めの音を足す)
-          const sounded = template ? templateSounds({ ...state, segments: result.segments }, template) : result.segments;
-          const fromReference = sounded !== result.segments;
+          // 寄りは今まで通り強調の字幕に付け、効果音は編集チームの完成動画のクセどおりに置く(sfxPlan.ts)
+          const zoomed = emphasisEffects(segments).segments;
+          const events = collectSfxEvents({ ...state, segments: zoomed }, template);
+          const { picks, byAi } = await pickEmphasisSfx(events);
+          const placed = placeSfx(zoomed, events, picks);
+          // 型に手本の効果音があれば、手本と同じ音にする(手本で鳴っていない強調の種類は鳴らさない・締めと見出しの音も手本の音)
+          const sounded = template
+            ? templateSounds({ ...state, segments: placed }, template, {
+                isEmphasisSound: (id) => EMPHASIS_SFX.some((sound) => sound.id === id),
+                stepSound: TEAM_SFX.step,
+                endingSound: TEAM_SFX.ending,
+              })
+            : placed;
+          const count = (kind: string) => events.filter((event) => event.kind === kind && sounded[event.segmentIndex]?.emphasisSfxPresetId).length;
+          const total = sounded.filter((segment) => segment.emphasisSfxPresetId).length;
+          const emphasisTotal = events.filter((event) => event.kind === "強調").length;
           return {
             state: { ...state, segments: sounded },
-            note: fromReference
-              ? `強調した字幕${result.count}個に少し人物の拡大を付け、効果音は見た目の手本から切り出した音を、手本で鳴っていた所と同じ種類の字幕に付けました`
-              : `強調した字幕${result.count}個に効果音を付け、少し人物を拡大しました`,
+            note: `効果音を${total}か所に置きました(強調の字幕${emphasisTotal}個のうち${count("強調")}個${byAi ? "をAIが選び" : "を1つおきに選び"}、見出し・項目・写真・印・締めなど画面の出来事にも鳴らします)。強調の字幕には少し人物の拡大を付けました`,
+            details: events
+              .filter((event, i, all) => sounded[event.segmentIndex]?.emphasisSfxPresetId && all.findIndex((other) => other.segmentIndex === event.segmentIndex) === i)
+              .map((event) => `${fmt(event.seconds)} ${event.kind}${event.text ? `「${event.text.slice(0, 20)}」` : ""}`),
           };
         }
         case 12: {

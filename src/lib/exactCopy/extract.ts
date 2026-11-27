@@ -26,7 +26,7 @@ import { drawGrid, encodePng } from "@/lib/editSteps/gridImage";
 import { bestLook, MIN_MATCH_SCORE } from "./drawMatch";
 import { toReferenceLayout } from "@/lib/editSteps/logic";
 import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/template";
-import { captionChangeTimes, cutReferenceSounds, matchReferenceSounds, withReferenceSounds } from "./referenceSounds";
+import { captionChangeTimes, cutReferenceSounds, matchReferenceSounds, screenChangeSeries, withReferenceSounds } from "./referenceSounds";
 
 /**
  * お客様が添付した見た目の手本(動画・スクリーンショット)から、型(template.ts)を自動で読み取る。
@@ -39,7 +39,8 @@ import { captionChangeTimes, cutReferenceSounds, matchReferenceSounds, withRefer
 
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
 // 33: 手本から効果音とBGMを自動で切り出して型に入れる
-const EXTRACT_VERSION = 33;
+// 34: 画面が変わらない音を捨て、毎回同じに鳴らす音(見出し・次の項目)も型に入れる
+const EXTRACT_VERSION = 34;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 完成型(凍結した型)の置き場所。手本ごとに1つ。 */
 const FROZEN_DIR = path.join(process.cwd(), "data", "exact-copy-templates");
@@ -1969,16 +1970,18 @@ const addReferenceSounds = async (template: ReferenceTemplate, raw: ExtractedTem
   if (!cut) return template;
   const top = Math.max(0, raw.caption.topPercent - 6);
   const changes = await captionChangeTimes(file.absolutePath, top, raw.caption.topPercent + 16);
+  const screen = await screenChangeSeries(file.absolutePath);
   const matched = matchReferenceSounds({
     sounds: cut.sounds,
     captionChanges: changes,
     styleSeen: raw.emphasisStyles.map((style) => style.seen ?? []),
     stageStarts: (raw.ctaStages ?? []).flatMap((stage) => (stage.start !== undefined ? [stage.start] : [])),
+    screen,
   });
   if (process.env.EXACT_COPY_DEBUG)
     console.info(`[exactCopy] 字幕が変わった秒: ${changes.join(" ")} / 強調を読んだ秒: ${raw.emphasisStyles.map((style) => (style.seen ?? []).join(",")).join(" | ")} / 締めの段の始め: ${(raw.ctaStages ?? []).map((stage) => stage.start).join(" ")}`);
   console.info(
-    `[exactCopy] 手本の効果音の結び付け: ${template.emphasisStyles.map((style, i) => `${style.role.slice(0, 12)}→${matched.styles[i] !== null ? `${cut.sounds[matched.styles[i]!].start}秒` : "なし"}`).join(" / ")} / 締め→${matched.closing !== null ? `${cut.sounds[matched.closing].start}秒` : "なし"}`
+    `[exactCopy] 手本の効果音の結び付け: ${template.emphasisStyles.map((style, i) => `${style.role.slice(0, 12)}→${matched.styles[i] !== null ? `${cut.sounds[matched.styles[i]!].start}秒` : "なし"}`).join(" / ")} / 締め→${matched.closing !== null ? `${cut.sounds[matched.closing].start}秒` : "なし"} / 毎回同じ音→${matched.structure !== null ? `${cut.sounds[matched.structure].start}秒など` : "なし"}`
   );
   return withReferenceSounds(template, id, cut, matched);
 };

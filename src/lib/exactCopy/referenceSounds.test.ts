@@ -51,3 +51,34 @@ describe("手本の効果音の結び付け", () => {
     expect(result.bgm).toEqual({ src: "audio/exact-sfx/abc/bgm.wav", volume: 1 });
   });
 });
+
+describe("手本の効果音の見分け方", () => {
+  it("音の始めに画面が変わらない音は使わない", () => {
+    const screen = Array.from({ length: 200 }, () => 0.5);
+    screen[Math.round(8.3 * 20)] = 12; // 8.3秒にだけ画面が変わる
+    const matched = matchReferenceSounds({
+      sounds: [{ start: 1.7 }, { start: 8.25 }],
+      captionChanges: [1.75, 8.3],
+      styleSeen: [[2.5], [9.0]],
+      stageStarts: [],
+      screen,
+    });
+    expect(matched.styles).toEqual([null, 1]);
+  });
+
+  it("強調にも締めにも結び付かず3回以上鳴った同じ音を、毎回同じに鳴らす音にする", () => {
+    const matched = matchReferenceSounds({
+      sounds: [{ start: 2, group: 0 }, { start: 5, group: 1 }, { start: 9, group: 0 }, { start: 14, group: 0 }, { start: 20, group: 1 }],
+      captionChanges: [5.1],
+      styleSeen: [[5.5]],
+      stageStarts: [],
+    });
+    expect(matched.styles).toEqual([1]);
+    expect(matched.structure).toBe(0);
+  });
+
+  it("3回未満なら、毎回同じに鳴らす音は無し", () => {
+    const matched = matchReferenceSounds({ sounds: [{ start: 2, group: 0 }, { start: 9, group: 0 }], captionChanges: [], styleSeen: [], stageStarts: [] });
+    expect(matched.structure).toBeNull();
+  });
+});

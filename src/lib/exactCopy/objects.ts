@@ -4,6 +4,7 @@
  */
 import type { ImageOverlay, ShapeOverlay, TextOverlay } from "@video/shared/schema";
 import type { StepState } from "@/lib/editSteps/logic";
+import type { ProjectSegment } from "@/lib/videoProject";
 import { fitFontSize, lineStepPercent, TEMPLATE_FILL_TAG, textOverlay, type ReferenceTemplate } from "@/lib/editSteps/template";
 
 /** 最後の項目の大きな写真を出しておく、いちばん長い秒数。 */
@@ -266,6 +267,10 @@ export const measuredLookAndZoom = (state: StepState, template: ReferenceTemplat
   );
   // E41: 手本の強調には数字・金額の言葉が無かったので、数字・金額を言う字幕は強調しない(AIが選んでしまった時の止め)
   const numeric = /[0-9０-９]|[一二三四五六七八九十百千万]+(円|万|分の|割|%|％|倍)/;
+  // 手本で見出し・次の項目が出るたびに毎回鳴らしていた音があれば、項目が入るクリップで鳴らす(寄る強調・締めの音が先)
+  const fillKeys = new Set((state.frameFills ?? []).map((fill) => fill.key));
+  const withStructure = (segment: ProjectSegment): ProjectSegment =>
+    template.structureSound && !segment.emphasisSfxPresetId && fillKeys.has(segment.key) ? { ...segment, emphasisSfxPresetId: template.structureSound } : segment;
   let at = 0;
   let closingSounded = false;
   const plain = state.segments.map((segment) => (segment.captionEmphasis && numeric.test(segment.caption) ? { ...segment, captionEmphasis: undefined, captionAnimation: "none" as const } : segment));
@@ -280,11 +285,11 @@ export const measuredLookAndZoom = (state: StepState, template: ReferenceTemplat
       closingSounded = true;
       return { ...segment, zoom: undefined, emphasisSfxPresetId: template.closingSound };
     }
-    if (!scale) return segment;
+    if (!scale) return withStructure(segment);
     const continued = i > 0 && all[i - 1].caption.trim() !== "" && all[i - 1].caption === segment.caption;
     const withMark = marks.some((mark) => mark >= start - 0.05 && mark < end);
     const zoomed = !!segment.captionEmphasis && !!segment.caption.trim() && !continued && !withMark;
-    if (!zoomed) return { ...segment, zoom: undefined, emphasisSfxPresetId: undefined };
+    if (!zoomed) return withStructure({ ...segment, zoom: undefined, emphasisSfxPresetId: undefined });
     const color = segment.captionEmphasis?.textColor?.toUpperCase();
     const style = template.emphasisStyles.find((candidate) => candidate.textColor.toUpperCase() === color);
     return {

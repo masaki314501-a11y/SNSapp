@@ -162,6 +162,8 @@ export type ReferenceTemplate = {
   otherChangesPerTenSeconds?: number;
   /** 完全模倣だけ: 締めに入る時に鳴らす、手本から切り出した効果音の id。 */
   closingSound?: string;
+  /** 手本で、見出し・次の項目・写真が出るたびに毎回同じに鳴らしていた効果音の id(手本から切り出した物)。 */
+  structureSound?: string;
   /** 完全模倣だけ: 手本から測った寄りの倍率(手本では、寄るのは強調の字幕の時だけだった)。 */
   zoomScale?: number;
   /** 完全模倣だけ: 手本から取り出したBGM(置き場所と、声に対する音量)。 */
@@ -578,30 +580,26 @@ export const placeTemplateFills = (state: StepState, template: ReferenceTemplate
 };
 
 /**
- * 型に手本から切り出した効果音がある時(手本を測って作った型)、効果音を手本どおりにする(工程11)。
- * - 強調の字幕は、その見た目の種類で手本が鳴らしていた音にする。手本で鳴っていなかった種類は鳴らさない
- * - 最後の一言が出る所で、手本の締めの音を鳴らす
- * 手本の音が型に無い時は、そのまま(手持ちの効果音)。
+ * 型に手本から切り出した効果音がある時(手本を測って作った型)、効果音を手本どおりにする(工程11。sfxPlan.ts で置いた後)。
+ * - 強調の字幕の音(isEmphasisSound の音)は、その見た目の種類で手本が鳴らしていた音にする。手本で鳴っていなかった種類は鳴らさない
+ * - 見出し・次の項目の音は、手本で毎回同じに鳴らしていた音(structureSound)があればそれにする
+ * - 締めの音は、手本の締めの音があればそれにする
+ * 手本の音が型に無い時は、そのまま(編集チームの効果音)。
  */
-export const templateSounds = (state: StepState, template: ReferenceTemplate): StepState["segments"] => {
+export const templateSounds = (
+  state: StepState,
+  template: ReferenceTemplate,
+  sounds: { isEmphasisSound: (id: string) => boolean; stepSound: string; endingSound: string }
+): StepState["segments"] => {
   const segments = state.segments;
-  if (!template.emphasisStyles.some((style) => style.sound) && !template.closingSound) return segments;
-  const ctaStart = template.cta && state.templateCta?.trim() ? Math.max(0, totalSeconds(state) - template.cta.seconds) : null;
-  let closingIndex = -1;
-  if (ctaStart !== null && template.closingSound) {
-    let at = 0;
-    let nearest = Infinity;
-    segments.forEach((segment, i) => {
-      if (Math.abs(at - ctaStart) < nearest) {
-        nearest = Math.abs(at - ctaStart);
-        closingIndex = i;
-      }
-      at += segment.durationInSeconds;
-    });
-  }
-  return segments.map((segment, i) => {
-    if (i === closingIndex) return { ...segment, emphasisSfxPresetId: template.closingSound };
-    if (!segment.emphasisSfxPresetId) return segment;
+  const hasStyleSounds = template.emphasisStyles.some((style) => style.sound);
+  if (!hasStyleSounds && !template.closingSound && !template.structureSound) return segments;
+  return segments.map((segment) => {
+    const id = segment.emphasisSfxPresetId;
+    if (!id) return segment;
+    if (id === sounds.endingSound && template.closingSound) return { ...segment, emphasisSfxPresetId: template.closingSound };
+    if (id === sounds.stepSound && template.structureSound) return { ...segment, emphasisSfxPresetId: template.structureSound };
+    if (!hasStyleSounds || !sounds.isEmphasisSound(id)) return segment;
     const color = segment.captionEmphasis?.textColor?.toUpperCase();
     const style = template.emphasisStyles.find((candidate) => candidate.textColor.toUpperCase() === color);
     return { ...segment, emphasisSfxPresetId: style?.sound };

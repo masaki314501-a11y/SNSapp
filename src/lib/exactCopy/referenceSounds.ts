@@ -13,7 +13,7 @@ import path from "node:path";
 import { RenderInternals } from "@remotion/renderer";
 import type { ReferenceTemplate } from "@/lib/editSteps/template";
 
-export type CutSound = { file: string; start: number; length: number; db: number };
+export type CutSound = { file: string; start: number; length: number; db: number; /** 同じ手本の中で、同じ響きの音どうしの番号(group_sounds.py)。 */ group?: number };
 type CutResult = { sounds: CutSound[]; bgm: string };
 
 const SCRIPT = path.join(process.cwd(), "scripts", "reference_sounds.py");
@@ -106,6 +106,39 @@ export const captionChangeTimes = async (absolutePath: string, topPercent: numbe
   return changePeaks(diffs, FPS, CHANGE_THRESHOLD);
 };
 
+/**
+ * 手本の画面全体の、コマ(0.05秒)ごとの変わり方(0〜255の平均)。効果音は画面の出来事とセットで鳴るので、
+ * 音の始めに画面が変わらない音は、効果音ではない(撮影の物音・BGM)とみなすのに使う。
+ */
+export const screenChangeSeries = async (absolutePath: string): Promise<number[]> => {
+  const W = 72;
+  const H = 128;
+  const result = await callFf([
+    "-v", "error", "-i", absolutePath, "-an", "-vf", `scale=${W}:${H}`, "-r", String(FPS),
+    "-pix_fmt", "gray", "-c:v", "rawvideo", "-f", "image2pipe", "-",
+  ]).catch(() => null);
+  if (!result) return [];
+  const pixels = new Uint8Array(result.stdout as unknown as Buffer);
+  const size = W * H;
+  const frames = Math.floor(pixels.length / size);
+  const diffs: number[] = [0];
+  for (let f = 1; f < frames; f++) {
+    let sum = 0;
+    for (let i = 0; i < size; i++) sum += Math.abs(pixels[f * size + i] - pixels[(f - 1) * size + i]);
+    diffs.push(sum / size);
+  }
+  return diffs;
+};
+
+/** 音の始めの0.15秒前〜0.3秒後に、画面が少しでも変わったか(完成動画の正解119か所で決めた値。変わり方2以上)。 */
+export const SCREEN_CHANGE_MIN = 2;
+export const screenChangedAt = (series: number[], seconds: number): boolean => {
+  if (series.length === 0) return true;
+  const i = Math.round(seconds * FPS);
+  const window = series.slice(Math.max(0, i - 3), i + 6);
+  return window.length > 0 && Math.max(...window) >= SCREEN_CHANGE_MIN;
+};
+
 /** 明るさの変わり方の並びから、大きく変わった時刻(近い物は1つにまとめる)。 */
 export const changePeaks = (diffs: number[], fps: number, threshold: number): number[] => {
   const times: number[] = [];
@@ -126,26 +159,40 @@ export const changePeaks = (diffs: number[], fps: number, threshold: number): nu
  * 戻り値は、音の番号(結び付かなければ null)。
  */
 export const matchReferenceSounds = (input: {
-  sounds: { start: number }[];
+  sounds: { start: number; group?: number }[];
   captionChanges: number[];
   /** 強調の見た目ごとに、その見た目の字幕を読んだ秒(1秒ごと)。 */
   styleSeen: number[][];
   /** 締めの段が始まった秒。 */
   stageStarts: number[];
-}): { styles: (number | null)[]; closing: number | null } => {
+  /** 画面全体のコマごとの変わり方(screenChangeSeries)。音の始めに画面が変わらない音は使わない。 */
+  screen?: number[];
+}): { styles: (number | null)[]; closing: number | null; structure: number | null } => {
   const styles: (number | null)[] = input.styleSeen.map(() => null);
   let closing: number | null = null;
+  const used = new Set<number>();
+  const usable = (index: number) => !input.screen || screenChangedAt(input.screen, input.sounds[index].start);
   input.sounds.forEach((sound, index) => {
+    if (!usable(index)) return;
     const o = sound.start;
     if (closing === null && input.stageStarts.some((start) => o >= start - 0.35 && o <= start + 0.15)) {
       closing = index;
+      used.add(index);
       return;
     }
     if (!input.captionChanges.some((change) => change >= o - 0.15 && change <= o + 0.25)) return;
     const style = input.styleSeen.findIndex((seen) => seen.some((seconds) => seconds >= o - 0.1 && seconds <= o + 1.05));
+    if (style >= 0) used.add(index);
     if (style >= 0 && styles[style] === null) styles[style] = index;
   });
-  return { styles, closing };
+  // 毎回同じに鳴らす音: 強調・締めに結び付かず、画面の出来事と一緒に3回以上鳴った、同じまとまりの音(いちばん多い物)
+  const counts = new Map<number, number[]>();
+  input.sounds.forEach((sound, index) => {
+    if (sound.group === undefined || used.has(index) || !usable(index)) return;
+    counts.set(sound.group, [...(counts.get(sound.group) ?? []), index]);
+  });
+  const best = [...counts.values()].filter((members) => members.length >= 3).sort((a, b) => b.length - a.length)[0];
+  return { styles, closing, structure: best ? best[0] : null };
 };
 
 /** 型に、手本から切り出した効果音・締めの音・BGMを入れる(結び付いた音だけ)。 */
@@ -153,7 +200,7 @@ export const withReferenceSounds = (
   template: ReferenceTemplate,
   id: string,
   cut: CutResult,
-  matched: { styles: (number | null)[]; closing: number | null }
+  matched: { styles: (number | null)[]; closing: number | null; structure?: number | null }
 ): ReferenceTemplate => {
   const idOf = (file: string) => `exact:audio/exact-sfx/${id}/${file}`;
   const sounds: { id: string; label: string }[] = [];
@@ -166,11 +213,14 @@ export const withReferenceSounds = (
   });
   const closingSound = matched.closing !== null && cut.sounds[matched.closing] ? idOf(cut.sounds[matched.closing].file) : undefined;
   if (closingSound) sounds.push({ id: closingSound, label: `手本で、締めの段に移る時の音(${cut.sounds[matched.closing!].start}秒)` });
+  const structureSound = matched.structure !== null && matched.structure !== undefined && cut.sounds[matched.structure] ? idOf(cut.sounds[matched.structure].file) : undefined;
+  if (structureSound) sounds.push({ id: structureSound, label: `手本で、見出し・次の項目・写真が出るたびに毎回鳴らしていた音(${cut.sounds[matched.structure!].start}秒など)` });
   return {
     ...template,
     emphasisStyles,
     ...(sounds.length > 0 ? { sounds } : {}),
     ...(closingSound ? { closingSound } : {}),
+    ...(structureSound ? { structureSound } : {}),
     ...(cut.bgm ? { bgm: { src: `audio/exact-sfx/${id}/${cut.bgm}`, volume: 1 } } : {}),
   };
 };

@@ -179,6 +179,31 @@ def main():
         b[-cross:] *= np.linspace(1, 0, cross)[:, None]
     sf.write(os.path.join(outdir, "bgm.wav"), b, sr)
 
+    # 同じ響きの音どうしに同じ番号を付ける(group_sounds.py と同じ決め方)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from group_sounds import feature, THRESHOLD
+    feats = [feature(os.path.join(outdir, s["file"])) for s in sounds]
+    idx = [i for i, f in enumerate(feats) if f is not None]
+    if idx:
+        X = np.array([feats[i] for i in idx])
+        sim = X @ X.T
+        clusters = [[k] for k in range(len(idx))]
+        while len(clusters) > 1:
+            best = (-1.0, 0, 0)
+            for a in range(len(clusters)):
+                for c in range(a + 1, len(clusters)):
+                    link = float(sim[np.ix_(clusters[a], clusters[c])].mean())
+                    if link > best[0]:
+                        best = (link, a, c)
+            if best[0] < THRESHOLD:
+                break
+            _, a, c = best
+            clusters[a] += clusters[c]
+            del clusters[c]
+        for g, members in enumerate(clusters):
+            for k in members:
+                sounds[idx[k]]["group"] = g
+
     print(json.dumps({"sounds": sounds, "bgm": "bgm.wav", "baseDb": round(base, 1), "voiceDb": round(voice_db, 1), "gainDb": round(gain_db, 1), "periodSeconds": period}))
 
 
