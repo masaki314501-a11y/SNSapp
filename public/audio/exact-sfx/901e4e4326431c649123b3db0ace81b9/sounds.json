@@ -1,0 +1,105 @@
+{
+  "sounds": [
+    {
+      "file": "cand00.wav",
+      "start": 5.8,
+      "length": 0.5,
+      "db": 19.6,
+      "excess": 14,
+      "unique": 1.41
+    },
+    {
+      "file": "cand01.wav",
+      "start": 9.25,
+      "length": 0.5,
+      "db": 16.2,
+      "excess": 13,
+      "unique": 0.59
+    },
+    {
+      "file": "cand02.wav",
+      "start": 12.85,
+      "length": 1,
+      "db": 14.8,
+      "excess": 7.6,
+      "unique": 0.68
+    },
+    {
+      "file": "cand04.wav",
+      "start": 22.4,
+      "length": 1,
+      "db": 16,
+      "excess": 9.9,
+      "unique": 1
+    },
+    {
+      "file": "cand06.wav",
+      "start": 25.5,
+      "length": 0.6,
+      "db": 24.8,
+      "excess": 18.2,
+      "unique": 0.51
+    },
+    {
+      "file": "cand07.wav",
+      "start": 28.75,
+      "length": 0.5,
+      "db": 16.6,
+      "excess": 13.7,
+      "unique": 0.56
+    },
+    {
+      "file": "cand08.wav",
+      "start": 33.05,
+      "length": 1,
+      "db": 19,
+      "excess": 13.8,
+      "unique": 1.09
+    },
+    {
+      "file": "cand10.wav",
+      "start": 38.55,
+      "length": 0.65,
+      "db": 24,
+      "excess": 19.1,
+      "unique": 0.51
+    },
+    {
+      "file": "cand12.wav",
+      "start": 39.9,
+      "length": 0.6,
+      "db": 10.5,
+      "excess": 4.5,
+      "unique": 0.8
+    },
+    {
+      "file": "cand13.wav",
+      "start": 49.9,
+      "length": 0.5,
+      "db": 10,
+      "excess": 2.3,
+      "unique": 0.79
+    },
+    {
+      "file": "cand15.wav",
+      "start": 57.3,
+      "length": 0.5,
+      "db": 20.5,
+      "excess": 13.5,
+      "unique": 0.81
+    },
+    {
+      "file": "cand16.wav",
+      "start": 61.15,
+      "length": 0.5,
+      "db": 23.9,
+      "excess": 16.9,
+      "unique": 1.08
+    }
+  ],
+  "bgm": "bgm.wav",
+  "baseDb": -37.8,
+  "voiceDb": -24.3,
+  "gainDb": 4.3,
+  "periodSeconds": 4
+}

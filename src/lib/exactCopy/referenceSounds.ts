@@ -7,7 +7,7 @@
  * 切り出した音は public/audio/exact-sfx/<手本のID>/ に置く(書き出しは /api/media から読む)。
  */
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { RenderInternals } from "@remotion/renderer";
@@ -37,14 +37,22 @@ const separationPython = (): string | null => {
   return path.isAbsolute(value) ? value : path.join(process.cwd(), value);
 };
 
-/** 手本の音から、効果音の候補とBGMを切り出す(同じ手本なら、前に切り出した物)。できなければ null。 */
+/** 置いてあるBGMだけを使う(BGMは大きいのでリポジトリに入れず、本番には無いことがある)。 */
+const withExistingBgm = async (outDir: string, result: CutResult): Promise<CutResult> =>
+  result.bgm && (await stat(path.join(outDir, result.bgm)).catch(() => null))?.isFile() ? result : { ...result, bgm: "" };
+
+/**
+ * 手本の音から、効果音の候補とBGMを切り出す。できなければ null。
+ * 同じ手本(中身が同じ動画は同じID)なら、前に切り出した物を使う。前もって切り出しておいた手本
+ * (scripts/prepare-reference-sounds.ts)は、声を分ける Python が無い所(本番)でも使える。
+ */
 export const cutReferenceSounds = async (absolutePath: string, id: string): Promise<CutResult | null> => {
-  const python = separationPython();
-  if (!python) return null;
   const outDir = path.join(OUT_ROOT, id);
   const listPath = path.join(outDir, "sounds.json");
   const saved = await readFile(listPath, "utf8").then((text) => JSON.parse(text) as CutResult).catch(() => null);
-  if (saved) return saved;
+  if (saved) return withExistingBgm(outDir, saved);
+  const python = separationPython();
+  if (!python) return null;
   const work = path.join(os.tmpdir(), `reference-sounds-${id}`);
   await mkdir(work, { recursive: true });
   const wav = path.join(work, "reference.wav");
@@ -59,7 +67,7 @@ export const cutReferenceSounds = async (absolutePath: string, id: string): Prom
     const result = JSON.parse(line) as CutResult;
     await writeFile(listPath, JSON.stringify(result, null, 2));
     console.info(`[referenceSounds] 手本の効果音の候補: ${result.sounds.map((sound) => `${sound.start}秒`).join("・") || "なし"}`);
-    return result;
+    return withExistingBgm(outDir, result);
   } catch (error) {
     console.warn("[referenceSounds] 手本の音を切り出せませんでした", error);
     return null;

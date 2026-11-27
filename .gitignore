@@ -52,3 +52,5 @@ yarn-error.log*
 next-env.d.ts
 eval-results/
 /.venv-sound/
+# 手本から切り出したBGMは大きいので入れない(手元だけ。本番では型にBGMを入れない)
+/public/audio/exact-sfx/*/bgm.wav

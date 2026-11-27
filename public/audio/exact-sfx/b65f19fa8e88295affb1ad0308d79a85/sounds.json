@@ -1,0 +1,113 @@
+{
+  "sounds": [
+    {
+      "file": "cand00.wav",
+      "start": 1.8,
+      "length": 0.5,
+      "db": 19.2,
+      "excess": 23.2,
+      "unique": 0.74
+    },
+    {
+      "file": "cand02.wav",
+      "start": 8.15,
+      "length": 0.6,
+      "db": 27,
+      "excess": 29.4,
+      "unique": 0.91
+    },
+    {
+      "file": "cand04.wav",
+      "start": 14,
+      "length": 0.5,
+      "db": 28.9,
+      "excess": 31.4,
+      "unique": 1.24
+    },
+    {
+      "file": "cand05.wav",
+      "start": 17.5,
+      "length": 0.65,
+      "db": 15.1,
+      "excess": 14.1,
+      "unique": 0.88
+    },
+    {
+      "file": "cand06.wav",
+      "start": 22.8,
+      "length": 0.5,
+      "db": 21.3,
+      "excess": 25.2,
+      "unique": 0.59
+    },
+    {
+      "file": "cand07.wav",
+      "start": 23.35,
+      "length": 1,
+      "db": 21.2,
+      "excess": 25.4,
+      "unique": 0.99
+    },
+    {
+      "file": "cand09.wav",
+      "start": 33.9,
+      "length": 0.5,
+      "db": 20.8,
+      "excess": 21,
+      "unique": 0.85
+    },
+    {
+      "file": "cand10.wav",
+      "start": 37.25,
+      "length": 0.55,
+      "db": 10.2,
+      "excess": 5.3,
+      "unique": 0.35
+    },
+    {
+      "file": "cand32.wav",
+      "start": 52.05,
+      "length": 0.65,
+      "db": 19.6,
+      "excess": 10,
+      "unique": 0.44
+    },
+    {
+      "file": "cand54.wav",
+      "start": 64.2,
+      "length": 0.9,
+      "db": 14.5,
+      "excess": 11.6,
+      "unique": 0.91
+    },
+    {
+      "file": "cand55.wav",
+      "start": 65.45,
+      "length": 0.5,
+      "db": 19.6,
+      "excess": 10.2,
+      "unique": 0.69
+    },
+    {
+      "file": "cand65.wav",
+      "start": 71.8,
+      "length": 0.7,
+      "db": 11.1,
+      "excess": -1,
+      "unique": 0.7
+    },
+    {
+      "file": "cand75.wav",
+      "start": 77.7,
+      "length": 0.5,
+      "db": 8.7,
+      "excess": 7.5,
+      "unique": 0.27
+    }
+  ],
+  "bgm": "bgm.wav",
+  "baseDb": -40,
+  "voiceDb": -21.1,
+  "gainDb": 1.1,
+  "periodSeconds": 2.3000000000000003
+}
