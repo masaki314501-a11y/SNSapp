@@ -107,7 +107,7 @@ export type ReferenceTemplate = {
     /** 言い回しの型(例「1行目に話題、2行目に問いかけ」)。手本の文言は持ち込まず、言い回しの形だけまねる。 */
     wording?: string;
     /** 画面の端から端までの帯(タイトルの後ろ)。 */
-    band?: { color: string; topPercent: number; heightPercent: number };
+    band?: { color: string; topPercent: number; heightPercent: number; opacity?: number };
     /** 冒頭に、画面の真ん中あたりへ大きく出してから、いつもの位置へ縮みながら動く。 */
     intro?: { seconds: number; xPercent: number; yPercent: number; fontSizePx: number };
   };
@@ -312,7 +312,8 @@ export const buildTemplateObjects = (params: {
     shapes.push(
       shapeOf(
         { xPercent: 50, yPercent: title.band.topPercent + title.band.heightPercent / 2, widthPercent: 100, heightPercent: title.band.heightPercent },
-        { fillColor: title.band.color, fillOpacity: 1, borderWidthPx: 0, cornerRadiusPx: 0 },
+        // 手本から測った透けない度合い(測っていない型は今まで通り透けない帯)
+        { fillColor: title.band.color, fillOpacity: title.band.opacity ?? 1, borderWidthPx: 0, cornerRadiusPx: 0 },
         { decorative: true, animation: "none" }
       )
     );

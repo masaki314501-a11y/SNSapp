@@ -108,7 +108,7 @@ export const EMPHASIS_SFX_PROMPT = (items: { index: number; seconds: number; tex
 ${EMPHASIS_SFX.map((sound, i) => `  ${i + 1}. ${sound.label}`).join("\n")}
 字幕:
 ${items.map((item) => `[${item.index}] ${item.seconds.toFixed(1)}秒「${item.text}」${item.nearStructure ? "(近くで別の音が鳴る)" : ""}`).join("\n")}
-選んだ字幕ごとに、index(字幕の番号)と sound(音の番号 1〜${EMPHASIS_SFX.length})を答えてください。
+選んだ字幕ごとに、index(字幕の番号)と sound(音の番号 1〜${EMPHASIS_SFX.length})を、言葉の強い順に並べて答えてください。${targetCount}個より多く選ばないでください。
 `.trim();
 
 export type EmphasisPick = { index: number; sound: number };
@@ -219,7 +219,13 @@ export const pickEmphasisSfx = async (events: SfxEvent[]): Promise<{ picks: Emph
       },
       parse: z.object({ picks: z.array(z.object({ index: z.number().int(), sound: z.number().int() })) }),
     });
-    const picks = answer.picks.filter((pick) => pick.index >= 0 && pick.index < emphasis.length && pick.sound >= 1 && pick.sound <= EMPHASIS_SFX.length);
+    // AIが多く選びすぎた時は、強い順の先から、強調の数の半分まで(完成動画では4割ほど)
+    const limit = Math.max(1, Math.ceil(emphasis.length * 0.5));
+    const seen = new Set<number>();
+    const picks = answer.picks
+      .filter((pick) => pick.index >= 0 && pick.index < emphasis.length && pick.sound >= 1 && pick.sound <= EMPHASIS_SFX.length)
+      .filter((pick) => !seen.has(pick.index) && seen.add(pick.index))
+      .slice(0, limit);
     return { picks, byAi: true };
   } catch (error) {
     console.warn("[sfxPlan] 効果音を鳴らす強調をAIで選べませんでした(1つおきにします)", error);

@@ -25,7 +25,7 @@ import {
 import { drawGrid, encodePng } from "@/lib/editSteps/gridImage";
 import { bestLook, MIN_MATCH_SCORE } from "./drawMatch";
 import { toReferenceLayout } from "@/lib/editSteps/logic";
-import type { ReferenceTemplate, TemplateTextLook } from "@/lib/editSteps/template";
+import { lineStepPercent, type ReferenceTemplate, type TemplateTextLook } from "@/lib/editSteps/template";
 import { captionChangeTimes, cutReferenceSounds, matchReferenceSounds, screenChangeSeries, withReferenceSounds } from "./referenceSounds";
 
 /**
@@ -40,7 +40,8 @@ import { captionChangeTimes, cutReferenceSounds, matchReferenceSounds, screenCha
 /** 読み取り方を変えたら上げる(前の読み取り結果を使わないように)。 */
 // 33: 手本から効果音とBGMを自動で切り出して型に入れる
 // 34: 画面が変わらない音を捨て、毎回同じに鳴らす音(見出し・次の項目)も型に入れる
-const EXTRACT_VERSION = 34;
+// 35: タイトルの縦の位置・帯の上下・透け方を画面から測る
+const EXTRACT_VERSION = 35;
 const CACHE_DIR = path.join(os.tmpdir(), "sns-exact-copy-templates");
 /** 完成型(凍結した型)の置き場所。手本ごとに1つ。 */
 const FROZEN_DIR = path.join(process.cwd(), "data", "exact-copy-templates");
@@ -1829,11 +1830,36 @@ const refineLooks = async (raw: ExtractedTemplate, file: StyleReferenceFile | un
   // 6. (EC-6)タイトルの帯の透け方と本当の色を測る
   const band = refined.title.band;
   const titleLook = refined.title.lines[0];
+  const titlePixels = titleLook ? await frameOf(secondsOf(titleLook)) : null;
+  const titlePixelsOk = !!titlePixels && titlePixels.length >= SAMPLE_WIDTH * SAMPLE_HEIGHT * 3;
+  // 帯の上下は、画面の左右の端(文字の無い所)で、帯と同じ色の行が続く所から測る
+  if (band && titlePixels && titlePixelsOk) {
+    const extent = measureBandExtent(titlePixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, band, refined.title.yPercent);
+    if (extent) {
+      console.info(`[exactCopy] タイトルの帯の上下: AIの答え${band.topPercent}〜${band.topPercent + band.heightPercent}% → 画面から${extent.topPercent}〜${Math.round((extent.topPercent + extent.heightPercent) * 10) / 10}%`);
+      band.topPercent = extent.topPercent;
+      band.heightPercent = extent.heightPercent;
+    }
+  }
+  // タイトルの縦の位置: 文字の色の画素が並ぶ行から測る(AIの答えは2〜3%ずれていた。こんな歯になりたいランキングで、手本は約11.7%なのに14%)
+  if (titleLook && titlePixels && titlePixelsOk) {
+    const range = band ? { from: band.topPercent, to: band.topPercent + band.heightPercent } : { from: refined.title.yPercent - 10, to: refined.title.yPercent + 10 };
+    const measured = measureTitleCenter(titlePixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, titleLook.color, range);
+    // 2行目の色が1行目と違う時は、測れたのは1行目だけなので、行の間隔の半分(行の数に合わせて)を足して全体の真ん中にする
+    const lines = refined.title.lines;
+    const sameColor = lines.every((line) => distance(hexToRgb(line.color), hexToRgb(titleLook.color)) <= 50);
+    const step = (lineStepPercent(fontPx(refined.title.charHeightPercent, 28, 120)) * (lines.length - 1)) / 2;
+    const center = measured === null ? null : sameColor ? measured : Math.round((measured + step) * 10) / 10;
+    if (center !== null) {
+      console.info(`[exactCopy] タイトルの縦の位置: AIの答え${refined.title.yPercent}% → 画面から${center}%`);
+      refined.title.yPercent = center;
+    }
+  }
   if (band && titleLook) {
-    const pixels = await frameOf(secondsOf(titleLook));
-    if (pixels && pixels.length >= SAMPLE_WIDTH * SAMPLE_HEIGHT * 3) {
+    const pixels = titlePixels;
+    if (pixels && titlePixelsOk) {
       const textColors = refined.title.lines.flatMap((line) => [line.color, line.strokeColor].filter((value): value is string => Boolean(value)));
-      const measuredBand = measureBand(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, band, textColors);
+      const measuredBand = measureBandByBackground(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, band) ?? measureBand(pixels, SAMPLE_WIDTH, SAMPLE_HEIGHT, band, textColors);
       if (measuredBand) {
         (band as typeof band & { opacity?: number }).opacity = measuredBand.opacity;
         band.color = measuredBand.color;
@@ -1885,6 +1911,130 @@ export const measureFrameSpan = (
   const left = (median(lefts) / width) * 100 - cornerRadiusPercent;
   const right = (median(rights) / width) * 100 + cornerRadiusPercent;
   return { xPercent: Math.round(((left + right) / 2) * 10) / 10, widthPercent: Math.round((right - left) * 10) / 10 };
+};
+
+/** 端の列(文字の無い所)の、行ごとの平均の色。 */
+const edgeRowColor = (pixels: Uint8Array, width: number, y: number): Rgb => {
+  const sum: Rgb = [0, 0, 0];
+  let n = 0;
+  for (let x = 0; x < width; x++) {
+    if (x > width * 0.08 && x < width * 0.92) continue;
+    const i = (y * width + x) * 3;
+    sum[0] += pixels[i];
+    sum[1] += pixels[i + 1];
+    sum[2] += pixels[i + 2];
+    n++;
+  }
+  return [sum[0] / n, sum[1] / n, sum[2] / n];
+};
+
+/**
+ * タイトルの帯の上下を測る。画面の左右の端の、帯の真ん中の行と色が近い(35以内)行が、上下に続く所。
+ * 帯の真ん中は、AIの答えた帯の真ん中とタイトルの縦の位置の間で、端の色がいちばん色付いている行。測れなければ null。
+ */
+export const measureBandExtent = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  band: { topPercent: number; heightPercent: number },
+  titleYPercent: number
+): { topPercent: number; heightPercent: number } | null => {
+  const toRow = (percent: number) => Math.max(0, Math.min(height - 1, Math.round((percent / 100) * height)));
+  const saturation = (rgb: Rgb) => Math.max(...rgb) - Math.min(...rgb);
+  const from = toRow(Math.min(band.topPercent + band.heightPercent / 2, titleYPercent) - 4);
+  const to = toRow(Math.max(band.topPercent + band.heightPercent / 2, titleYPercent) + 4);
+  let center = from;
+  for (let y = from; y <= to; y++) if (saturation(edgeRowColor(pixels, width, y)) > saturation(edgeRowColor(pixels, width, center))) center = y;
+  const target = edgeRowColor(pixels, width, center);
+  const near = (y: number) => distance(edgeRowColor(pixels, width, y), target) <= 35;
+  let top = center;
+  let bottom = center;
+  while (top > 0 && near(top - 1)) top--;
+  while (bottom < height - 1 && near(bottom + 1)) bottom++;
+  const heightPercent = ((bottom - top + 1) / height) * 100;
+  if (heightPercent < 2 || heightPercent > 30) return null;
+  return { topPercent: Math.round((top / height) * 1000) / 10, heightPercent: Math.round(heightPercent * 10) / 10 };
+};
+
+/**
+ * タイトルの帯の透け方と本当の色を、帯のすぐ下(帯の無い所)の背景と比べて測る。
+ * 透けた帯の色 = 透けない度合い × 帯の色 + (1 − 透けない度合い) × 背景 なので、左右の端の列ごとに
+ * 「帯の所の明るさ」と「帯のすぐ下の明るさ」を並べ、その傾き(1 − 透けない度合い)を出す。背景の明るさに差が無い時は null。
+ */
+export const measureBandByBackground = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  band: { topPercent: number; heightPercent: number }
+): { color: string; opacity: number } | null => {
+  const yIn = Math.round(((band.topPercent + band.heightPercent * 0.15) / 100) * height);
+  const yBelow = Math.round(((band.topPercent + band.heightPercent) / 100) * height) + 2;
+  if (yBelow >= height) return null;
+  const pairs: { inside: Rgb; below: Rgb }[] = [];
+  for (let x = 0; x < width; x++) {
+    if (x > width * 0.12 && x < width * 0.88) continue;
+    const at = (y: number): Rgb => {
+      const i = (y * width + x) * 3;
+      return [pixels[i], pixels[i + 1], pixels[i + 2]];
+    };
+    pairs.push({ inside: at(yIn), below: at(yBelow) });
+  }
+  const lum = (rgb: Rgb) => 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+  const xs = pairs.map((pair) => lum(pair.below));
+  const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+  const mx = mean(xs);
+  const varX = mean(xs.map((value) => (value - mx) ** 2));
+  if (pairs.length < 10 || Math.sqrt(varX) < 25) return null;
+  const ys = pairs.map((pair) => lum(pair.inside));
+  const my = mean(ys);
+  const slope = mean(xs.map((value, i) => (value - mx) * (ys[i] - my))) / varX;
+  const opacity = Math.max(0.3, Math.min(1, 1 - slope));
+  if (opacity > 0.95) return { color: rgbToHex([0, 1, 2].map((k) => mean(pairs.map((pair) => pair.inside[k]))) as Rgb), opacity: 1 };
+  const solve = (k: number) =>
+    Math.max(0, Math.min(255, Math.round(mean(pairs.map((pair) => (pair.inside[k] - (1 - opacity) * pair.below[k]) / opacity)))));
+  return { color: rgbToHex([solve(0), solve(1), solve(2)]), opacity: Math.round(opacity * 100) / 100 };
+};
+
+/**
+ * タイトルの縦の中心を測る。range(帯があれば帯の中、無ければAIの答えの上下10%)の中で、真ん中(横10〜90%)に文字の色の画素が並ぶ行の
+ * かたまり(行の間が1.5%までの空きはつなぐ)のうち、文字の画素がいちばん多い物の、上の端と下の端の真ん中。測れなければ null。
+ */
+export const measureTitleCenter = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  color: string,
+  range: { from: number; to: number }
+): number | null => {
+  const target = hexToRgb(color);
+  const y0 = Math.max(0, Math.round((range.from / 100) * height));
+  const y1 = Math.min(height - 1, Math.round((range.to / 100) * height));
+  const inkRows: number[] = [];
+  const inkCount = new Map<number, number>();
+  for (let y = y0; y <= y1; y++) {
+    let count = 0;
+    for (let x = Math.round(width * 0.1); x < width * 0.9; x++) {
+      const i = (y * width + x) * 3;
+      if (distance([pixels[i], pixels[i + 1], pixels[i + 2]], target) <= 50) count++;
+    }
+    if (count >= width * 0.02) {
+      inkRows.push(y);
+      inkCount.set(y, count);
+    }
+  }
+  if (inkRows.length === 0) return null;
+  const gap = Math.max(1, Math.round(height * 0.015));
+  const groups: number[][] = [];
+  for (const y of inkRows) {
+    const last = groups[groups.length - 1];
+    if (last && y - last[last.length - 1] <= gap) last.push(y);
+    else groups.push([y]);
+  }
+  const ink = (group: number[]) => group.reduce((sum, y) => sum + (inkCount.get(y) ?? 0), 0);
+  const best = groups.reduce((a, b) => (ink(a) >= ink(b) ? a : b));
+  const span = best[best.length - 1] - best[0];
+  if (span < height * 0.015) return null;
+  return Math.round((((best[0] + best[best.length - 1]) / 2) / height) * 1000) / 10;
 };
 
 /**
